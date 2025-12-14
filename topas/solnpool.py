@@ -229,7 +229,7 @@ class SolutionPool_KeepAll(SolutionPoolBase):
         #
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
             )
         #
@@ -300,7 +300,7 @@ class SolutionPool_KeepLatest(SolutionPoolBase):
         #
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
             )
         #
@@ -385,7 +385,7 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
         #
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
             )
         #
@@ -545,7 +545,7 @@ class SolutionPool_KeepBest(SolutionPoolBase):
 
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
             )
         #
@@ -584,7 +584,7 @@ class SolutionPool_KeepBest(SolutionPoolBase):
             self._heap = tmp
 
         if len(self._solutions) != len(self._heap):
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Num solutions is {len(self._solutions)} but the heap size is {len(self._heap)}"
             )
         return soln.id
