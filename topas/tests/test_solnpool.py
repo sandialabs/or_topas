@@ -549,12 +549,12 @@ class TestSolnPool(unittest.TestCase):
                 "policy": "keep_best",
             },
             "pool_config": {
-                'abs_tolerance': 1,
-                'best_value': 0,
-                'max_pool_size': None,
-                'objective': 0,
-                'rel_tolerance': None,
-                'sense_is_min': True,
+                "abs_tolerance": 1,
+                "best_value": 0,
+                "max_pool_size": None,
+                "objective": 0,
+                "rel_tolerance": None,
+                "sense_is_min": True,
             },
             "solutions": {
                 0: {
@@ -618,12 +618,12 @@ class TestSolnPool(unittest.TestCase):
                     "policy": "keep_best",
                 },
                 "pool_config": {
-                    'abs_tolerance': 1,
-                    'best_value': 0,
-                    'max_pool_size': None,
-                    'objective': 0,
-                    'rel_tolerance': None,
-                    'sense_is_min': True,
+                    "abs_tolerance": 1,
+                    "best_value": 0,
+                    "max_pool_size": None,
+                    "objective": 0,
+                    "rel_tolerance": None,
+                    "sense_is_min": True,
                 },
                 "solutions": {
                     0: {
@@ -696,12 +696,12 @@ class TestSolnPool(unittest.TestCase):
                     "policy": "keep_best",
                 },
                 "pool_config": {
-                    'abs_tolerance': 1,
-                    'best_value': -1,
-                    'max_pool_size': None,
-                    'objective': 0,
-                    'rel_tolerance': None,
-                    'sense_is_min': True,
+                    "abs_tolerance": 1,
+                    "best_value": -1,
+                    "max_pool_size": None,
+                    "objective": 0,
+                    "rel_tolerance": None,
+                    "sense_is_min": True,
                 },
                 "solutions": {
                     0: {
@@ -772,11 +772,11 @@ class TestSolnPool(unittest.TestCase):
                 },
                 "pool_config": {
                     "abs_tolerance": 1,
-                    'best_value': -1.5,
+                    "best_value": -1.5,
                     "max_pool_size": None,
                     "objective": 0,
                     "rel_tolerance": None,
-                    'sense_is_min': True,
+                    "sense_is_min": True,
                 },
                 "solutions": {
                     2: {
@@ -869,11 +869,11 @@ class TestSolnPool(unittest.TestCase):
                 },
                 "pool_config": {
                     "abs_tolerance": 1,
-                    'best_value': -1,
+                    "best_value": -1,
                     "max_pool_size": 2,
                     "objective": 0,
                     "rel_tolerance": None,
-                    'sense_is_min': True,
+                    "sense_is_min": True,
                 },
                 "solutions": {
                     2: {
@@ -927,7 +927,7 @@ class TestSolnPool(unittest.TestCase):
                 },
                 "pool_config": {
                     "abs_tolerance": 1,
-                    'best_value': -1.5,
+                    "best_value": -1.5,
                     "max_pool_size": 2,
                     "objective": 0,
                     "rel_tolerance": None,

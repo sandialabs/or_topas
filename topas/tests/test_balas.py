@@ -16,9 +16,9 @@ from pyomo.common.dependencies import attempt_import
 from pyomo.common.dependencies import numpy as numpy, numpy_available
 import pyomo.opt
 
-parameterized, param_available = attempt_import('parameterized')
+parameterized, param_available = attempt_import("parameterized")
 if not param_available:
-    raise unittest.SkipTest('Parameterized is not available.')
+    raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
 
 if numpy_available:
