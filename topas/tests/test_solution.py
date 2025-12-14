@@ -12,9 +12,9 @@
 import pyomo.opt
 import pyomo.environ as pyo
 import pyomo.common.unittest as unittest
-import pyomo.contrib.alternative_solutions.aos_utils as au
-from pyomo.contrib.alternative_solutions import PyomoSolution
-from pyomo.contrib.alternative_solutions import enumerate_binary_solutions
+import topas.aos_utils as au
+from topas import PyomoSolution
+from topas import enumerate_binary_solutions
 
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
 pytestmark = unittest.pytest.mark.parametrize("mip_solver", solvers)

@@ -18,8 +18,8 @@ import pyomo.environ as pyo
 import pyomo.opt
 from pyomo.common import unittest
 
-import pyomo.contrib.alternative_solutions.tests.test_cases as tc
-from pyomo.contrib.alternative_solutions import shifted_lp
+import topas.tests.test_cases as tc
+from topas import shifted_lp
 
 # TODO: add checks that confirm the shifted constraints make sense
 

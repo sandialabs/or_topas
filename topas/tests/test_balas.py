@@ -24,8 +24,8 @@ parameterized = parameterized.parameterized
 if numpy_available:
     from numpy.testing import assert_array_almost_equal
 
-from pyomo.contrib.alternative_solutions import enumerate_binary_solutions
-import pyomo.contrib.alternative_solutions.tests.test_cases as tc
+from topas import enumerate_binary_solutions
+import topas.tests.test_cases as tc
 
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi"))
 

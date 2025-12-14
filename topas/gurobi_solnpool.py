@@ -17,8 +17,8 @@ from pyomo.common.dependencies import attempt_import
 from pyomo.common.errors import ApplicationError
 
 from pyomo.contrib import appsi
-import pyomo.contrib.alternative_solutions.aos_utils as aos_utils
-from pyomo.contrib.alternative_solutions import PyomoPoolManager, PoolPolicy
+import topas.aos_utils as aos_utils
+from topas import PyomoPoolManager, PoolPolicy
 
 
 def gurobi_generate_solutions(

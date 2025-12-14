@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools >= 64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name="topas"
+version="1.0"
+dependencies = [
+    "pyomo",
+    ]
+readme = {file = "README.md", content-type = "text/plain"}
+description="Topas supports the generation of alternative solutions for pyomo models"
+classifiers=[
+        "Intended Audience :: End Users/Desktop",
+        "Intended Audience :: Science/Research",
+        "Natural Language :: English",
+        "Operating System :: Unix",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Topic :: Scientific/Engineering :: Mathematics",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+    ]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["topas*"]
+
+[tool.coverage.report]
+exclude_also = [
+  'if self.debug:',
+  'if debug:',
+  'raise AssertionError.*',
+  'raise NotImplementedError.*',
+  '@(abc.)?abstractmethod',
+  'if noisy:',
+  'if self.noisy:',
+  'pragma: no cover',
+  'pass',
+  'except Exception as e:',
+  'except BaseException:',
+  'except ImportError:',
+]

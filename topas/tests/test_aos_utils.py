@@ -17,7 +17,7 @@ import pyomo.environ as pyo
 import pyomo.common.unittest as unittest
 from pyomo.common.collections import ComponentSet
 
-import pyomo.contrib.alternative_solutions.aos_utils as au
+import topas.aos_utils as au
 
 
 class TestAOSUtilsUnit(unittest.TestCase):

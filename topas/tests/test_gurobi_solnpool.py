@@ -14,9 +14,9 @@ from collections import Counter
 from pyomo.common import unittest
 from pyomo.common.dependencies import numpy as np, numpy_available
 
-from pyomo.contrib.alternative_solutions import gurobi_generate_solutions
+from topas import gurobi_generate_solutions
 from pyomo.contrib.appsi.solvers import Gurobi
-import pyomo.contrib.alternative_solutions.tests.test_cases as tc
+import topas.tests.test_cases as tc
 
 gurobipy_available = Gurobi().available()
 

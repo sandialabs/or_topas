@@ -9,7 +9,8 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-from pyomo.common.collections import Bunch as Munch
+#from pyomo.common.collections import Bunch as Munch
+from munch import Munch
 import logging
 from contextlib import contextmanager
 

@@ -21,8 +21,8 @@ if not param_available:
     raise unittest.SkipTest('Parameterized is not available.')
 parameterized = parameterized.parameterized
 
-import pyomo.contrib.alternative_solutions.tests.test_cases as tc
-from pyomo.contrib.alternative_solutions import lp_enum
+import topas.tests.test_cases as tc
+from topas import lp_enum
 
 #
 # Find available solvers. Just use GLPK if it's available.
