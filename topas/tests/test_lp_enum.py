@@ -16,9 +16,9 @@ import pyomo.opt
 from pyomo.common import unittest
 from pyomo.common.dependencies import attempt_import
 
-parameterized, param_available = attempt_import('parameterized')
+parameterized, param_available = attempt_import("parameterized")
 if not param_available:
-    raise unittest.SkipTest('Parameterized is not available.')
+    raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
 
 import topas.tests.test_cases as tc

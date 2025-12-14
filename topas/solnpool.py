@@ -55,11 +55,11 @@ class PoolCounter:
 
 
 class PoolPolicy(Enum):
-    unspecified = 'unspecified'
-    keep_all = 'keep_all'
-    keep_best = 'keep_best'
-    keep_latest = 'keep_latest'
-    keep_latest_unique = 'keep_latest_unique'
+    unspecified = "unspecified"
+    keep_all = "keep_all"
+    keep_best = "keep_best"
+    keep_latest = "keep_latest"
+    keep_latest_unique = "keep_latest_unique"
 
     def __str__(self):
         return f"{self.value}"
@@ -131,7 +131,7 @@ class SolutionPoolBase:
         """
         Property to return pool construction policy.
         """
-        return self.metadata['policy']
+        return self.metadata["policy"]
 
     @property
     def as_solution(self):
@@ -685,7 +685,7 @@ class PoolManager:
         int or None
             The maximum pool size value for the active pool, or None if this parameter is not by this pool.
         """
-        return getattr(self.active_pool, 'max_pool_size', None)
+        return getattr(self.active_pool, "max_pool_size", None)
 
     def to_dict(self):
         """

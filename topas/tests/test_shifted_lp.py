@@ -18,9 +18,9 @@ from pyomo.common.dependencies import attempt_import
 if numpy_available:
     from numpy.testing import assert_array_almost_equal
 
-parameterized, param_available = attempt_import('parameterized')
+parameterized, param_available = attempt_import("parameterized")
 if not param_available:
-    raise unittest.SkipTest('Parameterized is not available.')
+    raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
 
 import topas.tests.test_cases as tc
