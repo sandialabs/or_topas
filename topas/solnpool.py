@@ -16,6 +16,7 @@ import collections
 import dataclasses
 import json
 import weakref
+import math
 
 from topas.aos_utils import MyMunch, to_dict
 from topas.solution import Solution, PyomoSolution
@@ -55,11 +56,11 @@ class PoolCounter:
 
 
 class PoolPolicy(Enum):
-    unspecified = 'unspecified'
-    keep_all = 'keep_all'
-    keep_best = 'keep_best'
-    keep_latest = 'keep_latest'
-    keep_latest_unique = 'keep_latest_unique'
+    unspecified = "unspecified"
+    keep_all = "keep_all"
+    keep_best = "keep_best"
+    keep_latest = "keep_latest"
+    keep_latest_unique = "keep_latest_unique"
 
     def __str__(self):
         return f"{self.value}"
@@ -131,7 +132,7 @@ class SolutionPoolBase:
         """
         Property to return pool construction policy.
         """
-        return self.metadata['policy']
+        return self.metadata["policy"]
 
     @property
     def as_solution(self):
@@ -229,7 +230,7 @@ class SolutionPool_KeepAll(SolutionPoolBase):
         #
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
             )
         #
@@ -300,7 +301,7 @@ class SolutionPool_KeepLatest(SolutionPoolBase):
         #
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
             )
         #
@@ -385,7 +386,7 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
         #
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
             )
         #
@@ -545,7 +546,7 @@ class SolutionPool_KeepBest(SolutionPoolBase):
 
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
             )
         #
@@ -584,7 +585,7 @@ class SolutionPool_KeepBest(SolutionPoolBase):
             self._heap = tmp
 
         if len(self._solutions) != len(self._heap):
-            raise DeveloperError(
+            raise RuntimeError(
                 f"Num solutions is {len(self._solutions)} but the heap size is {len(self._heap)}"
             )
         return soln.id
@@ -685,7 +686,7 @@ class PoolManager:
         int or None
             The maximum pool size value for the active pool, or None if this parameter is not by this pool.
         """
-        return getattr(self.active_pool, 'max_pool_size', None)
+        return getattr(self.active_pool, "max_pool_size", None)
 
     def to_dict(self):
         """

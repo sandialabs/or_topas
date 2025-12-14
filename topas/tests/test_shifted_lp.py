@@ -9,32 +9,33 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
+import pyomo.environ as pyo
+import pyomo.opt
+from pyomo.common import unittest
 from pyomo.common.dependencies import numpy as numpy, numpy_available
+from pyomo.common.dependencies import attempt_import
 
 if numpy_available:
     from numpy.testing import assert_array_almost_equal
 
-import pyomo.environ as pyo
-import pyomo.opt
-from pyomo.common import unittest
+parameterized, param_available = attempt_import("parameterized")
+if not param_available:
+    raise unittest.SkipTest("Parameterized is not available.")
+parameterized = parameterized.parameterized
 
 import topas.tests.test_cases as tc
 from topas import shifted_lp
 
-# TODO: add checks that confirm the shifted constraints make sense
-
 #
-# Find available solvers. Just use GLPK if it's available.
+# Find available solvers
 #
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
-if "glpk" in solvers:
-    solver = ["glpk"]
-pytestmark = unittest.pytest.mark.parametrize("lp_solver", solvers)
 
 
-@unittest.pytest.mark.default
-class TestShiftedIP:
+# TODO: add checks that confirm the shifted constraints make sense
+class TestShiftedIP(unittest.TestCase):
 
+    @parameterized.expand(input=solvers)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_mip_abs_objective(self, lp_solver):
         m = tc.get_indexed_pentagonal_pyramid_mip()
@@ -50,6 +51,7 @@ class TestShiftedIP:
 
         assert old_obj == unittest.pytest.approx(new_obj)
 
+    @parameterized.expand(input=solvers)
     def test_polyhedron(self, lp_solver):
         m = tc.get_3d_polyhedron_problem()
 
