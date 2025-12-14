@@ -16,6 +16,7 @@ import collections
 import dataclasses
 import json
 import weakref
+import math
 
 from topas.aos_utils import MyMunch, to_dict
 from topas.solution import Solution, PyomoSolution

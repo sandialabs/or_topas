@@ -167,7 +167,7 @@ def gurobi_enumerate_linear_solutions(
 
     opt = pyo.SolverFactory("gurobi")
     if not opt.available(exception_flag=False):
-        raise ValueError(solver + " is not available")
+        raise ValueError("Gurobi is not available")
     for parameter, value in solver_options.items():
         opt.options[parameter] = value
 
