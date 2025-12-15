@@ -666,7 +666,7 @@ class PoolManager:
         list
             The solutions in the active pool.
         """
-        return self.active_pool.solutions.values()
+        return self.active_pool.solutions
 
     @property
     def last_solution(self):
