@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 import pyomo.environ as pyo
 from pyomo.common.collections import ComponentSet
-from topas import PyomoPoolManager, PoolPolicy
-import topas.aos_utils as aos_utils
+from or_topas import PyomoPoolManager, PoolPolicy
+import or_topas.aos_utils as aos_utils
 
 
 def enumerate_binary_solutions(

@@ -19,7 +19,7 @@ gurobipy, gurobi_available = attempt_import("gurobipy")
 
 import pyomo.environ as pyo
 import pyomo.common.errors
-from topas import (
+from or_topas import (
     aos_utils,
     shifted_lp,
     PyomoPoolManager,

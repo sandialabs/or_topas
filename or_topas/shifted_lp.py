@@ -13,7 +13,7 @@ import pyomo.environ as pyo
 from pyomo.common.collections import ComponentMap
 from pyomo.gdp.util import clone_without_expression_components
 from pyomo.contrib.fbbt.fbbt import compute_bounds_on_expr
-from topas import aos_utils
+from or_topas import aos_utils
 
 
 def _get_unique_name(collection, name):

@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pyomo.environ as pyo
-from topas import (
+from or_topas import (
     aos_utils,
     shifted_lp,
     PyomoPoolManager,

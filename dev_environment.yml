@@ -1,4 +1,4 @@
-name: topas
+name: or_topas
 channels:
   - conda-forge
   - https://repo.anaconda.com/pkgs/main

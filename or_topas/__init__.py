@@ -9,27 +9,27 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-from topas.aos_utils import logcontext
-from topas.solution import (
+from or_topas.aos_utils import logcontext
+from or_topas.solution import (
     PyomoSolution,
     Solution,
     VariableInfo,
     ObjectiveInfo,
 )
-from topas.solnpool import (
+from or_topas.solnpool import (
     PoolManager,
     PyomoPoolManager,
     PoolPolicy,
 )
-from topas.balas import enumerate_binary_solutions
-from topas.obbt import (
+from or_topas.balas import enumerate_binary_solutions
+from or_topas.obbt import (
     obbt_analysis,
     obbt_analysis_bounds_and_solutions,
 )
-from topas.lp_enum import enumerate_linear_solutions
-from topas.gurobi_lp_enum import (
+from or_topas.lp_enum import enumerate_linear_solutions
+from or_topas.gurobi_lp_enum import (
     gurobi_enumerate_linear_solutions,
 )
-from topas.gurobi_solnpool import (
+from or_topas.gurobi_solnpool import (
     gurobi_generate_solutions,
 )

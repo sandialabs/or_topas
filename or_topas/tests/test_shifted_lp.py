@@ -23,8 +23,8 @@ if not param_available:
     raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
 
-import topas.tests.test_cases as tc
-from topas import shifted_lp
+import or_topas.tests.test_cases as tc
+from or_topas import shifted_lp
 
 #
 # Find available solvers

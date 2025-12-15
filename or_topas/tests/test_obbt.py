@@ -25,11 +25,11 @@ if not param_available:
     raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
 
-from topas import (
+from or_topas import (
     obbt_analysis_bounds_and_solutions,
     obbt_analysis,
 )
-import topas.tests.test_cases as tc
+import or_topas.tests.test_cases as tc
 
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi"))
 
