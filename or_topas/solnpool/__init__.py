@@ -11,4 +11,3 @@ from .solnpool import (
     PyomoPoolManager,
     PoolPolicy,
 )
-

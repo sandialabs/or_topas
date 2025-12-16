@@ -12,4 +12,3 @@ from or_topas.aos.gurobi_lp_enum import (
 from or_topas.aos.gurobi_solnpool import (
     gurobi_generate_solutions,
 )
-
