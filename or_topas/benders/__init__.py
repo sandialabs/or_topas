@@ -8,8 +8,3 @@
 #  rights in this software.
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
-
-from or_topas.aos_utils import logcontext
-from or_topas.solnpool import *
-from or_topas.aos import *
-from . import benders
