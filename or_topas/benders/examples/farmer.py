@@ -27,39 +27,39 @@ mpirun -np 3 python farmer.py
 
 class Farmer:
     def __init__(self):
-        self.crops = ['WHEAT', 'CORN', 'SUGAR_BEETS']
+        self.crops = ["WHEAT", "CORN", "SUGAR_BEETS"]
         self.total_acreage = 500
-        self.PriceQuota = {'WHEAT': 100000.0, 'CORN': 100000.0, 'SUGAR_BEETS': 6000.0}
-        self.SubQuotaSellingPrice = {'WHEAT': 170.0, 'CORN': 150.0, 'SUGAR_BEETS': 36.0}
-        self.SuperQuotaSellingPrice = {'WHEAT': 0.0, 'CORN': 0.0, 'SUGAR_BEETS': 10.0}
-        self.CattleFeedRequirement = {'WHEAT': 200.0, 'CORN': 240.0, 'SUGAR_BEETS': 0.0}
-        self.PurchasePrice = {'WHEAT': 238.0, 'CORN': 210.0, 'SUGAR_BEETS': 100000.0}
-        self.PlantingCostPerAcre = {'WHEAT': 150.0, 'CORN': 230.0, 'SUGAR_BEETS': 260.0}
+        self.PriceQuota = {"WHEAT": 100000.0, "CORN": 100000.0, "SUGAR_BEETS": 6000.0}
+        self.SubQuotaSellingPrice = {"WHEAT": 170.0, "CORN": 150.0, "SUGAR_BEETS": 36.0}
+        self.SuperQuotaSellingPrice = {"WHEAT": 0.0, "CORN": 0.0, "SUGAR_BEETS": 10.0}
+        self.CattleFeedRequirement = {"WHEAT": 200.0, "CORN": 240.0, "SUGAR_BEETS": 0.0}
+        self.PurchasePrice = {"WHEAT": 238.0, "CORN": 210.0, "SUGAR_BEETS": 100000.0}
+        self.PlantingCostPerAcre = {"WHEAT": 150.0, "CORN": 230.0, "SUGAR_BEETS": 260.0}
         self.scenarios = [
-            'BelowAverageScenario',
-            'AverageScenario',
-            'AboveAverageScenario',
+            "BelowAverageScenario",
+            "AverageScenario",
+            "AboveAverageScenario",
         ]
         self.crop_yield = dict()
-        self.crop_yield['BelowAverageScenario'] = {
-            'WHEAT': 2.0,
-            'CORN': 2.4,
-            'SUGAR_BEETS': 16.0,
+        self.crop_yield["BelowAverageScenario"] = {
+            "WHEAT": 2.0,
+            "CORN": 2.4,
+            "SUGAR_BEETS": 16.0,
         }
-        self.crop_yield['AverageScenario'] = {
-            'WHEAT': 2.5,
-            'CORN': 3.0,
-            'SUGAR_BEETS': 20.0,
+        self.crop_yield["AverageScenario"] = {
+            "WHEAT": 2.5,
+            "CORN": 3.0,
+            "SUGAR_BEETS": 20.0,
         }
-        self.crop_yield['AboveAverageScenario'] = {
-            'WHEAT': 3.0,
-            'CORN': 3.6,
-            'SUGAR_BEETS': 24.0,
+        self.crop_yield["AboveAverageScenario"] = {
+            "WHEAT": 3.0,
+            "CORN": 3.6,
+            "SUGAR_BEETS": 24.0,
         }
         self.scenario_probabilities = dict()
-        self.scenario_probabilities['BelowAverageScenario'] = 0.3333
-        self.scenario_probabilities['AverageScenario'] = 0.3334
-        self.scenario_probabilities['AboveAverageScenario'] = 0.3333
+        self.scenario_probabilities["BelowAverageScenario"] = 0.3333
+        self.scenario_probabilities["AverageScenario"] = 0.3334
+        self.scenario_probabilities["AboveAverageScenario"] = 0.3333
 
 
 def create_root(farmer):
@@ -148,7 +148,7 @@ def create_subproblem(root, farmer, scenario):
 def main():
     rank = mpi4py.MPI.COMM_WORLD.Get_rank()
     if rank != 0:
-        sys.stdout = open(os.devnull, 'w')
+        sys.stdout = open(os.devnull, "w")
 
     t0 = time.time()
     farmer = Farmer()
@@ -158,21 +158,21 @@ def main():
     m.benders.set_input(root_vars=root_vars, tol=1e-8)
     for s in farmer.scenarios:
         subproblem_fn_kwargs = dict()
-        subproblem_fn_kwargs['root'] = m
-        subproblem_fn_kwargs['farmer'] = farmer
-        subproblem_fn_kwargs['scenario'] = s
+        subproblem_fn_kwargs["root"] = m
+        subproblem_fn_kwargs["farmer"] = farmer
+        subproblem_fn_kwargs["scenario"] = s
         m.benders.add_subproblem(
             subproblem_fn=create_subproblem,
             subproblem_fn_kwargs=subproblem_fn_kwargs,
             root_eta=m.eta[s],
-            subproblem_solver='gurobi_persistent',
+            subproblem_solver="gurobi_persistent",
         )
-    opt = pyo.SolverFactory('gurobi_persistent')
+    opt = pyo.SolverFactory("gurobi_persistent")
     opt.set_instance(m)
 
     print(
-        '{0:<15}{1:<15}{2:<15}{3:<15}{4:<15}'.format(
-            '# Cuts', 'Corn', 'Sugar Beets', 'Wheat', 'Time'
+        "{0:<15}{1:<15}{2:<15}{3:<15}{4:<15}".format(
+            "# Cuts", "Corn", "Sugar Beets", "Wheat", "Time"
         )
     )
     for i in range(30):
@@ -181,11 +181,11 @@ def main():
         for c in cuts_added:
             opt.add_constraint(c)
         print(
-            '{0:<15}{1:<15.2f}{2:<15.2f}{3:<15.2f}{4:<15.2f}'.format(
+            "{0:<15}{1:<15.2f}{2:<15.2f}{3:<15.2f}{4:<15.2f}".format(
                 len(cuts_added),
-                m.devoted_acreage['CORN'].value,
-                m.devoted_acreage['SUGAR_BEETS'].value,
-                m.devoted_acreage['WHEAT'].value,
+                m.devoted_acreage["CORN"].value,
+                m.devoted_acreage["SUGAR_BEETS"].value,
+                m.devoted_acreage["WHEAT"].value,
                 time.time() - t0,
             )
         )
@@ -193,5 +193,5 @@ def main():
             break
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

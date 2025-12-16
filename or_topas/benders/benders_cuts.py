@@ -98,19 +98,19 @@ subproblem will automatically be transformed to
 
 
 solver_dual_sign_convention = dict()
-solver_dual_sign_convention['ipopt'] = -1
-solver_dual_sign_convention['gurobi'] = -1
-solver_dual_sign_convention['gurobi_direct'] = -1
-solver_dual_sign_convention['gurobi_persistent'] = -1
-solver_dual_sign_convention['cplex'] = -1
-solver_dual_sign_convention['cplex_direct'] = -1
-solver_dual_sign_convention['cplexdirect'] = -1
-solver_dual_sign_convention['cplex_persistent'] = -1
-solver_dual_sign_convention['glpk'] = -1
-solver_dual_sign_convention['cbc'] = -1
-solver_dual_sign_convention['xpress_direct'] = -1
-solver_dual_sign_convention['xpress_persistent'] = -1
-solver_dual_sign_convention['highs'] = -1
+solver_dual_sign_convention["ipopt"] = -1
+solver_dual_sign_convention["gurobi"] = -1
+solver_dual_sign_convention["gurobi_direct"] = -1
+solver_dual_sign_convention["gurobi_persistent"] = -1
+solver_dual_sign_convention["cplex"] = -1
+solver_dual_sign_convention["cplex_direct"] = -1
+solver_dual_sign_convention["cplexdirect"] = -1
+solver_dual_sign_convention["cplex_persistent"] = -1
+solver_dual_sign_convention["glpk"] = -1
+solver_dual_sign_convention["cbc"] = -1
+solver_dual_sign_convention["xpress_direct"] = -1
+solver_dual_sign_convention["xpress_persistent"] = -1
+solver_dual_sign_convention["highs"] = -1
 
 
 def _del_con(c):
@@ -142,7 +142,7 @@ def _setup_subproblem(b, root_vars, relax_subproblem_cons):
         b.component_data_objects(pyo.Objective, descend_into=False, active=True)
     )
     if len(objs) != 1:
-        raise ValueError('Subproblem must have exactly one objective')
+        raise ValueError("Subproblem must have exactly one objective")
     orig_obj = objs[0]
     orig_obj_expr = orig_obj.expr
     b.del_component(orig_obj)
@@ -186,13 +186,13 @@ def _setup_subproblem(b, root_vars, relax_subproblem_cons):
     b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
 
 
-@declare_custom_block(name='BendersCutGenerator')
+@declare_custom_block(name="BendersCutGenerator")
 class BendersCutGeneratorData(BlockData):
     def __init__(self, component):
         if not mpi4py_available:
-            raise ImportError('BendersCutGenerator requires mpi4py.')
+            raise ImportError("BendersCutGenerator requires mpi4py.")
         if not numpy_available:
-            raise ImportError('BendersCutGenerator requires numpy.')
+            raise ImportError("BendersCutGenerator requires numpy.")
         BlockData.__init__(self, component)
 
         self.num_subproblems_by_rank = 0  # np.zeros(self.comm.Get_size())
@@ -249,7 +249,7 @@ class BendersCutGeneratorData(BlockData):
         subproblem_fn,
         subproblem_fn_kwargs,
         root_eta,
-        subproblem_solver='gurobi_persistent',
+        subproblem_solver="gurobi_persistent",
         relax_subproblem_cons=False,
     ):
         _rank = np.argmin(self.num_subproblems_by_rank)
@@ -281,10 +281,10 @@ class BendersCutGeneratorData(BlockData):
 
     def generate_cut(self):
         coefficients = np.zeros(
-            self.global_num_subproblems() * len(self.root_vars), dtype='d'
+            self.global_num_subproblems() * len(self.root_vars), dtype="d"
         )
-        constants = np.zeros(self.global_num_subproblems(), dtype='d')
-        eta_coeffs = np.zeros(self.global_num_subproblems(), dtype='d')
+        constants = np.zeros(self.global_num_subproblems(), dtype="d")
+        eta_coeffs = np.zeros(self.global_num_subproblems(), dtype="d")
 
         for local_subproblem_ndx in range(len(self.subproblems)):
             subproblem = self.subproblems[local_subproblem_ndx]
@@ -311,7 +311,7 @@ class BendersCutGeneratorData(BlockData):
             subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
             if subproblem_solver.name not in solver_dual_sign_convention:
                 raise NotImplementedError(
-                    'BendersCutGenerator is unaware of the dual sign convention of subproblem solver '
+                    "BendersCutGenerator is unaware of the dual sign convention of subproblem solver "
                     + subproblem_solver.name
                 )
             sign_convention = solver_dual_sign_convention[subproblem_solver.name]
@@ -325,7 +325,7 @@ class BendersCutGeneratorData(BlockData):
                 )
                 if res.solver.termination_condition != pyo.TerminationCondition.optimal:
                     raise RuntimeError(
-                        'Unable to generate cut because subproblem failed to converge.'
+                        "Unable to generate cut because subproblem failed to converge."
                     )
                 subproblem_solver.load_vars()
                 subproblem_solver.load_duals()
@@ -335,7 +335,7 @@ class BendersCutGeneratorData(BlockData):
                 )
                 if res.solver.termination_condition != pyo.TerminationCondition.optimal:
                     raise RuntimeError(
-                        'Unable to generate cut because subproblem failed to converge.'
+                        "Unable to generate cut because subproblem failed to converge."
                     )
                 subproblem.solutions.load_from(res)
 
@@ -359,9 +359,9 @@ class BendersCutGeneratorData(BlockData):
             del subproblem.fix_eta
 
         total_num_subproblems = self.global_num_subproblems()
-        global_constants = np.zeros(total_num_subproblems, dtype='d')
-        global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype='d')
-        global_eta_coeffs = np.zeros(total_num_subproblems, dtype='d')
+        global_constants = np.zeros(total_num_subproblems, dtype="d")
+        global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
+        global_eta_coeffs = np.zeros(total_num_subproblems, dtype="d")
 
         comm = self.comm
         comm.Allreduce([constants, MPI.DOUBLE], [global_constants, MPI.DOUBLE])

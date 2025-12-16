@@ -16,16 +16,16 @@ import pyomo.environ as pyo
 from pyomo.common.dependencies import mpi4py_available, numpy_available
 from or_topas.benders.benders_cuts import BendersCutGenerator
 
-ipopt_available = pyo.SolverFactory('ipopt').available(exception_flag=False)
+ipopt_available = pyo.SolverFactory("ipopt").available(exception_flag=False)
 
 for mip_name in (
-    'cplex_direct',
-    'gurobi_direct',
-    'gurobi',
-    'cplex',
-    'glpk',
-    'cbc',
-    'highs',
+    "cplex_direct",
+    "gurobi_direct",
+    "gurobi",
+    "cplex",
+    "glpk",
+    "cbc",
+    "highs",
 ):
     mip_available = pyo.SolverFactory(mip_name).available(exception_flag=False)
     if mip_available:
@@ -40,63 +40,63 @@ class MPITestBenders(unittest.TestCase):
     def test_farmer(self):
         class Farmer:
             def __init__(self):
-                self.crops = ['WHEAT', 'CORN', 'SUGAR_BEETS']
+                self.crops = ["WHEAT", "CORN", "SUGAR_BEETS"]
                 self.total_acreage = 500
                 self.PriceQuota = {
-                    'WHEAT': 100000.0,
-                    'CORN': 100000.0,
-                    'SUGAR_BEETS': 6000.0,
+                    "WHEAT": 100000.0,
+                    "CORN": 100000.0,
+                    "SUGAR_BEETS": 6000.0,
                 }
                 self.SubQuotaSellingPrice = {
-                    'WHEAT': 170.0,
-                    'CORN': 150.0,
-                    'SUGAR_BEETS': 36.0,
+                    "WHEAT": 170.0,
+                    "CORN": 150.0,
+                    "SUGAR_BEETS": 36.0,
                 }
                 self.SuperQuotaSellingPrice = {
-                    'WHEAT': 0.0,
-                    'CORN': 0.0,
-                    'SUGAR_BEETS': 10.0,
+                    "WHEAT": 0.0,
+                    "CORN": 0.0,
+                    "SUGAR_BEETS": 10.0,
                 }
                 self.CattleFeedRequirement = {
-                    'WHEAT': 200.0,
-                    'CORN': 240.0,
-                    'SUGAR_BEETS': 0.0,
+                    "WHEAT": 200.0,
+                    "CORN": 240.0,
+                    "SUGAR_BEETS": 0.0,
                 }
                 self.PurchasePrice = {
-                    'WHEAT': 238.0,
-                    'CORN': 210.0,
-                    'SUGAR_BEETS': 100000.0,
+                    "WHEAT": 238.0,
+                    "CORN": 210.0,
+                    "SUGAR_BEETS": 100000.0,
                 }
                 self.PlantingCostPerAcre = {
-                    'WHEAT': 150.0,
-                    'CORN': 230.0,
-                    'SUGAR_BEETS': 260.0,
+                    "WHEAT": 150.0,
+                    "CORN": 230.0,
+                    "SUGAR_BEETS": 260.0,
                 }
                 self.scenarios = [
-                    'BelowAverageScenario',
-                    'AverageScenario',
-                    'AboveAverageScenario',
+                    "BelowAverageScenario",
+                    "AverageScenario",
+                    "AboveAverageScenario",
                 ]
                 self.crop_yield = dict()
-                self.crop_yield['BelowAverageScenario'] = {
-                    'WHEAT': 2.0,
-                    'CORN': 2.4,
-                    'SUGAR_BEETS': 16.0,
+                self.crop_yield["BelowAverageScenario"] = {
+                    "WHEAT": 2.0,
+                    "CORN": 2.4,
+                    "SUGAR_BEETS": 16.0,
                 }
-                self.crop_yield['AverageScenario'] = {
-                    'WHEAT': 2.5,
-                    'CORN': 3.0,
-                    'SUGAR_BEETS': 20.0,
+                self.crop_yield["AverageScenario"] = {
+                    "WHEAT": 2.5,
+                    "CORN": 3.0,
+                    "SUGAR_BEETS": 20.0,
                 }
-                self.crop_yield['AboveAverageScenario'] = {
-                    'WHEAT': 3.0,
-                    'CORN': 3.6,
-                    'SUGAR_BEETS': 24.0,
+                self.crop_yield["AboveAverageScenario"] = {
+                    "WHEAT": 3.0,
+                    "CORN": 3.6,
+                    "SUGAR_BEETS": 24.0,
                 }
                 self.scenario_probabilities = dict()
-                self.scenario_probabilities['BelowAverageScenario'] = 0.3333
-                self.scenario_probabilities['AverageScenario'] = 0.3334
-                self.scenario_probabilities['AboveAverageScenario'] = 0.3333
+                self.scenario_probabilities["BelowAverageScenario"] = 0.3333
+                self.scenario_probabilities["AverageScenario"] = 0.3334
+                self.scenario_probabilities["AboveAverageScenario"] = 0.3333
 
         def create_root(farmer):
             m = pyo.ConcreteModel()
@@ -191,9 +191,9 @@ class MPITestBenders(unittest.TestCase):
         m.benders.set_input(root_vars=root_vars, tol=1e-8)
         for s in farmer.scenarios:
             subproblem_fn_kwargs = dict()
-            subproblem_fn_kwargs['root'] = m
-            subproblem_fn_kwargs['farmer'] = farmer
-            subproblem_fn_kwargs['scenario'] = s
+            subproblem_fn_kwargs["root"] = m
+            subproblem_fn_kwargs["farmer"] = farmer
+            subproblem_fn_kwargs["scenario"] = s
             m.benders.add_subproblem(
                 subproblem_fn=create_subproblem,
                 subproblem_fn_kwargs=subproblem_fn_kwargs,
@@ -208,13 +208,13 @@ class MPITestBenders(unittest.TestCase):
             if len(cuts_added) == 0:
                 break
 
-        self.assertAlmostEqual(m.devoted_acreage['CORN'].value, 80, 7)
-        self.assertAlmostEqual(m.devoted_acreage['SUGAR_BEETS'].value, 250, 7)
-        self.assertAlmostEqual(m.devoted_acreage['WHEAT'].value, 170, 7)
+        self.assertAlmostEqual(m.devoted_acreage["CORN"].value, 80, 7)
+        self.assertAlmostEqual(m.devoted_acreage["SUGAR_BEETS"].value, 250, 7)
+        self.assertAlmostEqual(m.devoted_acreage["WHEAT"].value, 170, 7)
 
-    @unittest.skipIf(not mpi4py_available, 'mpi4py is not available.')
-    @unittest.skipIf(not numpy_available, 'numpy is not available.')
-    @unittest.skipIf(not ipopt_available, 'ipopt is not available.')
+    @unittest.skipIf(not mpi4py_available, "mpi4py is not available.")
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    @unittest.skipIf(not ipopt_available, "ipopt is not available.")
     def test_grothey(self):
         def create_root():
             m = pyo.ConcreteModel()
@@ -243,11 +243,11 @@ class MPITestBenders(unittest.TestCase):
         m.benders.set_input(root_vars=root_vars, tol=1e-8)
         m.benders.add_subproblem(
             subproblem_fn=create_subproblem,
-            subproblem_fn_kwargs={'root': m},
+            subproblem_fn_kwargs={"root": m},
             root_eta=m.eta,
-            subproblem_solver='ipopt',
+            subproblem_solver="ipopt",
         )
-        opt = pyo.SolverFactory('ipopt')
+        opt = pyo.SolverFactory("ipopt")
 
         for i in range(30):
             res = opt.solve(m, tee=False)
@@ -257,76 +257,76 @@ class MPITestBenders(unittest.TestCase):
         self.assertAlmostEqual(m.y.value, 2.721381, 4)
         self.assertAlmostEqual(m.eta.value, -0.0337568, 4)
 
-    @unittest.skipIf(not mpi4py_available, 'mpi4py is not available.')
-    @unittest.skipIf(not numpy_available, 'numpy is not available.')
-    @unittest.skipIf(not mip_available, 'MIP solver is not available.')
+    @unittest.skipIf(not mpi4py_available, "mpi4py is not available.")
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    @unittest.skipIf(not mip_available, "MIP solver is not available.")
     def test_four_scen_farmer(self):
         class FourScenFarmer:
             def __init__(self):
-                self.crops = ['WHEAT', 'CORN', 'SUGAR_BEETS']
+                self.crops = ["WHEAT", "CORN", "SUGAR_BEETS"]
                 self.total_acreage = 500
                 self.PriceQuota = {
-                    'WHEAT': 100000.0,
-                    'CORN': 100000.0,
-                    'SUGAR_BEETS': 6000.0,
+                    "WHEAT": 100000.0,
+                    "CORN": 100000.0,
+                    "SUGAR_BEETS": 6000.0,
                 }
                 self.SubQuotaSellingPrice = {
-                    'WHEAT': 170.0,
-                    'CORN': 150.0,
-                    'SUGAR_BEETS': 36.0,
+                    "WHEAT": 170.0,
+                    "CORN": 150.0,
+                    "SUGAR_BEETS": 36.0,
                 }
                 self.SuperQuotaSellingPrice = {
-                    'WHEAT': 0.0,
-                    'CORN': 0.0,
-                    'SUGAR_BEETS': 10.0,
+                    "WHEAT": 0.0,
+                    "CORN": 0.0,
+                    "SUGAR_BEETS": 10.0,
                 }
                 self.CattleFeedRequirement = {
-                    'WHEAT': 200.0,
-                    'CORN': 240.0,
-                    'SUGAR_BEETS': 0.0,
+                    "WHEAT": 200.0,
+                    "CORN": 240.0,
+                    "SUGAR_BEETS": 0.0,
                 }
                 self.PurchasePrice = {
-                    'WHEAT': 238.0,
-                    'CORN': 210.0,
-                    'SUGAR_BEETS': 100000.0,
+                    "WHEAT": 238.0,
+                    "CORN": 210.0,
+                    "SUGAR_BEETS": 100000.0,
                 }
                 self.PlantingCostPerAcre = {
-                    'WHEAT': 150.0,
-                    'CORN': 230.0,
-                    'SUGAR_BEETS': 260.0,
+                    "WHEAT": 150.0,
+                    "CORN": 230.0,
+                    "SUGAR_BEETS": 260.0,
                 }
                 self.scenarios = [
-                    'BelowAverageScenario',
-                    'AverageScenario',
-                    'AboveAverageScenario',
-                    'Scenario4',
+                    "BelowAverageScenario",
+                    "AverageScenario",
+                    "AboveAverageScenario",
+                    "Scenario4",
                 ]
                 self.crop_yield = dict()
-                self.crop_yield['BelowAverageScenario'] = {
-                    'WHEAT': 2.0,
-                    'CORN': 2.4,
-                    'SUGAR_BEETS': 16.0,
+                self.crop_yield["BelowAverageScenario"] = {
+                    "WHEAT": 2.0,
+                    "CORN": 2.4,
+                    "SUGAR_BEETS": 16.0,
                 }
-                self.crop_yield['AverageScenario'] = {
-                    'WHEAT': 2.5,
-                    'CORN': 3.0,
-                    'SUGAR_BEETS': 20.0,
+                self.crop_yield["AverageScenario"] = {
+                    "WHEAT": 2.5,
+                    "CORN": 3.0,
+                    "SUGAR_BEETS": 20.0,
                 }
-                self.crop_yield['AboveAverageScenario'] = {
-                    'WHEAT': 3.0,
-                    'CORN': 3.6,
-                    'SUGAR_BEETS': 24.0,
+                self.crop_yield["AboveAverageScenario"] = {
+                    "WHEAT": 3.0,
+                    "CORN": 3.6,
+                    "SUGAR_BEETS": 24.0,
                 }
-                self.crop_yield['Scenario4'] = {
-                    'WHEAT': 2.0,
-                    'CORN': 3.0,
-                    'SUGAR_BEETS': 24.0,
+                self.crop_yield["Scenario4"] = {
+                    "WHEAT": 2.0,
+                    "CORN": 3.0,
+                    "SUGAR_BEETS": 24.0,
                 }
                 self.scenario_probabilities = dict()
-                self.scenario_probabilities['BelowAverageScenario'] = 0.25
-                self.scenario_probabilities['AverageScenario'] = 0.25
-                self.scenario_probabilities['AboveAverageScenario'] = 0.25
-                self.scenario_probabilities['Scenario4'] = 0.25
+                self.scenario_probabilities["BelowAverageScenario"] = 0.25
+                self.scenario_probabilities["AverageScenario"] = 0.25
+                self.scenario_probabilities["AboveAverageScenario"] = 0.25
+                self.scenario_probabilities["Scenario4"] = 0.25
 
         def create_root(farmer):
             m = pyo.ConcreteModel()
@@ -421,9 +421,9 @@ class MPITestBenders(unittest.TestCase):
         m.benders.set_input(root_vars=root_vars, tol=1e-8)
         for s in farmer.scenarios:
             subproblem_fn_kwargs = dict()
-            subproblem_fn_kwargs['root'] = m
-            subproblem_fn_kwargs['farmer'] = farmer
-            subproblem_fn_kwargs['scenario'] = s
+            subproblem_fn_kwargs["root"] = m
+            subproblem_fn_kwargs["farmer"] = farmer
+            subproblem_fn_kwargs["scenario"] = s
             m.benders.add_subproblem(
                 subproblem_fn=create_subproblem,
                 subproblem_fn_kwargs=subproblem_fn_kwargs,
@@ -438,6 +438,6 @@ class MPITestBenders(unittest.TestCase):
             if len(cuts_added) == 0:
                 break
 
-        self.assertAlmostEqual(m.devoted_acreage['CORN'].value, 100, 7)
-        self.assertAlmostEqual(m.devoted_acreage['SUGAR_BEETS'].value, 250, 7)
-        self.assertAlmostEqual(m.devoted_acreage['WHEAT'].value, 150, 7)
+        self.assertAlmostEqual(m.devoted_acreage["CORN"].value, 100, 7)
+        self.assertAlmostEqual(m.devoted_acreage["SUGAR_BEETS"].value, 250, 7)
+        self.assertAlmostEqual(m.devoted_acreage["WHEAT"].value, 150, 7)

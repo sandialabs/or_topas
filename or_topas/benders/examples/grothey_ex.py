@@ -43,11 +43,11 @@ def main():
     m.benders.set_input(root_vars=root_vars, tol=1e-8)
     m.benders.add_subproblem(
         subproblem_fn=create_subproblem,
-        subproblem_fn_kwargs={'root': m},
+        subproblem_fn_kwargs={"root": m},
         root_eta=m.eta,
-        subproblem_solver='ipopt',
+        subproblem_solver="ipopt",
     )
-    opt = pyo.SolverFactory('gurobi_direct')
+    opt = pyo.SolverFactory("gurobi_direct")
 
     for i in range(30):
         res = opt.solve(m, tee=False)
@@ -57,5 +57,5 @@ def main():
             break
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
