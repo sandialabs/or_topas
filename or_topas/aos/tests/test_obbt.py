@@ -29,7 +29,7 @@ from or_topas import (
     obbt_analysis_bounds_and_solutions,
     obbt_analysis,
 )
-import or_topas.tests.test_cases as tc
+import or_topas.aos.tests.test_cases as tc
 
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi"))
 

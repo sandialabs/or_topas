@@ -136,7 +136,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool_1": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool_1",
                     "policy": "keep_all",
                 },
@@ -203,7 +203,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool_1": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool_1",
                     "policy": "keep_all",
                 },
@@ -264,7 +264,7 @@ class TestSolnPool(unittest.TestCase):
             },
             "pool_2": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool_2",
                     "policy": "keep_latest",
                 },
@@ -311,7 +311,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool",
                     "policy": "keep_all",
                 },
@@ -406,7 +406,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool",
                     "policy": "keep_latest",
                 },
@@ -476,7 +476,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool",
                     "policy": "keep_latest_unique",
                 },
@@ -544,7 +544,7 @@ class TestSolnPool(unittest.TestCase):
 
         assert pm.to_dict() == {
             "metadata": {
-                "as_solution_source": "or_topas.solnpool.default_as_solution",
+                "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                 "context_name": "pool",
                 "policy": "keep_best",
             },
@@ -613,7 +613,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool",
                     "policy": "keep_best",
                 },
@@ -691,7 +691,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool",
                     "policy": "keep_best",
                 },
@@ -766,7 +766,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool",
                     "policy": "keep_best",
                 },
@@ -863,7 +863,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool",
                     "policy": "keep_best",
                 },
@@ -921,7 +921,7 @@ class TestSolnPool(unittest.TestCase):
         assert pm.get_pool_dicts() == {
             "pool": {
                 "metadata": {
-                    "as_solution_source": "or_topas.solnpool.default_as_solution",
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
                     "context_name": "pool",
                     "policy": "keep_best",
                 },

@@ -16,7 +16,7 @@ from pyomo.common.dependencies import numpy as np, numpy_available
 
 from or_topas import gurobi_generate_solutions
 from pyomo.contrib.appsi.solvers import Gurobi
-import or_topas.tests.test_cases as tc
+import or_topas.aos.tests.test_cases as tc
 
 gurobipy_available = Gurobi().available()
 

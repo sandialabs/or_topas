@@ -25,7 +25,7 @@ if numpy_available:
     from numpy.testing import assert_array_almost_equal
 
 from or_topas import enumerate_binary_solutions
-import or_topas.tests.test_cases as tc
+import or_topas.aos.tests.test_cases as tc
 
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi"))
 
