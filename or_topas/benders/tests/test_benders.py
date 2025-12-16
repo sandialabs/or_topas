@@ -34,9 +34,9 @@ for mip_name in (
 
 class MPITestBenders(unittest.TestCase):
 
-    @unittest.skipIf(not mpi4py_available, 'mpi4py is not available.')
-    @unittest.skipIf(not numpy_available, 'numpy is not available.')
-    @unittest.skipIf(not mip_available, 'MIP solver is not available.')
+    @unittest.skipIf(not mpi4py_available, "mpi4py is not available.")
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    @unittest.skipIf(not mip_available, "MIP solver is not available.")
     def test_farmer(self):
         class Farmer:
             def __init__(self):
