@@ -12,7 +12,12 @@ Operations Research Toolkit for Pyomo Alternative Solutions
 
 ## Overview
 
-OR-Topas provides a python toolkit for generating and analyzing alternative solutions for pyomo models.
+OR-Topas provides a python toolkit for generating and analyzing
+alternative solutions for pyomo models.  This library is adapted from the
+pyomo.contrib.alternative_solutions and pyomo.contrib.benders libraries.
+OR-Topas extends the solution pool definition from pyomo, and it includes
+new Benders implementations that support generation for alternative
+solutions.
 
 ## Testing
 
@@ -36,4 +41,7 @@ cd or_topas
 pytest --cov=or_topas --cov-report term-missing .
 ```
 
-Note that pytest coverage includes coverage of test files themselves.  This gives a somewhat skewed sense of coverage for the code base, but it helps identify tests that are omitted or not executed completely.
+Note that pytest coverage includes coverage of test files themselves.
+This gives a somewhat skewed sense of coverage for the code base, but
+it helps identify tests that are omitted or not executed completely.
+

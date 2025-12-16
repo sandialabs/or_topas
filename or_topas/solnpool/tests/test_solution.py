@@ -11,17 +11,22 @@
 
 import pyomo.opt
 import pyomo.environ as pyo
+from pyomo.common.dependencies import attempt_import
 import pyomo.common.unittest as unittest
+
 import or_topas.aos_utils as au
 from or_topas import PyomoSolution
 from or_topas import enumerate_binary_solutions
 
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
-pytestmark = unittest.pytest.mark.parametrize("mip_solver", solvers)
+
+parameterized, param_available = attempt_import("parameterized")
+if not param_available:
+    raise unittest.SkipTest("Parameterized is not available.")
+parameterized = parameterized.parameterized
 
 
-@unittest.pytest.mark.default
-class TestSolutionUnit:
+class TestSolutionUnit(unittest.TestCase):
 
     def get_model(self):
         """
@@ -42,6 +47,7 @@ class TestSolutionUnit:
         m.con_z = pyo.Constraint(expr=m.z <= 3)
         return m
 
+    @parameterized.expand(input=solvers)
     def test_solution(self, mip_solver):
         """
         Create a Solution Object, call its functions, and ensure the correct
@@ -148,6 +154,7 @@ class TestSolutionUnit:
         assert set(sol_val.keys()) == {"x", "y", "z", "f"}
         assert set(solution.fixed_variable_names) == {"f"}
 
+    @parameterized.expand(input=solvers)
     def test_soln_order(self, mip_solver):
         """ """
         values = [10, 9, 2, 1, 1]
