@@ -9,6 +9,7 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
+from pyomo.common.unittest import pytest
 import pyomo.common.unittest as unittest
 import pyomo.environ as pyo
 
@@ -31,8 +32,8 @@ for mip_name in (
         break
 
 
-@unittest.pytest.mark.mpi
 class MPITestBenders(unittest.TestCase):
+
     @unittest.skipIf(not mpi4py_available, 'mpi4py is not available.')
     @unittest.skipIf(not numpy_available, 'numpy is not available.')
     @unittest.skipIf(not mip_available, 'MIP solver is not available.')
