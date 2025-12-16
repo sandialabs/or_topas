@@ -13,7 +13,7 @@ from pyomo.common.dependencies import numpy_available
 from pyomo.common import unittest
 
 import pyomo.common.errors
-import or_topas.tests.test_cases as tc
+import or_topas.aos.tests.test_cases as tc
 from or_topas import gurobi_enumerate_linear_solutions
 from pyomo.opt import check_available_solvers
 

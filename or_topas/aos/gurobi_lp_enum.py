@@ -19,13 +19,11 @@ gurobipy, gurobi_available = attempt_import("gurobipy")
 
 import pyomo.environ as pyo
 import pyomo.common.errors
-from or_topas import (
-    aos_utils,
-    shifted_lp,
-    PyomoPoolManager,
-    PoolPolicy,
-)
 from pyomo.contrib import appsi
+
+from or_topas import aos_utils
+from or_topas import PyomoPoolManager, PoolPolicy
+from . import shifted_lp
 
 
 class NoGoodCutGenerator:

@@ -21,7 +21,7 @@ if not param_available:
     raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
 
-import or_topas.tests.test_cases as tc
+import or_topas.aos.tests.test_cases as tc
 from or_topas import lp_enum
 
 #

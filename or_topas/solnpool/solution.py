@@ -18,7 +18,7 @@ import functools
 
 import pyomo.environ as pyo
 
-from .aos_utils import MyMunch, to_dict
+from or_topas.aos_utils import MyMunch, to_dict
 
 nan = float("nan")
 
