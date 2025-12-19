@@ -237,7 +237,7 @@ class Benders_Parallel(Benders_Abstract):
             return self.transform_to_cut_map[self.transform](self)
         else:
             raise NotImplementedError(
-            f"Benders_Parallel does not have {self.transform=} implemented"
+                f"Benders_Parallel does not have {self.transform=} implemented"
             )
 
     def generate_cut(self):

@@ -25,7 +25,7 @@ import pyomo.environ as pyo
 logger = logging.getLogger(__name__)
 
 
-#@declare_custom_block(name="BendersGenerator_Abstract")
+# @declare_custom_block(name="BendersGenerator_Abstract")
 class Benders_Abstract(BlockData):
     solver_dual_sign_convention = dict(
         ipopt=-1,
@@ -125,13 +125,13 @@ class Benders_Abstract(BlockData):
         subproblem, complicating_vars_map = subproblem_fn(**subproblem_fn_kwargs)
         self.subproblems.append(subproblem)
         self.complicating_vars_maps.append(complicating_vars_map)
-        b= subproblem
-        root_vars=[
-                complicating_vars_map[i]
-                for i in self.root_vars
-                if i in complicating_vars_map
-            ]
-        relax_subproblem_cons=relax_subproblem_cons
+        b = subproblem
+        root_vars = [
+            complicating_vars_map[i]
+            for i in self.root_vars
+            if i in complicating_vars_map
+        ]
+        relax_subproblem_cons = relax_subproblem_cons
         self._setup_subproblem(
             b=b,
             root_vars=root_vars,
