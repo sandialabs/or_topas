@@ -2,6 +2,8 @@ import logging
 
 from pyomo.common.collections import ComponentSet
 from pyomo.common.dependencies import (
+    mpi4py,
+    mpi4py_available,
     numpy as np,
     numpy_available,
 )
@@ -9,16 +11,8 @@ from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 from pyomo.core.base.block import BlockData, declare_custom_block
 import pyomo.environ as pyo
 from .benders import Benders_Abstract
-
 logger = logging.getLogger(__name__)
 
-"""
-This is a trivial serialization of the parallel version at the moment
-Where
-self.num_subproblems_by_rank = np.zeros(self.comm.Get_size())
-is replaced by
-self.num_subproblems_by_rank = np.zeros(1)
-"""
 
 @declare_custom_block(name="BendersGenerator_Serial")
 class Benders_Serial(Benders_Abstract):
@@ -26,13 +20,13 @@ class Benders_Serial(Benders_Abstract):
 
     def __init__(self, component):
         if not numpy_available:
-            raise ImportError("BendersGenerator_Serial requires numpy.")
+            raise ImportError("BendersGenerator_Parallel requires numpy.")
         super().__init__(component)
         self.transform_to_cut_map = {
             "feasibility": Benders_Serial.generate_cut_feasibility_transform,
         }
         self.default_transform_name = "feasibility"
-        self.num_subproblems_by_rank = np.zeros(1)  # np.zeros(self.comm.Get_size())
+        self.num_subproblems_by_rank = 0  # np.zeros(self.comm.Get_size())
         self.all_root_etas = list()
         # map from ndx in self.subproblems (local) to the global subproblem ndx
         self._subproblem_ndx_map = dict()
@@ -58,6 +52,7 @@ class Benders_Serial(Benders_Abstract):
         # else:
         #     self.comm = MPI.COMM_WORLD
         # self.num_subproblems_by_rank = np.zeros(self.comm.Get_size())
+        self.num_subproblems_by_rank = np.zeros(1)
         super().set_input(*args, **kwargs)
         self.all_root_etas = list()
         self._subproblem_ndx_map = dict()
@@ -74,7 +69,6 @@ class Benders_Serial(Benders_Abstract):
         self.num_subproblems_by_rank[_rank] += 1
         self.all_root_etas.append(root_eta)
         # if _rank == self.comm.Get_rank():
-        #functionally _rank == 1 which is always true in trivial serialization
         super().add_subproblem(
             subproblem_fn=subproblem_fn,
             subproblem_fn_kwargs=subproblem_fn_kwargs,
@@ -171,16 +165,18 @@ class Benders_Serial(Benders_Abstract):
             del subproblem.fix_eta
 
         total_num_subproblems = self.global_num_subproblems()
-        global_constants = np.zeros(total_num_subproblems, dtype="d")
-        global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
-        global_eta_coeffs = np.zeros(total_num_subproblems, dtype="d")
+        # global_constants = np.zeros(total_num_subproblems, dtype="d")
+        # global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
+        # global_eta_coeffs = np.zeros(total_num_subproblems, dtype="d")
 
-        #Trivial version of serial acts like parallel when one thread
-        #if one thread then all of this information is already shared
         # comm = self.comm
         # comm.Allreduce([constants, MPI.DOUBLE], [global_constants, MPI.DOUBLE])
         # comm.Allreduce([eta_coeffs, MPI.DOUBLE], [global_eta_coeffs, MPI.DOUBLE])
         # comm.Allreduce([coefficients, MPI.DOUBLE], [global_coeffs, MPI.DOUBLE])
+
+        global_constants = constants
+        global_coeffs = coefficients
+        global_eta_coeffs = eta_coeffs
 
         global_constants = [float(i) for i in global_constants]
         global_coeffs = [float(i) for i in global_coeffs]
