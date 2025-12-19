@@ -9,7 +9,12 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-from or_topas.benders.benders_cuts import BendersCutGenerator
+# from or_topas.benders.benders_cuts import BendersCutGenerator
+# from or_topas.benders.benders_parallel import BendersGenerator_Parallel as BendersCutGenerator
+from or_topas.benders.benders_serial import (
+    BendersGenerator_Serial as BendersCutGenerator,
+)
+
 import pyomo.environ as pyo
 
 

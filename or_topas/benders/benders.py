@@ -25,7 +25,7 @@ import pyomo.environ as pyo
 logger = logging.getLogger(__name__)
 
 
-#@declare_custom_block(name="BendersGenerator_Abstract")
+# @declare_custom_block(name="BendersGenerator_Abstract")
 class Benders_Abstract(BlockData):
     solver_dual_sign_convention = dict(
         ipopt=-1,
@@ -125,13 +125,13 @@ class Benders_Abstract(BlockData):
         subproblem, complicating_vars_map = subproblem_fn(**subproblem_fn_kwargs)
         self.subproblems.append(subproblem)
         self.complicating_vars_maps.append(complicating_vars_map)
-        b= subproblem
-        root_vars=[
-                complicating_vars_map[i]
-                for i in self.root_vars
-                if i in complicating_vars_map
-            ]
-        relax_subproblem_cons=relax_subproblem_cons
+        b = subproblem
+        root_vars = [
+            complicating_vars_map[i]
+            for i in self.root_vars
+            if i in complicating_vars_map
+        ]
+        relax_subproblem_cons = relax_subproblem_cons
         self._setup_subproblem(
             b=b,
             root_vars=root_vars,
@@ -154,6 +154,8 @@ class Benders_Abstract(BlockData):
     # need transform
     # need evaluate a model (possibly several)
     def evaluate_all_subproblems(self):
+        # TODO: we can always evaluate given a transform
+        # it may or may not make a ton of sense but we should always be able to do it
         # take the x information from root problem in parent block
         raise NotImplementedError(
             "Inheriting classes must implement evaluate_all_subproblems"
@@ -202,6 +204,18 @@ class Benders_Abstract(BlockData):
                 if i in a:
                     return True
         return False
+
+    @staticmethod
+    def _relax_first_stage_var_copies():
+        pass
+
+    @staticmethod
+    def _fix_first_stage_var_copies():
+        pass
+
+    @staticmethod
+    def _fix_eta_copies():
+        pass
 
     #
     # Transform methods go here
@@ -280,3 +294,15 @@ class Benders_Abstract(BlockData):
                 Benders_Abstract._del_con(c)
 
         b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
+
+
+"""
+    def evaluate(y):
+        return (optimal_x, optimal_y, dual_alpha, dual_beta)
+    def create_cut(dual_alpha, dual_beta):
+        return cut(...)
+    
+    def generate_cut(y):
+        _,_,dual_alpha, dual_beta = evaluate(y)
+        return create_cut
+"""
