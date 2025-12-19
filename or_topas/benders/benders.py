@@ -25,7 +25,7 @@ import pyomo.environ as pyo
 logger = logging.getLogger(__name__)
 
 
-@declare_custom_block(name="BendersGenerator_Abstract")
+#@declare_custom_block(name="BendersGenerator_Abstract")
 class Benders_Abstract(BlockData):
     solver_dual_sign_convention = dict(
         ipopt=-1,
@@ -46,10 +46,11 @@ class Benders_Abstract(BlockData):
     def __init__(self, component):
         BlockData.__init__(self, component)
         self.transform_map = {
-            Benders.default_transform_name: Benders._feasibility_subproblem_transform,
-            "feasibility": Benders._feasibility_subproblem_transform,
+            Benders_Abstract.default_transform_name: Benders_Abstract._feasibility_subproblem_transform,
+            "feasibility": Benders_Abstract._feasibility_subproblem_transform,
         }
         self.default_subproblem_solver = "gurobi_persistent"
+        self.default_transform_name = Benders_Abstract.default_transform_name
         self.default_relax_subproblem_cons = False
         self.subproblems = list()
         self.complicating_vars_maps = list()
@@ -82,7 +83,7 @@ class Benders_Abstract(BlockData):
         self.complicating_vars_maps = list()
         self.root_vars = list(root_vars)
         self.root_vars_indices = pyo.ComponentMap()
-        self.transform = kwargs.get("transform", Benders.default_transform_name)
+        self.transform = kwargs.get("transform", self.default_transform_name)
         for i, v in enumerate(self.root_vars):
             self.root_vars_indices[v] = i
         self.tol = kwargs.get("tol", 1e-6)
@@ -124,13 +125,16 @@ class Benders_Abstract(BlockData):
         subproblem, complicating_vars_map = subproblem_fn(**subproblem_fn_kwargs)
         self.subproblems.append(subproblem)
         self.complicating_vars_maps.append(complicating_vars_map)
-        Benders._setup_subproblem(
-            b=subproblem,
-            root_vars=[
+        b= subproblem
+        root_vars=[
                 complicating_vars_map[i]
                 for i in self.root_vars
                 if i in complicating_vars_map
-            ],
+            ]
+        relax_subproblem_cons=relax_subproblem_cons
+        self._setup_subproblem(
+            b=b,
+            root_vars=root_vars,
             relax_subproblem_cons=relax_subproblem_cons,
         )
         # parallel specific code
@@ -252,7 +256,7 @@ class Benders_Abstract(BlockData):
         ):
             if not relax_subproblem_cons:
                 c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
-                if not Benders._any_common_elements(root_vars, c_vars):
+                if not Benders_Abstract._any_common_elements(root_vars, c_vars):
                     continue
             if c.equality:
                 body = c.body
@@ -260,7 +264,7 @@ class Benders_Abstract(BlockData):
                 body -= rhs
                 b.aux_cons.add(body - b._z <= 0)
                 b.aux_cons.add(-body - b._z <= 0)
-                Benders._del_con(c)
+                Benders_Abstract._del_con(c)
             else:
                 body = c.body
                 lower = pyo.value(c.lower)
@@ -273,6 +277,6 @@ class Benders_Abstract(BlockData):
                     body_lower = -body_lower
                     body_lower -= b._z
                     b.aux_cons.add(body_lower <= 0)
-                Benders._del_con(c)
+                Benders_Abstract._del_con(c)
 
         b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)

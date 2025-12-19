@@ -39,10 +39,11 @@ class Benders_Parallel(Benders_Abstract):
             raise ImportError("BendersGenerator_Parallel requires mpi4py.")
         if not numpy_available:
             raise ImportError("BendersGenerator_Parallel requires numpy.")
-        super().__init__(self, component)
+        super().__init__(component)
         self.transform_to_cut_map = {
             "feasibility": Benders_Parallel.generate_cut_feasibility_transform,
         }
+        self.default_transform_name = "feasibility"
         self.num_subproblems_by_rank = 0  # np.zeros(self.comm.Get_size())
         self.all_root_etas = list()
         # map from ndx in self.subproblems (local) to the global subproblem ndx
@@ -68,6 +69,7 @@ class Benders_Parallel(Benders_Abstract):
             self.comm = kwargs.get("comm")
         else:
             self.comm = MPI.COMM_WORLD
+        self.num_subproblems_by_rank = np.zeros(self.comm.Get_size())
         super().set_input(*args, **kwargs)
         self.all_root_etas = list()
         self._subproblem_ndx_map = dict()
@@ -90,6 +92,9 @@ class Benders_Parallel(Benders_Abstract):
                 root_eta=root_eta,
                 subproblem_solver=subproblem_solver,
                 relax_subproblem_cons=relax_subproblem_cons,
+            )
+            self._subproblem_ndx_map[len(self.subproblems) - 1] = (
+                self.global_num_subproblems() - 1
             )
 
     def generate_cut_feasibility_transform(self):
@@ -229,9 +234,11 @@ class Benders_Parallel(Benders_Abstract):
 
     def generate_all_subproblem_cut(self):
         if self.transform in self.transform_to_cut_map:
-            return self.transform_to_cut_map[self.transform]()
+            return self.transform_to_cut_map[self.transform](self)
         else:
-            pass
+            raise NotImplementedError(
+            f"Benders_Parallel does not have {self.transform=} implemented"
+            )
 
     def generate_cut(self):
         return self.generate_all_subproblem_cut()

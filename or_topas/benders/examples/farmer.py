@@ -14,7 +14,8 @@ import sys
 import time
 
 from pyomo.common.dependencies import mpi4py
-from or_topas.benders.benders_cuts import BendersCutGenerator
+#from or_topas.benders.benders_cuts import BendersCutGenerator
+from or_topas.benders.benders_parallel import BendersGenerator_Parallel as BendersCutGenerator
 import pyomo.environ as pyo
 
 
