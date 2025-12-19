@@ -11,6 +11,7 @@ from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 from pyomo.core.base.block import BlockData, declare_custom_block
 import pyomo.environ as pyo
 from .benders import Benders_Abstract
+
 logger = logging.getLogger(__name__)
 
 
@@ -224,7 +225,7 @@ class Benders_Serial(Benders_Abstract):
             return self.transform_to_cut_map[self.transform](self)
         else:
             raise NotImplementedError(
-            f"Benders_Serial does not have {self.transform=} implemented"
+                f"Benders_Serial does not have {self.transform=} implemented"
             )
 
     def generate_cut(self):
