@@ -52,6 +52,7 @@ class Benders_Abstract(BlockData):
         self.default_subproblem_solver = "gurobi_persistent"
         self.default_transform_name = Benders_Abstract.default_transform_name
         self.default_relax_subproblem_cons = False
+        self.default_relax_subproblem_complicating_vars = True
         self.subproblems = list()
         self.complicating_vars_maps = list()
         self.root_vars = list()
@@ -112,6 +113,10 @@ class Benders_Abstract(BlockData):
         relax_subproblem_cons = kwargs.get(
             "relax_subproblem_cons", self.default_relax_subproblem_cons
         )
+        relax_subproblem_complicating_vars = kwargs.get(
+            "relax_subproblem_complicating_vars",
+            self.default_relax_subproblem_complicating_vars,
+        )
 
         # parallel specific code
         # so comment out
@@ -123,6 +128,10 @@ class Benders_Abstract(BlockData):
         # not parallel specific code
         self.root_etas.append(root_eta)
         subproblem, complicating_vars_map = subproblem_fn(**subproblem_fn_kwargs)
+        if relax_subproblem_complicating_vars:
+            Benders_Abstract._relax_first_stage_var_copies(
+                complicating_vars_map=complicating_vars_map
+            )
         self.subproblems.append(subproblem)
         self.complicating_vars_maps.append(complicating_vars_map)
         b = subproblem
@@ -206,16 +215,28 @@ class Benders_Abstract(BlockData):
         return False
 
     @staticmethod
-    def _relax_first_stage_var_copies():
-        pass
+    def _relax_first_stage_var_copies(complicating_vars_map):
+        for subproblem_var in complicating_vars_map.values():
+            subproblem_var.bounds = (None, None)
 
     @staticmethod
-    def _fix_first_stage_var_copies():
-        pass
+    def _fix_first_stage_var_copies(*, subproblem, root_vars, complicating_vars_map):
+        subproblem.fix_complicating_vars = pyo.ConstraintList()
+        var_to_con_map = pyo.ComponentMap()
+        for root_var in root_vars:
+            if root_var in complicating_vars_map:
+                sub_var = complicating_vars_map[root_var]
+                sub_var.set_value(root_var.value, skip_validation=True)
+                new_con = subproblem.fix_complicating_vars.add(
+                    sub_var - root_var.value == 0
+                )
+                var_to_con_map[root_var] = new_con
+        return var_to_con_map
 
     @staticmethod
-    def _fix_eta_copies():
-        pass
+    def _fix_eta_copies(*, subproblem, root_eta):
+        subproblem.fix_eta = pyo.Constraint(expr=subproblem._eta - root_eta.value == 0)
+        subproblem._eta.set_value(root_eta.value, skip_validation=True)
 
     #
     # Transform methods go here
