@@ -9,47 +9,14 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-# from pyomo.common.collections import Bunch as Munch
-from munch import Munch
 import logging
-from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
-
-
-from pyomo.common.dependencies import numpy as numpy, numpy_available
-
-if numpy_available:
-    import numpy.random
-    from numpy.linalg import norm
 
 import pyomo.environ as pyo
 from pyomo.common.modeling import unique_component_name
 from pyomo.common.collections import ComponentSet
 import pyomo.util.vars_from_expressions as vfe
-
-
-@contextmanager
-def logcontext(level):
-    """
-    This context manager is used to dynamically set the specified logging level
-    and then execute a block of code using that logging level.  When the context is
-    deleted, the logging level is reset to the original value.
-
-    Examples
-    --------
-    >>> with logcontext(logging.INFO):
-    ...    logging.debug("This will not be printed")
-    ...    logging.info("This will be printed")
-
-    """
-    logger = logging.getLogger()
-    current_level = logger.getEffectiveLevel()
-    logger.setLevel(level)
-    try:
-        yield
-    finally:
-        logger.setLevel(current_level)
 
 
 def get_active_objective(model):
@@ -67,14 +34,14 @@ def get_active_objective(model):
     return active_objs[0]
 
 
-def _add_aos_block(model, name="_aos_block"):
+def add_aos_block(model, name="_aos_block"):
     """Adds an alternative optimal solution block with a unique name."""
     aos_block = pyo.Block()
     model.add_component(unique_component_name(model, name), aos_block)
     return aos_block
 
 
-def _add_objective_constraint(
+def add_objective_constraint(
     aos_block, objective, objective_value, rel_opt_gap, abs_opt_gap
 ):
     """
@@ -125,35 +92,6 @@ def _add_objective_constraint(
         objective_constraints.append(aos_block.optimality_tol_abs)
 
     return objective_constraints
-
-
-if numpy_available:
-    rng = numpy.random.default_rng(9283749387)
-else:
-    rng = None
-
-
-def _set_numpy_rng(seed):
-    global rng
-    rng = numpy.random.default_rng(seed)
-
-
-def _get_random_direction(num_dimensions, iterations=1000, min_norm=1e-4):
-    """
-    Get a unit vector of dimension num_dimensions by sampling from and
-    normalizing a standard multivariate Gaussian distribution.
-    """
-    for idx in range(iterations):
-        samples = rng.normal(size=num_dimensions)
-        samples_norm = norm(samples)
-        if samples_norm > min_norm:
-            return samples / samples_norm
-    raise Exception(  # pragma: no cover
-        (
-            "Generated {} sequential Gaussian draws with a norm of "
-            "less than {}.".format(iterations, min_norm)
-        )
-    )
 
 
 def _filter_model_variables(
@@ -301,21 +239,3 @@ def get_model_variables(
                 )
 
     return variable_set
-
-
-class MyMunch(Munch):
-    # WEH, MPV needed to add a to_dict since Bunch did not have one
-    def to_dict(self):
-        return to_dict(self)
-
-
-def to_dict(x):
-    xtype = type(x)
-    if xtype in [tuple, set, frozenset]:
-        return list(x)
-    elif xtype in [dict, Munch, MyMunch]:
-        return {k: to_dict(v) for k, v in x.items()}
-    elif hasattr(x, "to_dict"):
-        return x.to_dict()
-    else:
-        return x

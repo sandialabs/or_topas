@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pyomo.environ as pyo
-from or_topas import aos_utils
+from or_topas.util import pyomo_utils
 from or_topas import PyomoPoolManager, PoolPolicy
 from pyomo.contrib import appsi
 
@@ -164,7 +164,7 @@ def obbt_analysis_bounds_and_solutions(
             raise ValueError(
                 "Cannot restrict variable list when warmstart is specified"
             )
-    all_variables = aos_utils.get_model_variables(model, include_fixed=False)
+    all_variables = pyomo_utils.get_model_variables(model, include_fixed=False)
     if variables == None:
         variable_list = all_variables
     else:
@@ -178,7 +178,7 @@ def obbt_analysis_bounds_and_solutions(
     logger.info(
         "Analyzing {} variables ({} total solves).".format(num_vars, 2 * num_vars)
     )
-    orig_objective = aos_utils.get_active_objective(model)
+    orig_objective = pyomo_utils.get_active_objective(model)
 
     use_appsi = False
     if "appsi" in solver:
@@ -225,11 +225,11 @@ def obbt_analysis_bounds_and_solutions(
         _add_solution(solutions)
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
-    aos_block = aos_utils._add_aos_block(model, name="_obbt")
+    aos_block = pyomo_utils.add_aos_block(model, name="_obbt")
     # placeholder for objective
     aos_block.var_objective = pyo.Objective(expr=0)
     logger.info("Added block {} to the model.".format(aos_block))
-    obj_constraints = aos_utils._add_objective_constraint(
+    obj_constraints = pyomo_utils.add_objective_constraint(
         aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
     )
     if refine_discrete_bounds:

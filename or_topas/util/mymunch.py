@@ -9,7 +9,22 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-from . import util
-from or_topas.solnpool import *
-from or_topas.aos import *
-from . import benders
+from munch import Munch
+
+
+class MyMunch(Munch):
+    # WEH, MPV needed to add a to_dict since Bunch did not have one
+    def to_dict(self):
+        return to_dict(self)
+
+
+def to_dict(x):
+    xtype = type(x)
+    if xtype in [tuple, set, frozenset]:
+        return list(x)
+    elif xtype in [dict, Munch, MyMunch]:
+        return {k: to_dict(v) for k, v in x.items()}
+    elif hasattr(x, "to_dict"):
+        return x.to_dict()
+    else:
+        return x

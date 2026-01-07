@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 import pyomo.environ as pyo
 from pyomo.common.collections import ComponentSet
 from or_topas import PyomoPoolManager, PoolPolicy
-import or_topas.aos_utils as aos_utils
+from or_topas.util import pyomo_utils, numpy_utils
 
 
 def enumerate_binary_solutions(
@@ -92,7 +92,7 @@ def enumerate_binary_solutions(
         raise ValueError('search mode must be "optimal", "random", or "hamming".')
 
     if seed is not None:
-        aos_utils._set_numpy_rng(seed)
+        numpy_utils.set_numpy_rng(seed)
 
     if pool_manager is None:
         pool_manager = PyomoPoolManager()
@@ -100,7 +100,7 @@ def enumerate_binary_solutions(
             name="enumerate_binary_solutions", policy=PoolPolicy.keep_all
         )
 
-    all_variables = aos_utils.get_model_variables(model, include_fixed=True)
+    all_variables = pyomo_utils.get_model_variables(model, include_fixed=True)
     if variables == None:
         binary_variables = [
             var for var in all_variables if var.is_binary() and not var.is_fixed()
@@ -126,7 +126,7 @@ def enumerate_binary_solutions(
             )
             logger.warning(", ".join(non_binary_variables))
 
-    orig_objective = aos_utils.get_active_objective(model)
+    orig_objective = pyomo_utils.get_active_objective(model)
 
     if len(binary_variables) == 0:
         logger.warning("No binary variables found!")
@@ -188,10 +188,10 @@ def enumerate_binary_solutions(
     if len(binary_variables) == 0:
         return pool_manager
 
-    aos_block = aos_utils._add_aos_block(model, name="_balas")
+    aos_block = pyomo_utils.add_aos_block(model, name="_balas")
     logger.info("Added block {} to the model.".format(aos_block))
     aos_block.no_good_cuts = pyo.ConstraintList()
-    aos_utils._add_objective_constraint(
+    pyomo_utils.add_objective_constraint(
         aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
     )
 
@@ -223,7 +223,7 @@ def enumerate_binary_solutions(
         elif search_mode == "random":
             if hasattr(aos_block, "random_objective"):
                 aos_block.del_component("random_objective")
-            vector = aos_utils._get_random_direction(len(binary_variables))
+            vector = numpy_utils.get_random_direction(len(binary_variables))
             idx = 0
             expr = 0
             for var in binary_variables:

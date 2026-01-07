@@ -18,7 +18,7 @@ import json
 import weakref
 import math
 
-from or_topas.aos_utils import MyMunch, to_dict
+from or_topas.util.mymunch import MyMunch, to_dict
 from .solution import Solution, PyomoSolution
 
 nan = float("nan")

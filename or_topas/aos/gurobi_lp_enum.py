@@ -21,7 +21,7 @@ import pyomo.environ as pyo
 import pyomo.common.errors
 from pyomo.contrib import appsi
 
-from or_topas import aos_utils
+from or_topas.util import pyomo_utils
 from or_topas import PyomoPoolManager, PoolPolicy
 from . import shifted_lp
 
@@ -41,7 +41,7 @@ class NoGoodCutGenerator:
         self.model = model
         self.zero_threshold = zero_threshold
         self.variable_groups = variable_groups
-        self.variables = aos_utils.get_model_variables(model)
+        self.variables = pyomo_utils.get_model_variables(model)
         self.orig_model = orig_model
         self.all_variables = all_variables
         self.orig_objective = orig_objective
@@ -156,7 +156,7 @@ def gurobi_enumerate_linear_solutions(
     if not gurobi_available:
         raise pyomo.common.errors.ApplicationError(f"Solver (gurobi) not available")
 
-    all_variables = aos_utils.get_model_variables(model)
+    all_variables = pyomo_utils.get_model_variables(model)
     for var in all_variables:
         if var.is_integer():
             raise pyomo.common.errors.ApplicationError(
@@ -182,13 +182,13 @@ def gurobi_enumerate_linear_solutions(
             ).format(status.value, condition.value)
         )
 
-    orig_objective = aos_utils.get_active_objective(model)
+    orig_objective = pyomo_utils.get_active_objective(model)
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
-    aos_block = aos_utils._add_aos_block(model, name="_lp_enum")
+    aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
     logger.info("Added block {} to the model.".format(aos_block))
-    aos_utils._add_objective_constraint(
+    pyomo_utils.add_objective_constraint(
         aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
     )
 
