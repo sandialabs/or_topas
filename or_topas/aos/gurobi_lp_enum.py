@@ -22,7 +22,7 @@ import pyomo.common.errors
 from pyomo.contrib import appsi
 
 from or_topas.util import pyomo_utils
-from or_topas import PyomoPoolManager, PoolPolicy
+from or_topas.solnpool import PyomoPoolManager, PoolPolicy
 from . import shifted_lp
 
 

@@ -15,8 +15,8 @@ from pyomo.common.dependencies import attempt_import
 import pyomo.common.unittest as unittest
 
 import or_topas.util as au
-from or_topas import PyomoSolution
-from or_topas import enumerate_binary_solutions
+from or_topas.solnpool import PyomoSolution
+from or_topas.aos import enumerate_binary_solutions
 
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
 

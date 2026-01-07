@@ -14,7 +14,7 @@ from pyomo.common import unittest
 
 import pyomo.common.errors
 import or_topas.aos.tests.test_cases as tc
-from or_topas import gurobi_enumerate_linear_solutions
+from or_topas.aos import gurobi_enumerate_linear_solutions
 from pyomo.opt import check_available_solvers
 
 import pyomo.environ as pyo

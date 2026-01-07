@@ -10,6 +10,6 @@
 #  ___________________________________________________________________________
 
 from . import util
-from or_topas.solnpool import *
-from or_topas.aos import *
+from . import solnpool
+from . import aos
 from . import benders

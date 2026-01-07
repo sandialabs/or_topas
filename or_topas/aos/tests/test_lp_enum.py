@@ -22,7 +22,7 @@ if not param_available:
 parameterized = parameterized.parameterized
 
 import or_topas.aos.tests.test_cases as tc
-from or_topas import lp_enum
+from or_topas.aos import lp_enum
 
 #
 # Find available solvers. Just use GLPK if it's available.

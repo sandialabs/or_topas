@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 import pyomo.environ as pyo
 from or_topas.util import pyomo_utils
-from or_topas import PyomoPoolManager, PoolPolicy
+from or_topas.solnpool import PyomoPoolManager, PoolPolicy
 from pyomo.contrib import appsi
 
 
