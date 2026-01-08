@@ -12,7 +12,7 @@
 from pyomo.common.unittest import pytest
 from pyomo.common import unittest
 
-from or_topas import (
+from or_topas.solnpool import (
     PoolManager,
     PoolPolicy,
     Solution,

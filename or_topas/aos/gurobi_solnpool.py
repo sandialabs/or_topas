@@ -17,8 +17,8 @@ from pyomo.common.dependencies import attempt_import
 from pyomo.common.errors import ApplicationError
 
 from pyomo.contrib import appsi
-import or_topas.aos_utils as aos_utils
-from or_topas import PyomoPoolManager, PoolPolicy
+from or_topas.util import pyomo_utils
+from or_topas.solnpool import PyomoPoolManager, PoolPolicy
 
 
 def gurobi_generate_solutions(
@@ -118,8 +118,8 @@ def gurobi_generate_solutions(
     # Collect solutions
     #
     solution_count = opt.get_model_attr("SolCount")
-    variables = aos_utils.get_model_variables(model, include_fixed=True)
-    objective = aos_utils.get_active_objective(model)
+    variables = pyomo_utils.get_model_variables(model, include_fixed=True)
+    objective = pyomo_utils.get_active_objective(model)
     solutions = []
     for i in range(solution_count):
         #

@@ -24,7 +24,7 @@ if not param_available:
 parameterized = parameterized.parameterized
 
 import or_topas.aos.tests.test_cases as tc
-from or_topas import shifted_lp
+from or_topas.aos import shifted_lp
 
 #
 # Find available solvers

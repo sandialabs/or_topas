@@ -25,7 +25,7 @@ if not param_available:
     raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
 
-from or_topas import (
+from or_topas.aos import (
     obbt_analysis_bounds_and_solutions,
     obbt_analysis,
 )

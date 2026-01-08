@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pyomo.environ as pyo
-from or_topas import aos_utils
+from or_topas.util import pyomo_utils
 from or_topas.solnpool import PyomoPoolManager, PoolPolicy
 from or_topas.aos import shifted_lp
 from pyomo.contrib import appsi
@@ -106,7 +106,7 @@ def enumerate_linear_solutions(
             name="enumerate_binary_solutions", policy=PoolPolicy.keep_all
         )
 
-    all_variables = aos_utils.get_model_variables(model)
+    all_variables = pyomo_utils.get_model_variables(model)
     # else:
     #     binary_variables = ComponentSet()
     #     non_binary_variables = []
@@ -119,7 +119,7 @@ def enumerate_linear_solutions(
     #         logger.warn(('Warning: The following non-binary variables were included'
     #                'in the variable list and will be ignored:'))
     #         logger.warn(", ".join(non_binary_variables))
-    # all_variables = aos_utils.get_model_variables(model, None,
+    # all_variables = pyomo_utils.get_model_variables(model, None,
     #                                               include_fixed=True)
 
     # TODO: Relax this if possible - Should allow for the mixed-binary case
@@ -186,12 +186,12 @@ def enumerate_linear_solutions(
     else:
         model.solutions.load_from(results)
 
-    orig_objective = aos_utils.get_active_objective(model)
+    orig_objective = pyomo_utils.get_active_objective(model)
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
-    aos_block = aos_utils._add_aos_block(model, name="_lp_enum")
-    aos_utils._add_objective_constraint(
+    aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
+    pyomo_utils.add_objective_constraint(
         aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
     )
     logger.info("Added block {} to the model.".format(aos_block))

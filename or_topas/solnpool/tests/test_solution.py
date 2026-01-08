@@ -14,9 +14,9 @@ import pyomo.environ as pyo
 from pyomo.common.dependencies import attempt_import
 import pyomo.common.unittest as unittest
 
-import or_topas.aos_utils as au
-from or_topas import PyomoSolution
-from or_topas import enumerate_binary_solutions
+import or_topas.util as au
+from or_topas.solnpool import PyomoSolution
+from or_topas.aos import enumerate_binary_solutions
 
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
 
@@ -56,8 +56,8 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         opt = pyo.SolverFactory(mip_solver)
         opt.solve(model)
-        all_vars = au.get_model_variables(model, include_fixed=False)
-        obj = au.get_active_objective(model)
+        all_vars = au.pyomo_utils.get_model_variables(model, include_fixed=False)
+        obj = au.pyomo_utils.get_active_objective(model)
 
         solution = PyomoSolution(variables=all_vars, objective=obj)
         sol_str = """{
@@ -100,7 +100,7 @@ class TestSolutionUnit(unittest.TestCase):
 }"""
         assert str(solution) == sol_str
 
-        all_vars = au.get_model_variables(model, include_fixed=True)
+        all_vars = au.pyomo_utils.get_model_variables(model, include_fixed=True)
         solution = PyomoSolution(variables=all_vars, objective=obj)
         sol_str = """{
     "id": null,

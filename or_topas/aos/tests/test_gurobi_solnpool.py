@@ -14,7 +14,7 @@ from collections import Counter
 from pyomo.common import unittest
 from pyomo.common.dependencies import numpy as np, numpy_available
 
-from or_topas import gurobi_generate_solutions
+from or_topas.aos import gurobi_generate_solutions
 from pyomo.contrib.appsi.solvers import Gurobi
 import or_topas.aos.tests.test_cases as tc
 
