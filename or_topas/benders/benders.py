@@ -316,6 +316,71 @@ class Benders_Abstract(BlockData):
 
         b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
 
+    #TODO: work in progress, no changes made
+    @staticmethod
+    def _standard_lp_subproblem_transform(*args, **kwargs):
+        assert "b" in kwargs, "Need argument b in _feasibility_subproblem_transform"
+        assert (
+            "root_vars" in kwargs
+        ), "Need argument root_vars in _feasibility_subproblem_transform"
+        assert (
+            "relax_subproblem_cons" in kwargs
+        ), "Need argument relax_subproblem_cons in _feasibility_subproblem_transform"
+        b = kwargs.get("b")
+        root_vars = kwargs.get("root_vars")
+        relax_subproblem_cons = kwargs.get("relax_subproblem_cons")
+        # check for all of these b, root_vars, relax_subproblem_cons
+        # first get the objective and turn it into a constraint
+        root_vars = ComponentSet(root_vars)
+
+        objs = list(
+            b.component_data_objects(pyo.Objective, descend_into=False, active=True)
+        )
+        if len(objs) != 1:
+            raise ValueError("Subproblem must have exactly one objective")
+        orig_obj = objs[0]
+        orig_obj_expr = orig_obj.expr
+        b.del_component(orig_obj)
+
+        b._z = pyo.Var(bounds=(0, None))
+        b.objective = pyo.Objective(expr=b._z)
+        b.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+        b._eta = pyo.Var()
+
+        b.aux_cons = pyo.ConstraintList()
+        for c in list(
+            b.component_data_objects(
+                pyo.Constraint, descend_into=True, active=True, sort=True
+            )
+        ):
+            if not relax_subproblem_cons:
+                c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
+                if not Benders_Abstract._any_common_elements(root_vars, c_vars):
+                    continue
+            if c.equality:
+                body = c.body
+                rhs = pyo.value(c.lower)
+                body -= rhs
+                b.aux_cons.add(body - b._z <= 0)
+                b.aux_cons.add(-body - b._z <= 0)
+                Benders_Abstract._del_con(c)
+            else:
+                body = c.body
+                lower = pyo.value(c.lower)
+                upper = pyo.value(c.upper)
+                if upper is not None:
+                    body_upper = body - upper - b._z
+                    b.aux_cons.add(body_upper <= 0)
+                if lower is not None:
+                    body_lower = body - lower
+                    body_lower = -body_lower
+                    body_lower -= b._z
+                    b.aux_cons.add(body_lower <= 0)
+                Benders_Abstract._del_con(c)
+
+        b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
+
+
 
 """
     def evaluate(y):
