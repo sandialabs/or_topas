@@ -158,7 +158,7 @@ class Solution:
         self, error_if_maps_used_elsewhere=False, rebuild_in_place=False
     ):
         if self.index_maps_used_elsewhere:
-            message_text = f"Rebuilding index maps used elsewhere, {rebuild_in_place=} in Solution {self.to_string()}"
+            message_text = f"Rebuilding index maps used elsewhere, {rebuild_in_place=} in Solution with id {id(self)}"
             if error_if_maps_used_elsewhere:
                 raise RuntimeError(message_text)
             else:
@@ -167,6 +167,8 @@ class Solution:
             self.variable_name_to_index.clear()
             self.fixed_variable_indices.clear()
         else:
+            self.variable_name_to_index = {}
+            self.fixed_variable_indices = set()
             self.index_maps_used_elsewhere = False
         for i, v in enumerate(self._variables):
             if v.name is not None:
@@ -196,11 +198,11 @@ class Solution:
         if type(index) is int:
             assert (
                 0 <= index < len(self._variables)
-            ), f"Index {index} is invalid in Solution {self.to_string()}"
+            ), f"Index {index} is invalid in Solution with id {id(self)}"
             return self._variables[index]
         else:
             return self._variable_by_name(
-                variable_name=index, map_consistency_check=map_consistency_check
+                name=index, map_consistency_check=map_consistency_check
             )
 
     def _variable_by_name(self, name, map_consistency_check=False):
@@ -211,11 +213,10 @@ class Solution:
         index : str or object
             The index or name of the variable if directly known. (default is 0)
             May also pass in an object with a .name attribute, which will be used if available
-            If .name attribute does not exist, to_string method will be attempted.
 
         Raises
         ------
-        AssertationError, if invalid index used
+        AssertationError, if invalid index used in maps based off name
         RuntimeError, if using name based lookup and name map inconsistent
 
         Returns
@@ -226,18 +227,16 @@ class Solution:
             variable_name = name
         elif hasattr(name, "name"):
             variable_name = name.name
-        elif hasattr(name, "to_string"):
-            variable_name = name.to_string()
         else:
             raise RuntimeError(
-                f"Index {name} is invalid in Solution {self.to_string()}"
+                f"Index {name} is invalid in Solution with id {id(self)}"
             )
         assert (
             variable_name in self.variable_name_to_index
-        ), f"{variable_name=} is not a valid key in {self.variable_name_to_index=} in Solution {self.to_string()}"
+        ), f"{variable_name=} is not a valid key in {self.variable_name_to_index=} in Solution with id {id(self)}"
         assert (
             0 <= self.variable_name_to_index[variable_name] < len(self._variables)
-        ), f"Index {self.variable_name_to_index[variable_name]} corresponding to {variable_name=} is not a valid variable list index in Solution {self.to_string}"
+        ), f"Index {self.variable_name_to_index[variable_name]} corresponding to {variable_name=} is not a valid variable list index in Solution with id {id(self)}"
         solution_variable_info = self._variables[
             self.variable_name_to_index[variable_name]
         ]
@@ -246,7 +245,7 @@ class Solution:
             # this consistency check will detect violations of that assumption.
             # current use defaults to error in this case, another option is to rebuild the local mappings
             raise RuntimeError(
-                f"Mismatch between input variable name, {variable_name}, and mapped to variable, {solution_variable_info} in Solution {self.to_string()}"
+                f"Mismatch between input variable name, {variable_name}, and mapped to variable, {solution_variable_info} in Solution with id {id(self)}"
             )
         return solution_variable_info
 
