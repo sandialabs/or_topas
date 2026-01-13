@@ -150,11 +150,29 @@ class TestSolutionUnit(unittest.TestCase):
 }"""
         assert solution.to_string() == sol_str
 
-        sol_val = solution.variable_name_to_index
-        assert set(sol_val.keys()) == {"x", "y", "z", "f"}
+        sol_vars = solution.variable_name_to_index
+        assert len(sol_vars) == len(solution._variables)
+        assert set(sol_vars.keys()) == {"x", "y", "z", "f"}
+        
+        for key, value in sol_vars.items():
+            #checks accuracy of variable_name_to_index map
+            assert solution._variables[value].name == key
+            #checks accuracy of variable() method for integer index
+            assert id(solution.variable(value)) == id(solution._variables[value])
+            #checks accuracy of variable() method for string inputs
+            assert id(solution.variable(key)) == id(solution._variables[value])
+            #checks accuracy of variable() method for objects with .name attribute
+            temp = solution._variables[value]
+            assert id(solution.variable(temp)) == id(solution._variables[value])
+            #checks accuracy of _variable_by_name() method for string inputs
+            assert id(solution._variable_by_name(key)) == id(solution._variables[value])
+            #checks accuracy of _variable_by_name() method for objects with .name attribute
+            temp = solution._variables[value]
+            assert id(solution._variable_by_name(temp)) == id(solution._variables[value])
         # old solution.fixed_variable_names functionality replaced with map
+        sol_vars_fixed = solution.fixed_variable_indices
         fixed_variable_names = map(
-            lambda x: solution._variables[x].name, solution.fixed_variable_indices
+            lambda x: solution._variables[x].name, sol_vars_fixed
         )
         assert set(fixed_variable_names) == {"f"}
 
