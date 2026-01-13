@@ -233,10 +233,10 @@ class Solution:
             )
         assert (
             variable_name in self.variable_name_to_index
-        ), f"{variable_name=} is not a valid key in {self.variable_name_to_index=} in Solution with id {id(self)}"
+        ), f"Key {variable_name} is not a valid key in the variable_name_to_index map in Solution with id {id(self)}"
         assert (
             0 <= self.variable_name_to_index[variable_name] < len(self._variables)
-        ), f"Index {self.variable_name_to_index[variable_name]} corresponding to {variable_name=} is not a valid variable list index in Solution with id {id(self)}"
+        ), f"Index {self.variable_name_to_index[variable_name]} corresponding to key {variable_name} is not a valid variable list index in Solution with id {id(self)}"
         solution_variable_info = self._variables[
             self.variable_name_to_index[variable_name]
         ]
@@ -245,7 +245,7 @@ class Solution:
             # this consistency check will detect violations of that assumption.
             # current use defaults to error in this case, another option is to rebuild the local mappings
             raise RuntimeError(
-                f"Mismatch between input variable name, {variable_name}, and mapped to variable, {solution_variable_info} in Solution with id {id(self)}"
+                f"Mismatch between input variable name, {variable_name}, and mapped to variable, {solution_variable_info.name} in Solution with id {id(self)}"
             )
         return solution_variable_info
 
