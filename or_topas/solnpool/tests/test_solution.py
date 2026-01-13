@@ -153,22 +153,24 @@ class TestSolutionUnit(unittest.TestCase):
         sol_vars = solution.variable_name_to_index
         assert len(sol_vars) == len(solution._variables)
         assert set(sol_vars.keys()) == {"x", "y", "z", "f"}
-        
+
         for key, value in sol_vars.items():
-            #checks accuracy of variable_name_to_index map
+            # checks accuracy of variable_name_to_index map
             assert solution._variables[value].name == key
-            #checks accuracy of variable() method for integer index
+            # checks accuracy of variable() method for integer index
             assert id(solution.variable(value)) == id(solution._variables[value])
-            #checks accuracy of variable() method for string inputs
+            # checks accuracy of variable() method for string inputs
             assert id(solution.variable(key)) == id(solution._variables[value])
-            #checks accuracy of variable() method for objects with .name attribute
+            # checks accuracy of variable() method for objects with .name attribute
             temp = solution._variables[value]
             assert id(solution.variable(temp)) == id(solution._variables[value])
-            #checks accuracy of _variable_by_name() method for string inputs
+            # checks accuracy of _variable_by_name() method for string inputs
             assert id(solution._variable_by_name(key)) == id(solution._variables[value])
-            #checks accuracy of _variable_by_name() method for objects with .name attribute
+            # checks accuracy of _variable_by_name() method for objects with .name attribute
             temp = solution._variables[value]
-            assert id(solution._variable_by_name(temp)) == id(solution._variables[value])
+            assert id(solution._variable_by_name(temp)) == id(
+                solution._variables[value]
+            )
         # old solution.fixed_variable_names functionality replaced with map
         sol_vars_fixed = solution.fixed_variable_indices
         fixed_variable_names = map(
@@ -185,7 +187,7 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         opt = pyo.SolverFactory(mip_solver)
         opt.solve(model)
-        
+
         all_vars = au.pyomo_utils.get_model_variables(model, include_fixed=True)
         obj = au.pyomo_utils.get_active_objective(model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
@@ -241,9 +243,9 @@ class TestSolutionUnit(unittest.TestCase):
         sol_vars_id_1 = id(sol_vars)
         assert len(sol_vars) == len(solution._variables)
         assert set(sol_vars.keys()) == {"x", "y", "z", "f"}
-        
+
         for key, value in sol_vars.items():
-            #checks accuracy of variable_name_to_index map
+            # checks accuracy of variable_name_to_index map
             assert solution._variables[value].name == key
         # old solution.fixed_variable_names functionality replaced with map
         sol_vars_fixed = solution.fixed_variable_indices
@@ -260,9 +262,9 @@ class TestSolutionUnit(unittest.TestCase):
         sol_vars_id_2 = id(sol_vars)
         assert len(sol_vars) == len(solution._variables)
         assert set(sol_vars.keys()) == {"x", "y", "z", "f"}
-        
+
         for key, value in sol_vars.items():
-            #checks accuracy of variable_name_to_index map
+            # checks accuracy of variable_name_to_index map
             assert solution._variables[value].name == key
         # old solution.fixed_variable_names functionality replaced with map
         sol_vars_fixed = solution.fixed_variable_indices
@@ -274,10 +276,10 @@ class TestSolutionUnit(unittest.TestCase):
         assert sol_vars_id_1 == sol_vars_id_2
         assert fix_var_id_1 == fix_var_id_2
 
-        #testing not in place rebuild
-        #ids should be different between x_old and x for both sol_vars and sol_vars_fixed
-        #adding explicit forcing of solution.index_maps_used_elsewhere = False even though this is default
-        #no error should occur
+        # testing not in place rebuild
+        # ids should be different between x_old and x for both sol_vars and sol_vars_fixed
+        # adding explicit forcing of solution.index_maps_used_elsewhere = False even though this is default
+        # no error should occur
         sol_vars_old = sol_vars
         sol_vars_fixed_old = sol_vars_fixed
         solution.index_maps_used_elsewhere = False
@@ -286,9 +288,9 @@ class TestSolutionUnit(unittest.TestCase):
         sol_vars_id_3 = id(sol_vars)
         assert len(sol_vars) == len(solution._variables)
         assert set(sol_vars.keys()) == {"x", "y", "z", "f"}
-        
+
         for key, value in sol_vars.items():
-            #checks accuracy of variable_name_to_index map
+            # checks accuracy of variable_name_to_index map
             assert solution._variables[value].name == key
         # old solution.fixed_variable_names functionality replaced with map
         sol_vars_fixed = solution.fixed_variable_indices
@@ -304,12 +306,16 @@ class TestSolutionUnit(unittest.TestCase):
         rebuild_in_place = False
         expected_message = f"Rebuilding index maps used elsewhere, {rebuild_in_place=} in Solution with id {id(solution)}"
         with self.assertRaises(RuntimeError) as cm:
-            solution._rebuild_indices_maps(error_if_maps_used_elsewhere=True, rebuild_in_place=False)
-        #print(expected_message)
-        #print(str(cm.exception))
+            solution._rebuild_indices_maps(
+                error_if_maps_used_elsewhere=True, rebuild_in_place=False
+            )
+        # print(expected_message)
+        # print(str(cm.exception))
         self.assertEqual(str(cm.exception), expected_message)
         with self.assertRaises(RuntimeWarning) as cm:
-            solution._rebuild_indices_maps(error_if_maps_used_elsewhere=False, rebuild_in_place=False)
+            solution._rebuild_indices_maps(
+                error_if_maps_used_elsewhere=False, rebuild_in_place=False
+            )
         self.assertEqual(str(cm.exception), expected_message)
 
     @parameterized.expand(input=solvers)
@@ -321,7 +327,7 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         opt = pyo.SolverFactory(mip_solver)
         opt.solve(model)
-        
+
         all_vars = au.pyomo_utils.get_model_variables(model, include_fixed=True)
         obj = au.pyomo_utils.get_active_objective(model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
@@ -377,9 +383,9 @@ class TestSolutionUnit(unittest.TestCase):
         sol_vars_id_1 = id(sol_vars)
         assert len(sol_vars) == len(solution._variables)
         assert set(sol_vars.keys()) == {"x", "y", "z", "f"}
-        
+
         for key, value in sol_vars.items():
-            #checks accuracy of variable_name_to_index map
+            # checks accuracy of variable_name_to_index map
             assert solution._variables[value].name == key
         # old solution.fixed_variable_names functionality replaced with map
         sol_vars_fixed = solution.fixed_variable_indices
@@ -388,22 +394,49 @@ class TestSolutionUnit(unittest.TestCase):
         )
         assert set(fixed_variable_names) == {"f"}
 
+        # testing index out of range lookup in solution.variable
         test_index = len(solution._variables)
-        expected_message = f"Index {test_index} is invalid in Solution with id {id(solution)}"
+        expected_message = (
+            f"Index {test_index} is invalid in Solution with id {id(solution)}"
+        )
         with self.assertRaises(AssertionError) as cm:
             solution.variable(test_index)
         self.assertEqual(str(cm.exception), expected_message)
 
-        # rebuild_in_place = False
-        # expected_message = message_text = f"Rebuilding index maps used elsewhere, {rebuild_in_place=} in Solution id {id(solution)}"
-        # with self.assertRaises(RuntimeError) as cm:
-        #     solution._rebuild_indices_maps(error_if_maps_used_elsewhere=True, rebuild_in_place=False)
-        # self.assertEqual(str(cm.exception), expected_message)
-        # with self.assertRaises(RuntimeWarning) as cm:
-        #     solution._rebuild_indices_maps(error_if_maps_used_elsewhere=False, rebuild_in_place=False)
-        # self.assertEqual(str(cm.exception), expected_message)
-        
-        
+        # testing invalid type in solution._variable_by_name
+        test_index = len(solution._variables)
+        expected_message = (
+            f"Index {test_index} is invalid in Solution with id {id(solution)}"
+        )
+        with self.assertRaises(RuntimeError) as cm:
+            solution._variable_by_name(test_index)
+        self.assertEqual(str(cm.exception), expected_message)
+
+        # testing valid type, not present key in solution._variable_by_name
+        test_index = "topas"
+        expected_message = f"Key {test_index} is not a valid key in the variable_name_to_index map in Solution with id {id(solution)}"
+        with self.assertRaises(AssertionError) as cm:
+            solution.variable(test_index)
+        self.assertEqual(str(cm.exception), expected_message)
+
+        # testing present key but maps to invalid index in solution._variable_by_name
+        invalid_index = len(solution._variables)
+        test_index = "x"
+        solution.variable_name_to_index[test_index] = invalid_index
+        expected_message = f"Index {invalid_index} corresponding to key {test_index} is not a valid variable list index in Solution with id {id(solution)}"
+        with self.assertRaises(AssertionError) as cm:
+            solution.variable(test_index)
+        self.assertEqual(str(cm.exception), expected_message)
+
+        # testing present key but maps to valid index in solution._variable_by_name corresponding to wrong variable
+        # this is the map_consistency_check
+        test_index = "x"
+        wrong_index = 2
+        solution.variable_name_to_index[test_index] = wrong_index
+        expected_message = f"Mismatch between input variable name, {test_index}, and mapped to variable, {solution._variables[wrong_index].name} in Solution with id {id(solution)}"
+        with self.assertRaises(RuntimeError) as cm:
+            solution.variable(test_index, map_consistency_check=True)
+        self.assertEqual(str(cm.exception), expected_message)
 
     @parameterized.expand(input=solvers)
     def test_soln_order(self, mip_solver):
