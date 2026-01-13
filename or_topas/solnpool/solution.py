@@ -117,17 +117,27 @@ class Solution:
                 "The objective= and objectives= keywords cannot both be specified."
             )
         self.id = None
+        self.index_maps_used_elsewhere = False
 
         self._variables = []
-        self.name_to_variable = {}
-        self.fixed_variable_names = set()
-        if variables is not None:
-            self._variables = variables
-            for v in variables:
-                if v.name is not None:
-                    if v.fixed:
-                        self.fixed_variable_names.add(v.name)
-                    self.name_to_variable[v.name] = v
+        self.index_maps_from_external = kwargs.get("use_given_index_maps", False)
+        if self.index_maps_from_external:
+            name_index_map_string = "variable_name_to_index"
+            assert (
+                name_index_map_string in kwargs
+            ), f"Attempted to create solution using external index maps without passing {name_index_map_string} map"
+            self.variable_name_to_index = kwargs["variable_name_to_index"]
+            fixed_variable_indicies_string = "fixed_variable_names"
+            assert (
+                name_index_map_string in kwargs
+            ), f"Attempted to create solution using external index maps without passing {fixed_variable_indicies_string} map"
+            self.fixed_variable_indices = kwargs["fixed_variable_indicies_string"]
+        else:
+            self.variable_name_to_index = {}
+            self.fixed_variable_indices = set()
+            if variables is not None:
+                self._variables = variables
+            self._rebuild_indices_maps()
 
         self._objectives = []
         self.name_to_objective = {}
@@ -144,22 +154,101 @@ class Solution:
         else:
             self.suffix = MyMunch(**kwargs)
 
-    def variable(self, index):
+    def _rebuild_indices_maps(
+        self, error_if_maps_used_elsewhere=False, rebuild_in_place=False
+    ):
+        if self.index_maps_used_elsewhere:
+            message_text = f"Rebuilding index maps used elsewhere, {rebuild_in_place=} in Solution {self.to_string()}"
+            if error_if_maps_used_elsewhere:
+                raise RuntimeError(message_text)
+            else:
+                raise RuntimeWarning(message_text)
+        if rebuild_in_place:
+            self.variable_name_to_index.clear()
+            self.fixed_variable_indices.clear()
+        else:
+            self.index_maps_used_elsewhere = False
+        for i, v in enumerate(self._variables):
+            if v.name is not None:
+                if v.fixed:
+                    self.fixed_variable_indices.add(i)
+                self.variable_name_to_index[v.name] = i
+
+    def variable(self, index, map_consistency_check=False):
         """Returns the specified variable.
 
         Parameters
         ----------
-        index : int or str
-            The index or name of the objective. (default is 0)
+        index : int, str, object
+            The index or name of the variable if directly known. (default is 0)
+            May also pass in an object with a .name attribute, which will be used if available
+            If .name attribute does not exist, to_string method will be attempted.
+
+        Raises
+        ------
+        AssertationError, if invalid index used
+        RuntimeError, if using name based lookup and name map inconsistent
 
         Returns
         -------
         VariableInfo
         """
         if type(index) is int:
+            assert (
+                0 <= index < len(self._variables)
+            ), f"Index {index} is invalid in Solution {self.to_string()}"
             return self._variables[index]
         else:
-            return self.name_to_variable[index]
+            return self._variable_by_name(
+                variable_name=index, map_consistency_check=map_consistency_check
+            )
+
+    def _variable_by_name(self, name, map_consistency_check=False):
+        """Returns the specified variable.
+
+        Parameters
+        ----------
+        index : str or object
+            The index or name of the variable if directly known. (default is 0)
+            May also pass in an object with a .name attribute, which will be used if available
+            If .name attribute does not exist, to_string method will be attempted.
+
+        Raises
+        ------
+        AssertationError, if invalid index used
+        RuntimeError, if using name based lookup and name map inconsistent
+
+        Returns
+        -------
+        VariableInfo
+        """
+        if isinstance(name, str):
+            variable_name = name
+        elif hasattr(name, "name"):
+            variable_name = name.name
+        elif hasattr(name, "to_string"):
+            variable_name = name.to_string()
+        else:
+            raise RuntimeError(
+                f"Index {name} is invalid in Solution {self.to_string()}"
+            )
+        assert (
+            variable_name in self.variable_name_to_index
+        ), f"{variable_name=} is not a valid key in {self.variable_name_to_index=} in Solution {self.to_string()}"
+        assert (
+            0 <= self.variable_name_to_index[variable_name] < len(self._variables)
+        ), f"Index {self.variable_name_to_index[variable_name]} corresponding to {variable_name=} is not a valid variable list index in Solution {self.to_string}"
+        solution_variable_info = self._variables[
+            self.variable_name_to_index[variable_name]
+        ]
+        if map_consistency_check and solution_variable_info.name != variable_name:
+            # present design assumes consistency on variable_name_to_index maps across solutions
+            # this consistency check will detect violations of that assumption.
+            # current use defaults to error in this case, another option is to rebuild the local mappings
+            raise RuntimeError(
+                f"Mismatch between input variable name, {variable_name}, and mapped to variable, {solution_variable_info} in Solution {self.to_string()}"
+            )
+        return solution_variable_info
 
     def variables(self):
         """
@@ -240,10 +329,8 @@ class Solution:
 
         We use string names if possible, because they more explicit than the integer index values.
         """
-        if len(self.name_to_variable) == len(self._variables):
-            return tuple(
-                tuple([k, var.value]) for k, var in self.name_to_variable.items()
-            )
+        if len(self.variable_name_to_index) == len(self._variables):
+            return tuple(tuple([var.name, var.value]) for var in self._variables)
         else:
             return tuple(tuple([k, var.value]) for k, var in enumerate(self._variables))
 

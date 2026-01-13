@@ -150,9 +150,13 @@ class TestSolutionUnit(unittest.TestCase):
 }"""
         assert solution.to_string() == sol_str
 
-        sol_val = solution.name_to_variable
+        sol_val = solution.variable_name_to_index
         assert set(sol_val.keys()) == {"x", "y", "z", "f"}
-        assert set(solution.fixed_variable_names) == {"f"}
+        # old solution.fixed_variable_names functionality replaced with map
+        fixed_variable_names = map(
+            lambda x: solution._variables[x].name, solution.fixed_variable_indices
+        )
+        assert set(fixed_variable_names) == {"f"}
 
     @parameterized.expand(input=solvers)
     def test_soln_order(self, mip_solver):
