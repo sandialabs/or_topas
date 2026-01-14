@@ -15,7 +15,7 @@ from pyomo.common.dependencies import attempt_import
 import pyomo.common.unittest as unittest
 
 import or_topas.util as au
-from or_topas.solnpool import PyomoSolution
+from or_topas.solnpool import PyomoSolution, Solution
 from or_topas.aos import enumerate_binary_solutions
 
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
@@ -99,6 +99,16 @@ class TestSolutionUnit(unittest.TestCase):
     ]
 }"""
         assert str(solution) == sol_str
+        
+        #test objective lookup by index
+        assert str(solution.objective(0).value) == '6.5'
+        #test objective lookup by objective name
+        assert str(solution.objective('obj').value) == '6.5'
+
+        #test eq comparison
+        assert solution.__eq__('test_string') is NotImplemented
+        #test lt comparison
+        assert solution.__lt__('test_string') is NotImplemented
 
         all_vars = au.pyomo_utils.get_model_variables(model, include_fixed=True)
         solution = PyomoSolution(variables=all_vars, objective=obj)
@@ -519,6 +529,55 @@ class TestSolutionUnit(unittest.TestCase):
             [1, 0, 0, 1, 1],
             [1, 0, 1, 0, 0],
         ]
+    @parameterized.expand(input=solvers)
+    def test_solution_default_solution_not_pyomo_solution(self, mip_solver):
+        #check that objective and objectives both being used in Solution gets the proper error
+        expected_message = "The objective= and objectives= keywords cannot both be specified."
+        with self.assertRaises(ValueError) as cm:
+            solution = Solution(variables=None, objective=1, objectives = 2)
+        self.assertEqual(str(cm.exception), expected_message)
+
+        #check that objective to objecitves conversion works in solution
+        solution = Solution(variables=None, objective=1)
+        assert solution._objectives == [1]
+    
+    @parameterized.expand(input=solvers)
+    def test_solution_external_var_maps(self, mip_solver):
+        model = self.get_model()
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(model)
+
+        all_vars = au.pyomo_utils.get_model_variables(model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(model)
+
+        #check that saying to use an external variable_name_index without providing one errors
+        name_index_map_string = "variable_name_to_index"
+        expected_message = f"Attempted to create solution using external index maps without passing {name_index_map_string} map"
+        with self.assertRaises(AssertionError) as cm:
+            solution = PyomoSolution(variables=all_vars, objective=obj, use_given_index_maps = True)
+        self.assertEqual(str(cm.exception), expected_message)
+
+        #check that saying to use an external variable_name_index results in use of that object
+        t = {'x':0}
+        solution = PyomoSolution(variables=all_vars, objective=obj, use_given_index_maps = True, variable_name_to_index = t, keep_fixed_var_list = False)
+        assert id(solution.variable_name_to_index) == id(t)
+        assert solution.variable_name_to_index == {'x':0}
+
+        #check that saying to use an external fixed_variable_indices without providing one errors
+        fixed_variable_indicies_string = "fixed_variable_indices"
+        expected_message = f"Attempted to create solution using external index maps without passing {fixed_variable_indicies_string} map"
+        with self.assertRaises(AssertionError) as cm:
+            PyomoSolution(variables=all_vars, objective=obj, use_given_index_maps = True, variable_name_to_index = t, keep_fixed_var_list = True)
+        self.assertEqual(str(cm.exception), expected_message)
+
+        #check that saying to use an external variable_name_index and fixed_variable_indices results in use of that object
+        t = {'x':0}
+        s = {0}
+        solution = PyomoSolution(variables=all_vars, objective=obj, use_given_index_maps = True, variable_name_to_index = t, keep_fixed_var_list = True, fixed_variable_indices = s)
+        assert id(solution.variable_name_to_index) == id(t)
+        assert solution.variable_name_to_index == {'x':0}
+        assert id(solution.fixed_variable_indices) == id(s)
+        assert solution.fixed_variable_indices == {0}
 
 
 if __name__ == "__main__":

@@ -129,11 +129,11 @@ class Solution:
             ), f"Attempted to create solution using external index maps without passing {name_index_map_string} map"
             self.variable_name_to_index = kwargs["variable_name_to_index"]
             if self.keep_fixed_var_list:
-                fixed_variable_indicies_string = "fixed_variable_names"
+                fixed_variable_indicies_string = "fixed_variable_indices"
                 assert (
-                    name_index_map_string in kwargs
+                    fixed_variable_indicies_string in kwargs
                 ), f"Attempted to create solution using external index maps without passing {fixed_variable_indicies_string} map"
-                self.fixed_variable_indices = kwargs["fixed_variable_indicies_string"]
+                self.fixed_variable_indices = kwargs[fixed_variable_indicies_string]
         else:
             self.variable_name_to_index = {}
             self.fixed_variable_indices = set()
@@ -150,7 +150,7 @@ class Solution:
         if objectives is not None:
             self._objectives = objectives
             for o in objectives:
-                if o.name is not None:
+                if getattr(o, 'name', None) is not None:
                     self.name_to_objective[o.name] = o
 
         if "suffix" in kwargs:
