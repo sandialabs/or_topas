@@ -178,6 +178,59 @@ class TestSolutionUnit(unittest.TestCase):
         )
         assert set(fixed_variable_names) == {"f"}
 
+        solution = PyomoSolution(variables=all_vars, objective=obj, keep_fixed_var_list = False)
+        sol_str = """{
+    "id": null,
+    "objectives": [
+        {
+            "index": 0,
+            "name": "obj",
+            "suffix": {},
+            "value": 6.5
+        }
+    ],
+    "suffix": {},
+    "variables": [
+        {
+            "discrete": false,
+            "fixed": false,
+            "index": 0,
+            "name": "x",
+            "suffix": {},
+            "value": 1.5
+        },
+        {
+            "discrete": true,
+            "fixed": false,
+            "index": 1,
+            "name": "y",
+            "suffix": {},
+            "value": 1
+        },
+        {
+            "discrete": true,
+            "fixed": false,
+            "index": 2,
+            "name": "z",
+            "suffix": {},
+            "value": 3
+        },
+        {
+            "discrete": false,
+            "fixed": true,
+            "index": 3,
+            "name": "f",
+            "suffix": {},
+            "value": 1
+        }
+    ]
+}"""
+        sol_vars = solution.variable_name_to_index
+        assert len(sol_vars) == len(solution._variables)
+        assert set(sol_vars.keys()) == {"x", "y", "z", "f"}
+        assert solution.fixed_variable_indices == None
+
+
     @parameterized.expand(input=solvers)
     def test_solution_rebuild_indices_maps(self, mip_solver):
         """
@@ -309,8 +362,8 @@ class TestSolutionUnit(unittest.TestCase):
             solution._rebuild_indices_maps(
                 error_if_maps_used_elsewhere=True, rebuild_in_place=False
             )
-        # print(expected_message)
-        # print(str(cm.exception))
+        
+        
         self.assertEqual(str(cm.exception), expected_message)
         with self.assertRaises(RuntimeWarning) as cm:
             solution._rebuild_indices_maps(

@@ -121,23 +121,27 @@ class Solution:
 
         self._variables = []
         self.index_maps_from_external = kwargs.get("use_given_index_maps", False)
+        self.keep_fixed_var_list = kwargs.get("keep_fixed_var_list", True)
         if self.index_maps_from_external:
             name_index_map_string = "variable_name_to_index"
             assert (
                 name_index_map_string in kwargs
             ), f"Attempted to create solution using external index maps without passing {name_index_map_string} map"
             self.variable_name_to_index = kwargs["variable_name_to_index"]
-            fixed_variable_indicies_string = "fixed_variable_names"
-            assert (
-                name_index_map_string in kwargs
-            ), f"Attempted to create solution using external index maps without passing {fixed_variable_indicies_string} map"
-            self.fixed_variable_indices = kwargs["fixed_variable_indicies_string"]
+            if self.keep_fixed_var_list:
+                fixed_variable_indicies_string = "fixed_variable_names"
+                assert (
+                    name_index_map_string in kwargs
+                ), f"Attempted to create solution using external index maps without passing {fixed_variable_indicies_string} map"
+                self.fixed_variable_indices = kwargs["fixed_variable_indicies_string"]
         else:
             self.variable_name_to_index = {}
             self.fixed_variable_indices = set()
             if variables is not None:
                 self._variables = variables
             self._rebuild_indices_maps()
+        if self.keep_fixed_var_list == False:
+            self.fixed_variable_indices = None
 
         self._objectives = []
         self.name_to_objective = {}
@@ -165,14 +169,15 @@ class Solution:
                 raise RuntimeWarning(message_text)
         if rebuild_in_place:
             self.variable_name_to_index.clear()
-            self.fixed_variable_indices.clear()
+            if self.keep_fixed_var_list:
+                self.fixed_variable_indices.clear()
         else:
             self.variable_name_to_index = {}
             self.fixed_variable_indices = set()
             self.index_maps_used_elsewhere = False
         for i, v in enumerate(self._variables):
             if v.name is not None:
-                if v.fixed:
+                if self.keep_fixed_var_list and v.fixed:
                     self.fixed_variable_indices.add(i)
                 self.variable_name_to_index[v.name] = i
 
