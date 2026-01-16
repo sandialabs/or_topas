@@ -32,6 +32,24 @@ def _is_satisfied(constraint, feasibility_tol=1e-6):
     return True
 
 
+def get_1d_problem(discrete_x=False):
+    """
+    Simple 1d problem
+    """
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.Integers if discrete_x else pyo.Reals, bounds=(-10, 10))
+    m.o = pyo.Objective(expr=m.x, sense=pyo.maximize)
+    m.extreme_points = {(-10), (10)}
+    feasible_sols = []
+    for x_value in range(-10, 10 + 1):
+        feasible_sols.append(((x_value,), x_value))
+    m.discrete_feasible = sorted(feasible_sols, key=lambda sol: sol[1], reverse=True)
+    m.discrete_bounds = pyo.ComponentMap()
+    m.discrete_bounds[m.x] = (-10, 10)
+
+    return m
+
+
 def get_2d_diamond_problem(discrete_x=False, discrete_y=False):
     """
     Simple 2d problem where the feasible is diamond-shaped.

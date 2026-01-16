@@ -80,6 +80,25 @@ class TestGurobiSolnPoolUnit(unittest.TestCase):
         np.testing.assert_array_almost_equal(unique_solns_by_obj, actual_solns_by_obj)
 
     @unittest.skipIf(not numpy_available, "Numpy not installed")
+    def test_ip_solutions_1d(self):
+        """
+        Enumerate 8 solutions for an ip: triangle_ip.
+
+        Check that the correct number of alternate solutions are found.
+        """
+        m = tc.get_1d_problem(discrete_x=True)
+        # range is -10 to 10 so max of 21 integer solutions
+        desired_sols = 5
+        results = gurobi_generate_solutions(m, num_solutions=desired_sols)
+        assert len(results) == desired_sols
+        objectives = [round(soln.objective().value, 2) for soln in results]
+        actual_solns_by_obj = [10, 9, 8, 7, 6]
+        np.testing.assert_array_almost_equal(objectives, actual_solns_by_obj)
+        for index, solution in enumerate(results.solutions):
+            assert len(solution._variables) == 1
+            assert solution._variables[0].value == 10 - index
+
+    @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_mip_feasibility(self):
         """
         Enumerate all solutions for a mip: indexed_pentagonal_pyramid_mip.

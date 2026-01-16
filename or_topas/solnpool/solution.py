@@ -376,7 +376,8 @@ class PyomoSolution(Solution):
                     )
                 )
                 index += 1
-
+        else:
+            raise(RuntimeWarning('variable data was None'))
         #
         # TODO: Capture suffix info here.
         #
