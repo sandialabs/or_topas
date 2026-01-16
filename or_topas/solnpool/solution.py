@@ -181,7 +181,7 @@ class Solution:
                     self.fixed_variable_indices.add(i)
                 self.variable_name_to_index[v.name] = i
 
-    def variable(self, index, map_consistency_check=False):
+    def variable(self, index = 0, map_consistency_check=False):
         """Returns the specified variable.
 
         Parameters
@@ -216,7 +216,7 @@ class Solution:
         Parameters
         ----------
         index : str or object
-            The index or name of the variable if directly known. (default is 0)
+            The name of the variable if directly known.
             May also pass in an object with a .name attribute, which will be used if available
 
         Raises
