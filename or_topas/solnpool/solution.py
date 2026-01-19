@@ -83,6 +83,10 @@ class ObjectiveInfo:
         Other information about this objective.
     """
 
+    #
+    # TODO: add ability to keep track of if objective is active
+    #
+
     value: float = nan
     name: str = None
     index: int = None
@@ -111,7 +115,18 @@ class Solution:
         of the keyword arguments are treated as suffix data.
     """
 
-    def __init__(self, *, variables=None, objective=None, objectives=None, **kwargs):
+    def __init__(
+        self,
+        *,
+        variables=None,
+        objective=None,
+        objectives=None,
+        use_given_index_maps=False,
+        keep_fixed_var_list=True,
+        variable_name_to_index=None,
+        fixed_variable_indices=None,
+        **kwargs,
+    ):
         if objective is not None and objectives is not None:
             raise ValueError(
                 "The objective= and objectives= keywords cannot both be specified."
@@ -120,28 +135,45 @@ class Solution:
         self.index_maps_used_elsewhere = False
 
         self._variables = []
-        self.index_maps_from_external = kwargs.get("use_given_index_maps", False)
-        self.keep_fixed_var_list = kwargs.get("keep_fixed_var_list", True)
+        self.index_maps_from_external = use_given_index_maps
+        self.keep_fixed_var_list = keep_fixed_var_list
+
+        # load the variable data
+        if variables is not None:
+            self._variables = variables
+
+        # logic to control where variable_name_to_index and fixed_variable_indicies
+        #    data comes from. 2 possible cases:
+        #    Case 1. created external to this solution instance and used here
+        # .   Case 2. created in this solution instance
+        # Note, there is also an option to not keep track of fixed_variable_indicies
+        # this is handled in both cases.
         if self.index_maps_from_external:
-            name_index_map_string = "variable_name_to_index"
+            # case 1: created external to this solution instance and used here
+
+            # assertation check that the user actually gave variable_name_to_index data
             assert (
-                name_index_map_string in kwargs
-            ), f"Attempted to create solution using external index maps without passing {name_index_map_string} map"
-            self.variable_name_to_index = kwargs["variable_name_to_index"]
+                variable_name_to_index is not None
+            ), f"Attempted to create solution using external index maps without passing variable_name_to_index map"
+            self.variable_name_to_index = variable_name_to_index
+
+            # keep track of fixed_variable_indicies check
             if self.keep_fixed_var_list:
-                fixed_variable_indicies_string = "fixed_variable_indices"
                 assert (
-                    fixed_variable_indicies_string in kwargs
-                ), f"Attempted to create solution using external index maps without passing {fixed_variable_indicies_string} map"
-                self.fixed_variable_indices = kwargs[fixed_variable_indicies_string]
+                    fixed_variable_indices is not None
+                ), f"Attempted to create solution using external index maps without passing fixed_variable_indices set"
+                self.fixed_variable_indices = fixed_variable_indices
+
         else:
+            # case 2: created in this solution instance
             self.variable_name_to_index = {}
             self.fixed_variable_indices = set()
-            if variables is not None:
-                self._variables = variables
             self._rebuild_indices_maps()
-        if self.keep_fixed_var_list == False:
-            self.fixed_variable_indices = None
+
+            # _rebuild_indicies_map builds fixed_variable_indices by default
+            # in case 2, we can optionally throw it out
+            if self.keep_fixed_var_list == False:
+                self.fixed_variable_indices = None
 
         self._objectives = []
         self.name_to_objective = {}
@@ -150,7 +182,7 @@ class Solution:
         if objectives is not None:
             self._objectives = objectives
             for o in objectives:
-                if getattr(o, 'name', None) is not None:
+                if getattr(o, "name", None) is not None:
                     self.name_to_objective[o.name] = o
 
         if "suffix" in kwargs:
@@ -181,7 +213,7 @@ class Solution:
                     self.fixed_variable_indices.add(i)
                 self.variable_name_to_index[v.name] = i
 
-    def variable(self, index = 0, map_consistency_check=False):
+    def variable(self, index=0, map_consistency_check=False):
         """Returns the specified variable.
 
         Parameters
@@ -377,13 +409,18 @@ class PyomoSolution(Solution):
                 )
                 index += 1
         else:
-            raise(RuntimeWarning('variable data was None'))
+            raise (RuntimeWarning("variable data was None"))
         #
         # TODO: Capture suffix info here.
         #
         if objective is not None:
             objectives = [objective]
         olist = []
+        #
+        # TODO: Add some way here of keeping track of what objective is active
+        # Suggest reordering objective list so active objectives put at front of list
+        # So if only one objective active it goes as olist[0]
+        #
         if objectives is not None:
             index = 0
             for obj in objectives:
