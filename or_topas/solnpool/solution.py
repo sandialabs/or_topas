@@ -150,7 +150,7 @@ class Solution:
         if objectives is not None:
             self._objectives = objectives
             for o in objectives:
-                if getattr(o, 'name', None) is not None:
+                if getattr(o, "name", None) is not None:
                     self.name_to_objective[o.name] = o
 
         if "suffix" in kwargs:
@@ -181,7 +181,7 @@ class Solution:
                     self.fixed_variable_indices.add(i)
                 self.variable_name_to_index[v.name] = i
 
-    def variable(self, index = 0, map_consistency_check=False):
+    def variable(self, index=0, map_consistency_check=False):
         """Returns the specified variable.
 
         Parameters
@@ -377,7 +377,7 @@ class PyomoSolution(Solution):
                 )
                 index += 1
         else:
-            raise(RuntimeWarning('variable data was None'))
+            raise (RuntimeWarning("variable data was None"))
         #
         # TODO: Capture suffix info here.
         #
