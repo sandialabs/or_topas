@@ -9,6 +9,7 @@ dependencies:
   - numpy
   - glpk
   - flake8
+  - parameterized
   - pytest
   - pytest-cov
   - pip
