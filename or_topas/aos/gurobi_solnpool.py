@@ -129,6 +129,6 @@ def gurobi_generate_solutions(
         #
         # Pull the solution from the model, and cache it in a solution pool.
         #
-        pool_manager.add(variable=variables, objective=objective)
+        pool_manager.add(variables=variables, objective=objective)
 
     return pool_manager
