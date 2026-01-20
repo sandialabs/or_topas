@@ -1,6 +1,12 @@
-name: Pytest Tests
+name: Code Coverage
 
 on:
+  workflow_run:
+    workflows: ["Quick Tests"]
+    types:
+      - completed
+    branches:
+      - main
   push:
     branches:
       - main
@@ -9,20 +15,15 @@ on:
       - main
 
 jobs:
-  tests:
-    strategy:
-      fail-fast: false  # If one job fails, the rest will still run
-      matrix:
-        os: [ubuntu-latest] # Omitting macos-latest because it is 10x more expensive
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-    runs-on: ${{ matrix.os }}
+  coverage:
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash -el {0}
     steps:
       - uses: actions/checkout@v4
       
-      # Cache the conda environment
+      # Cache the conda environment (using a key for Ubuntu and Python 3.13)
       - name: Cache conda environment
         uses: actions/cache@v4
         with:
@@ -30,25 +31,27 @@ jobs:
             ~/conda_pkgs_dir
             ~/.conda
             ~/miniconda3/envs
-          key: conda-${{ matrix.os }}-${{ matrix.python-version }}-${{ hashFiles('dev_environment.yml') }}
+          key: conda-ubuntu-latest-3.13-${{ hashFiles('dev_environment.yml') }}
           restore-keys: |
-            conda-${{ matrix.os }}-${{ matrix.python-version }}-
-            conda-${{ matrix.os }}-
+            conda-ubuntu-latest-3.13-
+            conda-ubuntu-latest-
       
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: "latest"
           auto-update-conda: true
-          python-version: ${{ matrix.python-version }}
+          python-version: 3.13
           channels: conda-forge,defaults
           activate-environment: conin_dev
           environment-file: dev_environment.yml
           use-mamba: true
 
-      - name: Install package
-        run: pip install -e .
-
-      - name: Test with pytest
-        run: pytest -v
-
+      - name: Test with pytest & coverage
+        run: pytest --cov --cov-branch --cov-report=xml --junitxml=junit.xml -vv
+      
+      - name: Upload test results to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
