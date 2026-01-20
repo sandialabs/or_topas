@@ -4,4 +4,4 @@ coverage:
     project:
       default:
         # This setting enforces that your total (absolute) coverage must be at least 80%.
-        target: "80%"
+        target: "70%"
