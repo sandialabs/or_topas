@@ -147,7 +147,7 @@ def gurobi_enumerate_linear_solutions(
     if pool_manager is None:
         pool_manager = PyomoPoolManager()
         pool_manager.add_pool(
-            name="enumerate_binary_solutions", policy=PoolPolicy.keep_all
+            name="enumerate_gurobi_linear_solutions", policy=PoolPolicy.keep_all
         )
 
     #
@@ -256,7 +256,10 @@ def gurobi_enumerate_linear_solutions(
     opt.set_callback(cut_generator.cut_generator_callback)
     opt.solve(cb)
 
-    aos_block.deactivate()
+    # need to delete blocks not deactivate them to be able to run method again
+    # N.B. if anyone uses this outside this method, we can put the deletion under flag control
+    model.del_component(aos_block)
+    model.del_component(canonical_block)
     logger.info("COMPLETED LP ENUMERATION ANALYSIS")
 
     return cut_generator.pool_manager

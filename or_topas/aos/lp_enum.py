@@ -103,10 +103,10 @@ def enumerate_linear_solutions(
     if pool_manager is None:
         pool_manager = PyomoPoolManager()
         pool_manager.add_pool(
-            name="enumerate_binary_solutions", policy=PoolPolicy.keep_all
+            name="enumerate_linear_solutions", policy=PoolPolicy.keep_all
         )
 
-    all_variables = pyomo_utils.get_model_variables(model)
+    all_variables = pyomo_utils.get_model_variables(model, include_fixed=False)
     # else:
     #     binary_variables = ComponentSet()
     #     non_binary_variables = []
@@ -331,7 +331,10 @@ def enumerate_linear_solutions(
             logger.debug("=" * 80)
             logger.debug("")
 
-    model.del_component("aos_block")
+    # need to delete both the aos_block and the canon_block to restore model to previous structure
+    # N.B. if anyone uses this outside this method, we can put the deletion under flag control
+    model.del_component(aos_block)
+    model.del_component(canon_block)
 
     logger.info("COMPLETED LP ENUMERATION ANALYSIS")
 
