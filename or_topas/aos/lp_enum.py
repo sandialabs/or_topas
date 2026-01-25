@@ -196,8 +196,8 @@ def enumerate_linear_solutions(
     )
     logger.info("Added block {} to the model.".format(aos_block))
 
-    canon_block = shifted_lp.get_shifted_linear_model(model)
-    cb = canon_block
+    canonical_block = shifted_lp.get_shifted_linear_model(model)
+    cb = canonical_block
 
     # Set K
     cb.iteration = pyo.Set(pyo.PositiveIntegers)
@@ -331,10 +331,10 @@ def enumerate_linear_solutions(
             logger.debug("=" * 80)
             logger.debug("")
 
-    # need to delete both the aos_block and the canon_block to restore model to previous structure
+    # need to delete both the aos_block and the canonical_block to restore model to previous structure
     # N.B. if anyone uses this outside this method, we can put the deletion under flag control
     model.del_component(aos_block)
-    model.del_component(canon_block)
+    model.del_component(canonical_block)
 
     logger.info("COMPLETED LP ENUMERATION ANALYSIS")
 
