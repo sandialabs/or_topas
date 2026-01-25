@@ -1,7 +1,7 @@
 #  ___________________________________________________________________________
 #
 #  Pyomo: Python Optimization Modeling Objects
-#  Copyright (c) 2008-2025
+#  Copyright (c) 2008-2026
 #  National Technology and Engineering Solutions of Sandia, LLC
 #  Under the terms of Contract DE-NA0003525 with National Technology and
 #  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
@@ -115,6 +115,79 @@ def _filter_model_variables(
         ):
             variable_set.add(var)
 
+
+def load_solution_into_model(model, 
+                             solution, 
+                             solution_override_values_dict = dict(),
+                             descend_into = True,
+                             error_if_value_missing = False,
+                             return_vars_missing_values = True, 
+                             fix_continuous = False, 
+                             fix_binary = False, 
+                             fix_integer = False, 
+                             fix_if_model_var_fixed = False,
+                             fix_if_sol_var_fixed = False,
+                             vars_to_fix_set = set()):
+    """
+    Docstring for load_solution_into_model
+    Loads into a Pyomo model value data from an or_topas Solution object
+    returns vars_missing_values_set and vars_fixed_set
+    vars_missing_values_set is None if return_vars_missing_values = False, otherwise set of variables unable to be assigned values
+    vars_fixed_set is set of variables fixed
+    
+    :param model: Pyomo model to load solution values into
+    :param solution: or_topas Solution object to load values from
+    :param solution_override_values_dict: dictionary, keys are variables to use corresponding key-value value for
+    :param descend_into: boolean to decide to decend blocks
+    :param error_if_value_missing: boolean to raise runtime error if variable not found in Solution object
+    :param return_vars_missing_values: boolean to choose if model variables without corresponding values returned 
+    :param fix_continuous: boolean to decide if continuous variables are fixed
+    :param fix_binary: boolean to decide if binary variables are fixed
+    :param fix_integer: boolean to decide if integer variables are fixed
+    :param fix_if_model_var_fixed: boolean to decide to fix if model variable fixed in model
+    :param fix_if_sol_var_fixed: boolean to decide to fix if model variable fixed in solution
+    :param vars_to_fix_set: set of variables to fix model variable if in set
+    """
+    if return_vars_missing_values:
+        vars_missing_values_set = {}
+    else:
+        vars_missing_values_set = None
+    vars_fixed_set = {}
+
+    for model_var in model.component_data_objects(ctype=pyo.Var, descend_into=descend_into):
+        #handle all the fix if conditions that do not need the Solution object variable
+        
+        var_name = model_var.name
+        try:
+            solution_var = solution.get(var_name)
+        except RuntimeError as e:
+            if error_if_value_missing:
+                raise RuntimeError(f"Variable {var_name} has no value in Solution with id: {id(solution)}")
+            if return_vars_missing_values:
+                vars_missing_values_set.add(model_var)
+        #if we get past the try/except, we have the solution level variable as solution_var
+
+        #if in override map, use that, otherwise get from solution level variable
+        var_value = solution_override_values_dict.get(model_var, solution_var.value)
+        
+        #handle all the need to fix if conditions
+        need_to_fix_value = (model_var in vars_to_fix_set) \
+            or (fix_continuous and model_var.is_continuous()) \
+            or (fix_binary and model_var.is_binary()) \
+            or (fix_integer and model_var.is_integer()) \
+            or (fix_if_model_var_fixed and model_var.is_fixed()) \
+            or (fix_if_sol_var_fixed and solution_var.fixed)
+        
+        if need_to_fix_value:
+            #if need to fix variable, fix it to correct value
+            model_var.fix(var_value)
+            vars_fixed_set.add(model_var)
+        else:
+            #if we get here, model_var does not need to be fixed
+            #value loading can be done by assignment
+            model_var = var_value
+        
+    return vars_missing_values_set, vars_fixed_set
 
 def get_model_variables(
     model,
