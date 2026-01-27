@@ -79,6 +79,10 @@ class TestLPEnum(unittest.TestCase):
 
     @parameterized.expand(input=solvers)
     def test_3d_polyhedron_with_variable_count_check(self, mip_solver):
+        """
+        Test that model restored to same variables before and after AOS call
+        Also checks for solution accuracy
+        """
         m = tc.get_3d_polyhedron_problem()
         m.o.deactivate()
         m.obj = pyo.Objective(expr=m.x[0] + m.x[1] + m.x[2])
@@ -92,15 +96,20 @@ class TestLPEnum(unittest.TestCase):
         all_variables_after_solve_names = [
             var.name for var in all_variables_after_solve
         ]
-        print(f"{all_variables_before_solve_names=}")
-        print(f"{all_variables_after_solve_names=}")
         assert len(sols) == 2
         for s in sols:
             assert s.objective().value == unittest.pytest.approx(4)
         assert len(all_variables_before_solve) == len(all_variables_after_solve)
+        assert set(all_variables_before_solve_names) == set(
+            all_variables_after_solve_names
+        )
 
     @parameterized.expand(input=solvers)
     def test_3d_polyhedron_called_twice(self, mip_solver):
+        """
+        Test that AOS method can be called twice in a row with no issues
+        Also checks that objective results are the same across solves
+        """
         m = tc.get_3d_polyhedron_problem()
         m.o.deactivate()
         m.obj = pyo.Objective(expr=m.x[0] + m.x[1] + m.x[2])
