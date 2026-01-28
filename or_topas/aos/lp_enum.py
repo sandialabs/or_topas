@@ -90,7 +90,12 @@ def enumerate_linear_solutions(
         raise ValueError("num_solutions must be positive integer")
     if num_solutions == 1:
         logger.warning("Running alternative_solutions method to find only 1 solution!")
-
+    # TODO: First level value change
+    try:
+        if level_value is not None:
+            level_value = float(level_value)
+    except ValueError:
+        raise ValueError(f"level_value ({level_value}) must be None or numeric")
     if not (search_mode in ["optimal", "random", "norm"]):
         raise ValueError('search mode must be "optimal", "random", or "norm".')
     # TODO: Implement the random and norm objectives. I think it is sufficient
@@ -189,6 +194,12 @@ def enumerate_linear_solutions(
     orig_objective = pyomo_utils.get_active_objective(model)
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
+
+    # TODO: second level value change
+    if orig_objective.is_minimizing() and orig_objective_value > level_value:
+        return None
+    if (not orig_objective.is_minimizing()) and orig_objective_value < level_value:
+        return None
 
     aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
     pyomo_utils.add_objective_constraint(

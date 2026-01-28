@@ -42,13 +42,17 @@ def add_aos_block(model, name="_aos_block"):
 
 
 def add_objective_constraint(
-    aos_block, objective, objective_value, rel_opt_gap, abs_opt_gap
+    aos_block, objective, objective_value, rel_opt_gap, abs_opt_gap, level_value
 ):
     """
     Adds a relative and/or absolute objective function constraint to the
     specified block.
     """
-
+    try:
+        if level_value is not None:
+            level_value = float(level_value)
+    except ValueError:
+        raise ValueError(f"level_value ({level_value}) must be None or numeric")
     if not (rel_opt_gap is None or rel_opt_gap >= 0.0):
         raise ValueError(f"rel_opt_gap ({rel_opt_gap}) must be None or >= 0.0")
     if not (abs_opt_gap is None or abs_opt_gap >= 0.0):
@@ -90,6 +94,18 @@ def add_objective_constraint(
                 expr=objective_expr >= objective_cutoff
             )
         objective_constraints.append(aos_block.optimality_tol_abs)
+
+    # TODO: third level value change
+    if level_value is not None:
+        if objective_is_min:
+            aos_block.level_val_bound = pyo.Constraint(
+                expr=objective_expr <= level_value
+            )
+        else:
+            aos_block.level_val_bound = pyo.Constraint(
+                expr=objective_expr >= level_value
+            )
+        objective_constraints.append(aos_block.level_val_bound)
 
     return objective_constraints
 
