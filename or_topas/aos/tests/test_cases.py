@@ -560,3 +560,101 @@ def get_triangle_milp_fix_integer(level=5):
     else:
         m.num_ranked_solns = [1, 1]
     return m
+
+
+def get_triangle_milp(level=5):
+    """
+    Simple 2d continuous problem where the feasible region looks like a 90-45-45
+    right triangle and the optimal solutions fall along the hypotenuse, where
+    x + y == 5.
+
+    Modification of get_triangle_lp
+    This is designed to test how lp_enum codes deal with milps
+    MILP AOS methods presently designed to
+    1. enumerate IP solutions
+    2. find vertices of the LP version of the MILP with integer vars fixed
+
+    In this problem it is the y variables that are integer
+    This results in bands of alternative solution points
+    """
+    var_max = 5
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, var_max))
+    m.y = pyo.Var(within=pyo.NonNegativeIntegers, bounds=(0, var_max))
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=pyo.maximize)
+    m.c = pyo.Constraint(expr=m.x + m.y <= var_max)
+
+    #
+    # N.B. this could be made by a loop
+    # Hard coding for clarity
+    #
+    default_sols = [
+        ((0, 5), 5),
+        ((1, 4), 5),
+        ((2, 3), 5),
+        ((3, 2), 5),
+        ((4, 1), 5),
+        ((5, 0), 5),
+    ]
+    level = ceil(level)
+    if level >= 5:
+        added_sols = []
+        m.num_ranked_solns = [6]
+    elif level >= 4:
+        added_sols = [
+            ((0, 4), 4),
+            ((1, 3), 4),
+            ((2, 2), 4),
+            ((3, 1), 4),
+            ((4, 0), 4),
+        ]
+        m.num_ranked_solns = [6, 5]
+    elif level >= 3:
+        added_sols = [
+            ((0, 4), 4),
+            ((0, 3), 3),
+            ((1, 2), 3),
+            ((2, 1), 3),
+            ((3, 0), 3),
+        ]
+        m.num_ranked_solns = [6, 1, 4]
+    elif level >= 2:
+        added_sols = [
+            ((0, 4), 4),
+            ((0, 3), 3),
+            ((0, 2), 2),
+            ((1, 1), 2),
+            ((2, 0), 2),
+        ]
+        m.num_ranked_solns = [6, 1, 1, 3]
+    elif level >= 1:
+        added_sols = [
+            ((0, 4), 4),
+            ((0, 3), 3),
+            ((0, 2), 2),
+            ((0, 1), 1),
+            ((1, 0), 1),
+        ]
+        m.num_ranked_solns = [6, 1, 1, 1, 2]
+    else:
+        added_sols = [
+            ((4, 0), 4),
+            ((3, 0), 3),
+            ((2, 0), 2),
+            ((1, 0), 1),
+            ((0, 0), 0),
+        ]
+        m.num_ranked_solns = [6, 1, 1, 1, 1, 1]
+
+    feasible_sols = default_sols + added_sols
+    feasible_sols = sorted(feasible_sols, key=lambda sol: sol[1], reverse=True)
+    m.feasible_sols = feasible_sols
+    #
+    # Count of solutions from best to worst
+    #
+    if level >= 1:
+        m.num_ranked_solns = [1]
+    else:
+        m.num_ranked_solns = [1, 1]
+    return m

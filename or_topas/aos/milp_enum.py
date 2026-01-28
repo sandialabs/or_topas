@@ -21,6 +21,7 @@ from or_topas.aos import (
     gurobi_generate_solutions,
     enumerate_binary_solutions,
     enumerate_linear_solutions,
+    gurobi_enumerate_linear_solutions,
 )
 
 
@@ -78,7 +79,8 @@ def enumerate_mixed_integer_linear_program_solutions(
         "enumerate_binary_solutions": enumerate_binary_solutions,
     }
     supported_linear_program_methods = {
-        "enumerate_linear_solutions": enumerate_linear_solutions
+        "enumerate_linear_solutions": enumerate_linear_solutions,
+        "gurobi_enumerate_linear_solutions": gurobi_enumerate_linear_solutions,
     }
 
     assert (
@@ -128,21 +130,14 @@ def enumerate_mixed_integer_linear_program_solutions(
                 policy=PoolPolicy.keep_best,
                 as_solution=custom_as_solution,
             )
+        # TODO: add ability to adaptively change abs and rel tol
+        # fixing vars changes baseline
 
         # lp solve
         # TODO: check if we need to update the LP methods to tolerate fixed non-continuous variables
         lp_method(model, pool_manager=milp_pool_manager, **linear_program_options)
 
-        # delete aos_block locally
-        # TODO, figure out if delete in lp aos method sufficient
-        # TODO: figure out how to grab the AOS block to delete
-        # probably easiest to add name to model somewhere in add_aos_block method in pyomo_utils
-        # could also just add ability to delete aos_block after solve to lp method
-        # second option probably best
-
-        # delete aos_block if being used persistently
-        # shouldnt need this at the moment, we build new solver object in every lp_method call
-        # this may be a performence enhancement for latter to carry around the lp method persistently
-        # TODO: add persistent carry of LP model around
+        # TODO: look at adding persistent carry of LP model around
+        # is this something we can do?
 
     return milp_pool_manager, ip_pool_manager
