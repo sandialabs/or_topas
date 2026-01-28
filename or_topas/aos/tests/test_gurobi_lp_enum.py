@@ -15,11 +15,12 @@ from pyomo.common import unittest
 import pyomo.common.errors
 import or_topas.aos.tests.test_cases as tc
 from or_topas.aos import gurobi_enumerate_linear_solutions
+from or_topas.util import pyomo_utils
 from pyomo.opt import check_available_solvers
 
 import pyomo.environ as pyo
 
-gurobi_available = len(check_available_solvers("gurobi")) == 2
+gurobi_available = len(check_available_solvers("gurobi")) == 1
 
 #
 # TODO: Setup detailed tests here
@@ -38,7 +39,7 @@ class TestLPEnumSolnpool(unittest.TestCase):
         with self.assertRaises(ValueError):
             gurobi_enumerate_linear_solutions(n, num_solutions=-1)
 
-    def test_here(self):
+    def test_generation(self):
         n = tc.get_pentagonal_pyramid_mip()
         n.x.domain = pyo.Reals
         n.y.domain = pyo.Reals
@@ -50,3 +51,38 @@ class TestLPEnumSolnpool(unittest.TestCase):
             assert len(sols) == 7
         else:
             assert len(sols) == 0
+
+    def test_generation_with_variable_count_check(self):
+        # checks that the model is restored to same variable count/names
+        # as before the gurobi_enumerate_linear_solutions call
+        n = tc.get_pentagonal_pyramid_mip()
+        n.x.domain = pyo.Reals
+        n.y.domain = pyo.Reals
+
+        all_variables_before_solve = pyomo_utils.get_model_variables(n)
+        sols = gurobi_enumerate_linear_solutions(n, tee=True)
+        all_variables_after_solve = pyomo_utils.get_model_variables(n)
+        all_variables_before_solve_names = [
+            var.name for var in all_variables_before_solve
+        ]
+        all_variables_after_solve_names = [
+            var.name for var in all_variables_after_solve
+        ]
+
+        assert len(sols) == 7
+        assert len(all_variables_before_solve) == len(all_variables_after_solve)
+        assert set(all_variables_before_solve_names) == set(
+            all_variables_after_solve_names
+        )
+
+    def test_generation_twice(self):
+        # tests that the correct number of solutions are generated in repeated solves
+        # also implicitly tests that no error is raised by second aos call
+        n = tc.get_pentagonal_pyramid_mip()
+        n.x.domain = pyo.Reals
+        n.y.domain = pyo.Reals
+
+        sols = gurobi_enumerate_linear_solutions(n, tee=True)
+        assert len(sols) == 7
+        sols_2 = gurobi_enumerate_linear_solutions(n, tee=True)
+        assert len(sols_2) == 7
