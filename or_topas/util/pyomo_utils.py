@@ -42,7 +42,12 @@ def add_aos_block(model, name="_aos_block"):
 
 
 def add_objective_constraint(
-    aos_block, objective, objective_value, rel_opt_gap, abs_opt_gap, level_value
+    aos_block,
+    objective,
+    objective_value,
+    rel_opt_gap=None,
+    abs_opt_gap=None,
+    level_value=None,
 ):
     """
     Adds a relative and/or absolute objective function constraint to the

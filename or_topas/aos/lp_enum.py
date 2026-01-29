@@ -27,6 +27,7 @@ def enumerate_linear_solutions(
     num_solutions=10,
     rel_opt_gap=None,
     abs_opt_gap=None,
+    level_value=None,
     zero_threshold=1e-5,
     search_mode="optimal",
     solver="gurobi",
@@ -63,6 +64,7 @@ def enumerate_linear_solutions(
     zero_threshold: float
         The threshold for which a continuous variables' value is considered
         to be equal to zero.
+        Also used in level_value check if level_value is not None.
     search_mode : 'optimal', 'random', or 'norm'
         Indicates the mode that is used to generate alternative solutions.
         The optimal mode finds the next best solution. The random mode
@@ -197,20 +199,22 @@ def enumerate_linear_solutions(
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
     # TODO: second level value change
-    level_value_violated = orig_objective.is_minimizing() and (
-        orig_objective_value > level_value
-    )
-    level_value_violated = level_value_violated or (
-        (not orig_objective.is_minimizing()) and (orig_objective_value < level_value)
-    )
-    if level_value_violated:
-        # MPV: current behavior here is to warn but return pool with no solutions added
-        warnings.warn(
-            "Level value violated at optimum, no valid solutions",
-            category=RuntimeWarning,
-            stacklevel=2,
+    if level_value is not None:
+        level_value_violated = orig_objective.is_minimizing() and (
+            orig_objective_value - zero_threshold >= level_value
         )
-        return pool_manager
+        level_value_violated = level_value_violated or (
+            (not orig_objective.is_minimizing())
+            and (orig_objective_value + zero_threshold <= level_value)
+        )
+        if level_value_violated:
+            # MPV: current behavior here is to warn but return pool with no solutions added
+            warnings.warn(
+                "Level value violated at optimum, no valid solutions",
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+            return pool_manager
 
     aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
     pyomo_utils.add_objective_constraint(
