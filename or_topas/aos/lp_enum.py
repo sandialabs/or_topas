@@ -14,6 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pyomo.environ as pyo
+import warnings
 from or_topas.util import pyomo_utils
 from or_topas.solnpool import PyomoPoolManager, PoolPolicy
 from or_topas.aos import shifted_lp
@@ -196,10 +197,20 @@ def enumerate_linear_solutions(
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
     # TODO: second level value change
-    if orig_objective.is_minimizing() and orig_objective_value > level_value:
-        return None
-    if (not orig_objective.is_minimizing()) and orig_objective_value < level_value:
-        return None
+    level_value_violated = orig_objective.is_minimizing() and (
+        orig_objective_value > level_value
+    )
+    level_value_violated = level_value_violated or (
+        (not orig_objective.is_minimizing()) and (orig_objective_value < level_value)
+    )
+    if level_value_violated:
+        # MPV: current behavior here is to warn but return pool with no solutions added
+        warnings.warn(
+            "Level value violated at optimum, no valid solutions",
+            category=RuntimeWarning,
+            stacklevel=2,
+        )
+        return pool_manager
 
     aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
     pyomo_utils.add_objective_constraint(
