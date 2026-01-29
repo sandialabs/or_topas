@@ -172,3 +172,58 @@ class TestLPEnum(unittest.TestCase):
         for s in sols:
             print(s)
         assert len(sols) == 6
+
+    @parameterized.expand(input=solvers)
+    def test_triangle_lp(self, mip_solver):
+        """
+        Test that AOS method can be called multiple times in a row.
+        Uses adaptive test from test cases.
+        Feasible region is a right triangle with vertices (x,y) = (5,0), (0,5), (0,0)
+        Objective is x+y
+        Runs repeatedly changing the absolute gap tol at 0,1,2,3,4,5
+        Checks that vertices found are the expected ones.
+        Details in test_case.py
+        """
+        for level in range(0, 6):
+            abs_tol = 5 - level
+            m = tc.get_triangle_lp(level=level)
+            sols = lp_enum.enumerate_linear_solutions(
+                m, solver=mip_solver, abs_opt_gap=abs_tol
+            )
+            assert len(sols) == sum(m.num_ranked_solns)
+            sol_set = set()
+            for s in sols:
+                s_x = s.variable("x")
+                s_y = s.variable("y")
+                sol_set.add(
+                    ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+                )
+            assert set(m.feasible_sols) == sol_set
+
+    @parameterized.expand(input=solvers)
+    def test_triangle_milp_fix_integer(self, mip_solver):
+        """
+        Test that AOS method can be called multiple times in a row and handle all integers fixed
+        All integer fixed converts the MILP to effectively an LP
+        Uses adaptive test from test cases.
+        Feasible region is a right triangle with vertices (x,y) = (5,0), (0,5), (0,0)
+        Objective is x+y
+        Runs repeatedly changing the absolute gap tol at 0,1,2,3,4,5
+        Checks that vertices found are the expected ones.
+        Details in test_case.py
+        """
+        for level in range(0, 6):
+            abs_tol = 5 - level
+            m = tc.get_triangle_lp(level=level)
+            sols = lp_enum.enumerate_linear_solutions(
+                m, solver=mip_solver, abs_opt_gap=abs_tol
+            )
+            assert len(sols) == sum(m.num_ranked_solns)
+            sol_set = set()
+            for s in sols:
+                s_x = s.variable("x")
+                s_y = s.variable("y")
+                sol_set.add(
+                    ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+                )
+            assert set(m.feasible_sols) == sol_set
