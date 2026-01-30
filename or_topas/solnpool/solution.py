@@ -380,8 +380,9 @@ class Solution:
             return NotImplemented
         return self._tuple_repn() <= soln._tuple_repn()
 
-#TODO: we need to extend this to for a SparowSolution
-#that makes the sparow as_solution method simply
+
+# TODO: we need to extend this to for a SparowSolution
+# that makes the sparow as_solution method simply
 # def _as_sparow_solution(*args, **kwargs):
 #     return SparowSolution(*args, **kwargs)
 class PyomoSolution(Solution):
@@ -434,8 +435,8 @@ class PyomoSolution(Solution):
 
         super().__init__(variables=vlist, objectives=olist, **kwargs)
 
-    #TODO: update to have solution come from self not external
-    #convert to instance method
+    # TODO: update to have solution come from self not external
+    # convert to instance method
     def load_solution_into_model(
         model,
         solution,

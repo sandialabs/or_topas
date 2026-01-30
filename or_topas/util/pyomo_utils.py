@@ -17,6 +17,7 @@ import pyomo.environ as pyo
 from pyomo.common.modeling import unique_component_name
 from pyomo.common.collections import ComponentSet
 import pyomo.util.vars_from_expressions as vfe
+import warnings
 
 
 def get_active_objective(model):
@@ -42,22 +43,60 @@ def add_aos_block(model, name="_aos_block"):
 
 
 def add_objective_constraint(
-    aos_block,
+    target_block,
     objective,
     objective_value,
     rel_opt_gap=None,
     abs_opt_gap=None,
-    level_value=None,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
 ):
     """
     Adds a relative and/or absolute objective function constraint to the
     specified block.
+    target_block : Pyomo block
+        block on which to add the constraints
+    objective : Pyomo objective
+        objective to add the constraints based off on.
+    objective_value : Float
+        objective value to add the constraints based on.
+    rel_opt_gap : float or None
+        The relative optimality gap for the original objective for which
+        a constraint on feasible objectives will be added.
+        None indicates that a relative gap constraint will not be
+        added to the model.
+    abs_opt_gap : float or None
+        The absolute optimality gap for the original objective for which
+        a constraint on feasible objectives will be added.
+        None indicates that a relative gap constraint will not be
+        added to the model.
+    lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to add a constraint of
+        form objective >= lower_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to add a constraint of
+        form objective <= upper_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
     """
     try:
-        if level_value is not None:
-            level_value = float(level_value)
+        if lower_objective_threshold is not None:
+            lower_objective_threshold = float(lower_objective_threshold)
     except ValueError:
-        raise ValueError(f"level_value ({level_value}) must be None or numeric")
+        raise ValueError(
+            f"lower_objective_threshold ({lower_objective_threshold}) must be None or numeric"
+        )
+    try:
+        if upper_objective_threshold is not None:
+            upper_objective_threshold = float(upper_objective_threshold)
+    except ValueError:
+        raise ValueError(
+            f"upper_objective_threshold ({upper_objective_threshold}) must be None or numeric"
+        )
     if not (rel_opt_gap is None or rel_opt_gap >= 0.0):
         raise ValueError(f"rel_opt_gap ({rel_opt_gap}) must be None or >= 0.0")
     if not (abs_opt_gap is None or abs_opt_gap >= 0.0):
@@ -78,39 +117,39 @@ def add_objective_constraint(
         )
 
         if objective_is_min:
-            aos_block.optimality_tol_rel = pyo.Constraint(
+            target_block.optimality_tol_rel = pyo.Constraint(
                 expr=objective_expr <= objective_cutoff
             )
         else:
-            aos_block.optimality_tol_rel = pyo.Constraint(
+            target_block.optimality_tol_rel = pyo.Constraint(
                 expr=objective_expr >= objective_cutoff
             )
-        objective_constraints.append(aos_block.optimality_tol_rel)
+        objective_constraints.append(target_block.optimality_tol_rel)
 
     if abs_opt_gap is not None:
         objective_cutoff = objective_value + objective_sense * abs_opt_gap
 
         if objective_is_min:
-            aos_block.optimality_tol_abs = pyo.Constraint(
+            target_block.optimality_tol_abs = pyo.Constraint(
                 expr=objective_expr <= objective_cutoff
             )
         else:
-            aos_block.optimality_tol_abs = pyo.Constraint(
+            target_block.optimality_tol_abs = pyo.Constraint(
                 expr=objective_expr >= objective_cutoff
             )
-        objective_constraints.append(aos_block.optimality_tol_abs)
+        objective_constraints.append(target_block.optimality_tol_abs)
 
     # TODO: third level value change
-    if level_value is not None:
-        if objective_is_min:
-            aos_block.level_val_bound = pyo.Constraint(
-                expr=objective_expr <= level_value
-            )
-        else:
-            aos_block.level_val_bound = pyo.Constraint(
-                expr=objective_expr >= level_value
-            )
-        objective_constraints.append(aos_block.level_val_bound)
+    if objective_is_min and upper_objective_threshold is not None:
+        target_block.upper_objective_bound = pyo.Constraint(
+            expr=objective_expr <= upper_objective_threshold
+        )
+        objective_constraints.append(target_block.lower_objective_bound)
+    if (not objective_is_min) and lower_objective_threshold is not None:
+        target_block.upper_objective_bound = pyo.Constraint(
+            expr=objective_expr >= lower_objective_threshold
+        )
+        objective_constraints.append(target_block.upper_objective_bound)
 
     return objective_constraints
 
@@ -260,3 +299,54 @@ def get_model_variables(
                 )
 
     return variable_set
+
+
+def objective_thresolds_violation_check(
+    model,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
+    zero_threshold=0.0,
+):
+    """
+    Checks if the model current objective value violates thresholds.
+    Sense dependent, if maximizing then check the lower_objective_thresold.
+    If minimizing the check upper_objective_threshold.
+    Zero threshold is functionally rounding tolerance.
+
+    model: Pyomo model with an active objective
+    lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to check if
+        objective < lower_objective_threshold.
+        None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to check if
+        objective > upper_objective_threshold.
+        None indicates that a lower objective threshold will not
+        be added to the model.
+    :param zero_threshold: Description
+    """
+    orig_objective = get_active_objective(model)
+    orig_objective_value = pyo.value(orig_objective)
+    # MPV: current behavior here is to warn but return pool with no solutions added
+    if lower_objective_threshold is not None:
+        if (not orig_objective.is_minimizing()) and (
+            orig_objective_value + zero_threshold <= lower_objective_threshold
+        ):
+            warnings.warn(
+                "lower_objective_threshold violated at optimum, no valid solutions",
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+            return True
+    if upper_objective_threshold is not None:
+        if (orig_objective.is_minimizing()) and (
+            orig_objective_value - zero_threshold >= upper_objective_threshold
+        ):
+            warnings.warn(
+                "upper_objective_threshold violated at optimum, no valid solutions",
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+            return True
+    return False

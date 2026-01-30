@@ -14,7 +14,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pyomo.environ as pyo
-import warnings
 from or_topas.util import pyomo_utils
 from or_topas.solnpool import PyomoPoolManager, PoolPolicy
 from or_topas.aos import shifted_lp
@@ -27,7 +26,8 @@ def enumerate_linear_solutions(
     num_solutions=10,
     rel_opt_gap=None,
     abs_opt_gap=None,
-    level_value=None,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
     zero_threshold=1e-5,
     search_mode="optimal",
     solver="gurobi",
@@ -61,6 +61,18 @@ def enumerate_linear_solutions(
         The absolute optimality gap for the original objective for which
         variable bounds will be found. None indicates that an absolute gap
         constraint will not be added to the model.
+    lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to add a constraint of
+        form objective >= lower_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to add a constraint of
+        form objective <= upper_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
     zero_threshold: float
         The threshold for which a continuous variables' value is considered
         to be equal to zero.
@@ -94,11 +106,6 @@ def enumerate_linear_solutions(
     if num_solutions == 1:
         logger.warning("Running alternative_solutions method to find only 1 solution!")
     # TODO: First level value change
-    try:
-        if level_value is not None:
-            level_value = float(level_value)
-    except ValueError:
-        raise ValueError(f"level_value ({level_value}) must be None or numeric")
     if not (search_mode in ["optimal", "random", "norm"]):
         raise ValueError('search mode must be "optimal", "random", or "norm".')
     # TODO: Implement the random and norm objectives. I think it is sufficient
@@ -199,22 +206,14 @@ def enumerate_linear_solutions(
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
     # TODO: second level value change
-    if level_value is not None:
-        level_value_violated = orig_objective.is_minimizing() and (
-            orig_objective_value - zero_threshold >= level_value
-        )
-        level_value_violated = level_value_violated or (
-            (not orig_objective.is_minimizing())
-            and (orig_objective_value + zero_threshold <= level_value)
-        )
-        if level_value_violated:
-            # MPV: current behavior here is to warn but return pool with no solutions added
-            warnings.warn(
-                "Level value violated at optimum, no valid solutions",
-                category=RuntimeWarning,
-                stacklevel=2,
-            )
-            return pool_manager
+    objective_thresolds_violated = pyomo_utils.objective_thresolds_violation_check(
+        model,
+        lower_objective_threshold=None,
+        upper_objective_threshold=None,
+        zero_threshold=0.0,
+    )
+    if objective_thresolds_violated:
+        return pool_manager
 
     aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
     pyomo_utils.add_objective_constraint(
