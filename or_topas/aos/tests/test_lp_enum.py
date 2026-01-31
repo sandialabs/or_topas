@@ -343,12 +343,12 @@ class TestLPEnum(unittest.TestCase):
             "upper_objective_threshold violated at optimum, no valid solutions",
         )
     
-    def test_lp_enum_lower_objective_bound_gurobi(self, mip_solver):
+    def test_lp_enum_lower_objective_bound_gurobi(self):
         """
         Simple AOS test on 2D box example using lower objective bound
         Details in test_case.py for get_trivial_2d_box.
         """
-        # mip_solver = 'gurobi'
+        mip_solver = 'gurobi'
         m = tc.get_trivial_2d_box_lp(sense = pyo.maximize)
         #this case should keep all the same solutions
         sols = lp_enum.enumerate_linear_solutions(
