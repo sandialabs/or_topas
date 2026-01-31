@@ -76,7 +76,7 @@ def enumerate_linear_solutions(
     zero_threshold: float
         The threshold for which a continuous variables' value is considered
         to be equal to zero.
-        Also used in objective_threshold type tests is not None.
+        Also used in objective_threshold type tests when not None.
     search_mode : 'optimal', 'random', or 'norm'
         Indicates the mode that is used to generate alternative solutions.
         The optimal mode finds the next best solution. The random mode
@@ -204,7 +204,7 @@ def enumerate_linear_solutions(
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
-    #enforces objective threshold behvior if violated at optimum
+    # enforces objective threshold behvior if violated at optimum
     objective_thresholds_violated = pyomo_utils.objective_thresholds_violation_check(
         objective=orig_objective,
         objective_value=orig_objective_value,

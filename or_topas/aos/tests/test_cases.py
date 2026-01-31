@@ -659,7 +659,8 @@ def get_triangle_milp(level=5):
         m.num_ranked_solns = [1, 1]
     return m
 
-def get_trivial_2d_box_lp_variant(sense = pyo.minimize):
+
+def get_trivial_2d_box_lp_variant(sense=pyo.minimize):
     """
     Simple LP example in 2D.
     Feasibility region is box from [0,1] in both variables
@@ -679,21 +680,24 @@ def get_trivial_2d_box_lp_variant(sense = pyo.minimize):
 
     m.num_ranked_solns = [1, 2, 1]
 
-        #
+    #
     # Enumerate all feasible solutions
     #
     feasible_sols = []
     var_max = 1
     for i in range(var_max + 1):
         for j in range(var_max + 1):
-                feasible_sols.append(((i, j), i + j))
+            feasible_sols.append(((i, j), i + j))
 
     order_descending = sense == pyo.maximize
-    feasible_sols = sorted(feasible_sols, key=lambda sol: sol[1], reverse=order_descending)
+    feasible_sols = sorted(
+        feasible_sols, key=lambda sol: sol[1], reverse=order_descending
+    )
     m.feasible_sols = feasible_sols
     return m
 
-def get_trivial_2d_box_lp(sense = pyo.minimize):
+
+def get_trivial_2d_box_lp(sense=pyo.minimize):
     """
     Simple LP example in 2D.
     Feasibility region is box from [0,1] in both variables
@@ -711,16 +715,18 @@ def get_trivial_2d_box_lp(sense = pyo.minimize):
 
     m.num_ranked_solns = [1, 2, 1]
 
-        #
+    #
     # Enumerate all feasible solutions
     #
     feasible_sols = []
     var_max = 1
     for i in range(var_max + 1):
         for j in range(var_max + 1):
-                feasible_sols.append(((i, j), i + j))
+            feasible_sols.append(((i, j), i + j))
 
     order_descending = sense == pyo.maximize
-    feasible_sols = sorted(feasible_sols, key=lambda sol: sol[1], reverse=order_descending)
+    feasible_sols = sorted(
+        feasible_sols, key=lambda sol: sol[1], reverse=order_descending
+    )
     m.feasible_sols = feasible_sols
     return m
