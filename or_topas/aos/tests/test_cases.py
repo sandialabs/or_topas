@@ -658,3 +658,69 @@ def get_triangle_milp(level=5):
     else:
         m.num_ranked_solns = [1, 1]
     return m
+
+def get_trivial_2d_box_lp_variant(sense = pyo.minimize):
+    """
+    Simple LP example in 2D.
+    Feasibility region is box from [0,1] in both variables
+    Objective is x+y
+
+    Can control the sense of the problem.
+    Feasible vertices are (0,0), (1,0), (0,1), (1,1)
+    m.feasible_sols[0] is the optimal point
+
+    This variant uses within=NonNegativeReals
+    """
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, 1))
+    m.y = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, 1))
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=sense)
+
+    m.num_ranked_solns = [1, 2, 1]
+
+        #
+    # Enumerate all feasible solutions
+    #
+    feasible_sols = []
+    var_max = 1
+    for i in range(var_max + 1):
+        for j in range(var_max + 1):
+                feasible_sols.append(((i, j), i + j))
+
+    order_descending = sense == pyo.maximize
+    feasible_sols = sorted(feasible_sols, key=lambda sol: sol[1], reverse=order_descending)
+    m.feasible_sols = feasible_sols
+    return m
+
+def get_trivial_2d_box_lp(sense = pyo.minimize):
+    """
+    Simple LP example in 2D.
+    Feasibility region is box from [0,1] in both variables
+    Objective is x+y
+
+    Can control the sense of the problem.
+    Feasible vertices are (0,0), (1,0), (0,1), (1,1)
+    m.feasible_sols[0] is the optimal point
+    """
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.Reals, bounds=(0, 1))
+    m.y = pyo.Var(within=pyo.Reals, bounds=(0, 1))
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=sense)
+
+    m.num_ranked_solns = [1, 2, 1]
+
+        #
+    # Enumerate all feasible solutions
+    #
+    feasible_sols = []
+    var_max = 1
+    for i in range(var_max + 1):
+        for j in range(var_max + 1):
+                feasible_sols.append(((i, j), i + j))
+
+    order_descending = sense == pyo.maximize
+    feasible_sols = sorted(feasible_sols, key=lambda sol: sol[1], reverse=order_descending)
+    m.feasible_sols = feasible_sols
+    return m

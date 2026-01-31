@@ -76,7 +76,7 @@ def enumerate_linear_solutions(
     zero_threshold: float
         The threshold for which a continuous variables' value is considered
         to be equal to zero.
-        Also used in level_value check if level_value is not None.
+        Also used in objective_threshold type tests is not None.
     search_mode : 'optimal', 'random', or 'norm'
         Indicates the mode that is used to generate alternative solutions.
         The optimal mode finds the next best solution. The random mode
@@ -105,7 +105,6 @@ def enumerate_linear_solutions(
         raise ValueError("num_solutions must be positive integer")
     if num_solutions == 1:
         logger.warning("Running alternative_solutions method to find only 1 solution!")
-    # TODO: First level value change
     if not (search_mode in ["optimal", "random", "norm"]):
         raise ValueError('search mode must be "optimal", "random", or "norm".')
     # TODO: Implement the random and norm objectives. I think it is sufficient
@@ -205,19 +204,26 @@ def enumerate_linear_solutions(
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
-    # TODO: second level value change
-    objective_thresolds_violated = pyomo_utils.objective_thresolds_violation_check(
-        model,
-        lower_objective_threshold=None,
-        upper_objective_threshold=None,
-        zero_threshold=0.0,
+    #enforces objective threshold behvior if violated at optimum
+    objective_thresholds_violated = pyomo_utils.objective_thresholds_violation_check(
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
+        zero_threshold=zero_threshold,
     )
-    if objective_thresolds_violated:
+    if objective_thresholds_violated:
         return pool_manager
 
     aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
     pyomo_utils.add_objective_constraint(
-        aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
+        target_block=aos_block,
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        rel_opt_gap=rel_opt_gap,
+        abs_opt_gap=abs_opt_gap,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
     )
     logger.info("Added block {} to the model.".format(aos_block))
 
