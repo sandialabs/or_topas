@@ -144,12 +144,12 @@ def add_objective_constraint(
         target_block.upper_objective_bound = pyo.Constraint(
             expr=objective_expr <= upper_objective_threshold
         )
-        objective_constraints.append(target_block.lower_objective_bound)
+        objective_constraints.append(target_block.upper_objective_bound)
     if (not objective_is_min) and lower_objective_threshold is not None:
-        target_block.upper_objective_bound = pyo.Constraint(
+        target_block.lower_objective_bound = pyo.Constraint(
             expr=objective_expr >= lower_objective_threshold
         )
-        objective_constraints.append(target_block.upper_objective_bound)
+        objective_constraints.append(target_block.lower_objective_bound)
 
     return objective_constraints
 

@@ -97,10 +97,12 @@ class TestPyomoUtilsUnit(unittest.TestCase):
     def test_no_obj_constraint(self):
         """Ensure that no objective constraints are added."""
         m = self.get_simple_model()
-        cons = pyomo_utils.add_objective_constraint(m, m.o, 2, None, None)
+        cons = pyomo_utils.add_objective_constraint(m, m.o, 2, None, None, None, None)
         self.assertEqual(cons, [])
         self.assertEqual(m.find_component("optimality_tol_rel"), None)
         self.assertEqual(m.find_component("optimality_tol_abs"), None)
+        self.assertEqual(m.find_component("upper_objective_bound"), None)
+        self.assertEqual(m.find_component("lower_objective_bound"), None)
 
     def test_min_rel_obj_constraint(self):
         """Ensure that the correct relative objective constraint is added."""
@@ -122,31 +124,127 @@ class TestPyomoUtilsUnit(unittest.TestCase):
         self.assertEqual(3, cons[0].upper)
         self.assertEqual(None, cons[0].lower)
 
-    def test_min_both_obj_constraint(self):
+    def test_lower_objective_bound_constraint(self):
+        """Ensure that the correct lower objective bound constraint is added."""
+        m = self.get_simple_model(sense=pyo.maximize)
+        cons = pyomo_utils.add_objective_constraint(
+            target_block=m,
+            objective=m.o,
+            objective_value=2,
+            rel_opt_gap=None,
+            abs_opt_gap=None,
+            lower_objective_threshold=1,
+            upper_objective_threshold=None,
+        )
+        self.assertEqual(len(cons), 1)
+        self.assertEqual(m.find_component("optimality_tol_rel"), None)
+        self.assertEqual(m.find_component("optimality_tol_abs"), None)
+        self.assertEqual(m.find_component("lower_objective_bound"), cons[0])
+        self.assertEqual(m.find_component("upper_objective_bound"), None)
+        self.assertEqual(None, cons[0].upper)
+        self.assertEqual(1, cons[0].lower)
+
+    def test_upper_objective_bound_constraint(self):
+        """Ensure that the correct lower objective bound constraint is added."""
+        m = self.get_simple_model(sense=pyo.minimize)
+        cons = pyomo_utils.add_objective_constraint(
+            target_block=m,
+            objective=m.o,
+            objective_value=2,
+            rel_opt_gap=None,
+            abs_opt_gap=None,
+            lower_objective_threshold=None,
+            upper_objective_threshold=3,
+        )
+        self.assertEqual(len(cons), 1)
+        self.assertEqual(m.find_component("optimality_tol_rel"), None)
+        self.assertEqual(m.find_component("optimality_tol_abs"), None)
+        self.assertEqual(m.find_component("lower_objective_bound"), None)
+        self.assertEqual(m.find_component("upper_objective_bound"), cons[0])
+        self.assertEqual(3, cons[0].upper)
+        self.assertEqual(None, cons[0].lower)
+
+    def test_min_all_obj_constraint(self):
+        """
+        Ensure that the correct relative gap, absolute gap, and upper objective
+        constraints are added.
+        """
         m = self.get_simple_model()
-        cons = pyomo_utils.add_objective_constraint(m, m.o, -10, 0.3, 5)
-        self.assertEqual(len(cons), 2)
+        cons = pyomo_utils.add_objective_constraint(m, m.o, -10, 0.3, 5, None, 0)
+        self.assertEqual(len(cons), 3)
         self.assertEqual(m.find_component("optimality_tol_rel"), cons[0])
         self.assertEqual(m.find_component("optimality_tol_abs"), cons[1])
+        self.assertEqual(m.find_component("lower_objective_bound"), None)
+        self.assertEqual(m.find_component("upper_objective_bound"), cons[2])
         self.assertEqual(-7, cons[0].upper)
         self.assertEqual(None, cons[0].lower)
         self.assertEqual(-5, cons[1].upper)
         self.assertEqual(None, cons[1].lower)
+        self.assertEqual(0, cons[2].upper)
+        self.assertEqual(None, cons[2].lower)
 
-    def test_max_both_obj_constraint(self):
+    def test_min_all_obj_constraint_ignoring_lower_bound_for_sense(self):
         """
-        Ensure that the correct relative and absolute objective constraints are
-        added.
+        Ensure that the correct relative gap, absolute gap, and upper objective
+        constraints are added.
+
+        Also adds test that the lower objective bound is ignored because of
+        objective sense as minimize
         """
-        m = self.get_simple_model(sense=pyo.maximize)
-        cons = pyomo_utils.add_objective_constraint(m, m.o, -1, 0.3, 1)
-        self.assertEqual(len(cons), 2)
+        m = self.get_simple_model()
+        cons = pyomo_utils.add_objective_constraint(m, m.o, -10, 0.3, 5, 1000, 0)
+        self.assertEqual(len(cons), 3)
         self.assertEqual(m.find_component("optimality_tol_rel"), cons[0])
         self.assertEqual(m.find_component("optimality_tol_abs"), cons[1])
+        self.assertEqual(m.find_component("lower_objective_bound"), None)
+        self.assertEqual(m.find_component("upper_objective_bound"), cons[2])
+        self.assertEqual(-7, cons[0].upper)
+        self.assertEqual(None, cons[0].lower)
+        self.assertEqual(-5, cons[1].upper)
+        self.assertEqual(None, cons[1].lower)
+        self.assertEqual(0, cons[2].upper)
+        self.assertEqual(None, cons[2].lower)
+
+    def test_max_all_obj_constraint(self):
+        """
+        Ensure that the correct relative gap, absolute gap, and lower objective
+        constraints are added.
+        """
+        m = self.get_simple_model(sense=pyo.maximize)
+        cons = pyomo_utils.add_objective_constraint(m, m.o, -1, 0.3, 1, -5, None)
+        self.assertEqual(len(cons), 3)
+        self.assertEqual(m.find_component("optimality_tol_rel"), cons[0])
+        self.assertEqual(m.find_component("optimality_tol_abs"), cons[1])
+        self.assertEqual(m.find_component("lower_objective_bound"), cons[2])
+        self.assertEqual(m.find_component("upper_objective_bound"), None)
         self.assertEqual(None, cons[0].upper)
         self.assertEqual(-1.3, cons[0].lower)
         self.assertEqual(None, cons[1].upper)
         self.assertEqual(-2, cons[1].lower)
+        self.assertEqual(None, cons[2].upper)
+        self.assertEqual(-5, cons[2].lower)
+
+    def test_max_all_obj_constraint_ignoring_upper_bound_for_sense(self):
+        """
+        Ensure that the correct relative gap, absolute gap, and lower objective
+        constraints are added.
+
+        Also adds test that the upper objective bound is ignored because of
+        objective sense as maximize
+        """
+        m = self.get_simple_model(sense=pyo.maximize)
+        cons = pyomo_utils.add_objective_constraint(m, m.o, -1, 0.3, 1, -5, 100)
+        self.assertEqual(len(cons), 3)
+        self.assertEqual(m.find_component("optimality_tol_rel"), cons[0])
+        self.assertEqual(m.find_component("optimality_tol_abs"), cons[1])
+        self.assertEqual(m.find_component("lower_objective_bound"), cons[2])
+        self.assertEqual(m.find_component("upper_objective_bound"), None)
+        self.assertEqual(None, cons[0].upper)
+        self.assertEqual(-1.3, cons[0].lower)
+        self.assertEqual(None, cons[1].upper)
+        self.assertEqual(-2, cons[1].lower)
+        self.assertEqual(None, cons[2].upper)
+        self.assertEqual(-5, cons[2].lower)
 
     def test_max_both_obj_constraint2(self):
         """
