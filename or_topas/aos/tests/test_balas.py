@@ -171,7 +171,7 @@ class TestBalasUnit(unittest.TestCase):
         assert_array_almost_equal(objectives, [6, 5, 4])
 
     @parameterized.expand(input=solvers)
-    def test_trivial_2d_box_ip_minimize(self, mip_solver):
+    def test_trivial_2d_box_bp_minimize(self, mip_solver):
         """
         Simple AOS test on 2D box example.
         Details in test_case.py for get_trivial_2d_box.
@@ -192,7 +192,7 @@ class TestBalasUnit(unittest.TestCase):
         assert m.feasible_sols[0] == sol_list[0]
 
     @parameterized.expand(input=solvers)
-    def test_trivial_2d_box_ip_maximize(self, mip_solver):
+    def test_trivial_2d_box_bp_maximize(self, mip_solver):
         """
         Simple AOS test on 2D box example.
         Details in test_case.py for get_trivial_2d_box.
