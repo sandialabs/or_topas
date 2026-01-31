@@ -301,8 +301,9 @@ def get_model_variables(
     return variable_set
 
 
-def objective_thresolds_violation_check(
-    model,
+def objective_thresholds_violation_check(
+    objective,
+    objective_value,
     lower_objective_threshold=None,
     upper_objective_threshold=None,
     zero_threshold=0.0,
@@ -324,14 +325,28 @@ def objective_thresolds_violation_check(
         objective > upper_objective_threshold.
         None indicates that a lower objective threshold will not
         be added to the model.
-    :param zero_threshold: Description
+    :param zero_threshold: float or None
+        Round to zero tolerance, used to manage tolerance in comparisons.
+        If None, value of 1e-6 is used, float must be non-negative.
     """
-    orig_objective = get_active_objective(model)
-    orig_objective_value = pyo.value(orig_objective)
+    if zero_threshold is None:
+        zero_threshold = 1e-6
+    else:
+        # zero_threshold is not None
+        try:
+            zero_threshold = float(zero_threshold)
+            need_to_error = zero_threshold < 0
+        except:
+            need_to_error = True
+        if need_to_error:
+            raise ValueError(
+                f"zero_threshold ({zero_threshold}) must be None or >= 0.0"
+            )
+
     # MPV: current behavior here is to warn but return pool with no solutions added
     if lower_objective_threshold is not None:
-        if (not orig_objective.is_minimizing()) and (
-            orig_objective_value + zero_threshold <= lower_objective_threshold
+        if (not objective.is_minimizing()) and (
+            objective_value + zero_threshold < lower_objective_threshold
         ):
             warnings.warn(
                 "lower_objective_threshold violated at optimum, no valid solutions",
@@ -340,8 +355,8 @@ def objective_thresolds_violation_check(
             )
             return True
     if upper_objective_threshold is not None:
-        if (orig_objective.is_minimizing()) and (
-            orig_objective_value - zero_threshold >= upper_objective_threshold
+        if (objective.is_minimizing()) and (
+            objective_value - zero_threshold > upper_objective_threshold
         ):
             warnings.warn(
                 "upper_objective_threshold violated at optimum, no valid solutions",

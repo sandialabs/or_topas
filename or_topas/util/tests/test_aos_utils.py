@@ -18,6 +18,7 @@ import pyomo.common.unittest as unittest
 from pyomo.common.collections import ComponentSet
 
 from or_topas.util import pyomo_utils, numpy_utils
+import warnings
 
 
 class TestNumpyUtilsUnit(unittest.TestCase):
@@ -260,6 +261,452 @@ class TestPyomoUtilsUnit(unittest.TestCase):
         self.assertEqual(10, cons[0].lower)
         self.assertEqual(None, cons[1].upper)
         self.assertEqual(9, cons[1].lower)
+
+    def test_objective_thresholds_violation_check_for_zero_threshold(self):
+        """
+        Checking the behavior of the objective_thresholds_violation check
+        for a minimization problem, covering no violation cases
+        """
+
+        # minimization case
+        m = self.get_simple_model(sense=pyo.minimize)
+
+        # no issue case for minimization, with zero_threshold as float
+        is_violated = pyomo_utils.objective_thresholds_violation_check(
+            objective=m.o,
+            objective_value=5.0,
+            lower_objective_threshold=None,
+            upper_objective_threshold=6.0,
+            zero_threshold=0.0,
+        )
+        assert is_violated == False
+
+        # no issue case for minimization, with zero threshold as None
+        is_violated = pyomo_utils.objective_thresholds_violation_check(
+            objective=m.o,
+            objective_value=5.0,
+            lower_objective_threshold=None,
+            upper_objective_threshold=6.0,
+            zero_threshold=None,
+        )
+        assert is_violated == False
+
+        # value error case for minimization
+        with self.assertRaises(ValueError) as cm:
+            threshold_val = "test"
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=None,
+                upper_objective_threshold=6.0,
+                zero_threshold=threshold_val,
+            )
+        zero_threshold = threshold_val
+        expected_message = f"zero_threshold ({zero_threshold}) must be None or >= 0.0"
+        self.assertEqual(str(cm.exception), expected_message)
+
+        # maximization case
+        m = self.get_simple_model(sense=pyo.maximize)
+
+        # no issue case for maximization, with zero_threshold as float
+        is_violated = pyomo_utils.objective_thresholds_violation_check(
+            objective=m.o,
+            objective_value=5.0,
+            lower_objective_threshold=4.0,
+            upper_objective_threshold=None,
+            zero_threshold=0.0,
+        )
+        assert is_violated == False
+
+        # no issue case for maximization, with zero threshold as None
+        is_violated = pyomo_utils.objective_thresholds_violation_check(
+            objective=m.o,
+            objective_value=5.0,
+            lower_objective_threshold=4.0,
+            upper_objective_threshold=None,
+            zero_threshold=None,
+        )
+        assert is_violated == False
+
+        # value error case for maximization
+        with self.assertRaises(ValueError) as cm:
+            threshold_val = "test"
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=None,
+                upper_objective_threshold=6.0,
+                zero_threshold=threshold_val,
+            )
+        zero_threshold = threshold_val
+        expected_message = f"zero_threshold ({zero_threshold}) must be None or >= 0.0"
+        self.assertEqual(str(cm.exception), expected_message)
+
+    def test_min_objective_thresholds_no_violation_check(self):
+        """
+        Checking the behavior of the objective_thresholds_violation check
+        for a minimization problem, covering no violation cases
+        """
+
+        # recall objective here is x+y
+        m = self.get_simple_model(sense=pyo.minimize)
+
+        # case where upper threshold is used and not violated
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=None,
+                upper_objective_threshold=6.0,
+                zero_threshold=0.0,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and not violated
+        # lower threshold also used but ignored
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=0,
+                upper_objective_threshold=6.0,
+                zero_threshold=0.0,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and exactly satisfied
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=None,
+                upper_objective_threshold=6.0,
+                zero_threshold=None,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and exactly satisfied
+        # lower threshold also used but ignored
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=0,
+                upper_objective_threshold=6.0,
+                zero_threshold=None,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and not violated because of zero_threshold
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=None,
+                upper_objective_threshold=5.1,
+                zero_threshold=0.2,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and not violated because of zero_threshold
+        # lower threshold also used but ignored
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=0,
+                upper_objective_threshold=5.1,
+                zero_threshold=0.2,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+    def test_min_objective_thresholds_violation_check(self):
+        """
+        Checking the behavior of the objective_thresholds_violation check
+        for a minimization problem, covering violation cases
+        """
+
+        # recall objective here is x+y
+        m = self.get_simple_model(sense=pyo.minimize)
+
+        # case where upper threshold is used and is violated
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=None,
+                upper_objective_threshold=4.0,
+                zero_threshold=0.0,
+            )
+        assert len(wlist) == 1
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "upper_objective_threshold violated at optimum, no valid solutions",
+        )
+        assert is_violated == True
+
+        # case where upper threshold is used and violated
+        # lower threshold also used but ignored
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=0,
+                upper_objective_threshold=4.0,
+                zero_threshold=0.0,
+            )
+        assert len(wlist) == 1
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "upper_objective_threshold violated at optimum, no valid solutions",
+        )
+        assert is_violated == True
+
+        # case where upper threshold is used and violated even with zero_threshold
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=None,
+                upper_objective_threshold=4.0,
+                zero_threshold=0.2,
+            )
+        assert len(wlist) == 1
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "upper_objective_threshold violated at optimum, no valid solutions",
+        )
+        assert is_violated == True
+
+        # case where upper threshold is used and violated even zero_threshold
+        # lower threshold also used but ignored
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=0,
+                upper_objective_threshold=4.0,
+                zero_threshold=0.2,
+            )
+        assert len(wlist) == 1
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "upper_objective_threshold violated at optimum, no valid solutions",
+        )
+        assert is_violated == True
+
+    def test_max_objective_thresholds_no_violation_check(self):
+        """
+        Checking the behavior of the objective_thresholds_violation check
+        for a maximize problem, covering no violation cases
+        """
+
+        # recall objective here is x+y
+        m = self.get_simple_model(sense=pyo.maximize)
+
+        # case where upper threshold is used and not violated
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=4.0,
+                upper_objective_threshold=None,
+                zero_threshold=0.0,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and not violated
+        # lower threshold also used but ignored
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=4.0,
+                upper_objective_threshold=100.0,
+                zero_threshold=0.0,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and exactly satisfied
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=5.0,
+                upper_objective_threshold=None,
+                zero_threshold=None,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and exactly satisfied
+        # lower threshold also used but ignored
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=5.0,
+                upper_objective_threshold=100.0,
+                zero_threshold=None,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and not violated because of zero_threshold
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=4.9,
+                upper_objective_threshold=None,
+                zero_threshold=0.2,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+        # case where upper threshold is used and not violated because of zero_threshold
+        # lower threshold also used but ignored
+        # should not error or raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=4.9,
+                upper_objective_threshold=1000.0,
+                zero_threshold=0.2,
+            )
+        assert len(wlist) == 0
+        assert is_violated == False
+
+    def test_max_objective_thresholds_violation_check(self):
+        """
+        Checking the behavior of the objective_thresholds_violation check
+        for a maximization problem, covering violation cases
+        """
+
+        # recall objective here is x+y
+        m = self.get_simple_model(sense=pyo.maximize)
+
+        # case where lower threshold is used and is violated
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=6.0,
+                upper_objective_threshold=None,
+                zero_threshold=0.0,
+            )
+        assert len(wlist) == 1
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "lower_objective_threshold violated at optimum, no valid solutions",
+        )
+        assert is_violated == True
+
+        # case where lower threshold is used and violated
+        # upper threshold also used but ignored
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=6.0,
+                upper_objective_threshold=0.0,
+                zero_threshold=0.0,
+            )
+        assert len(wlist) == 1
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "lower_objective_threshold violated at optimum, no valid solutions",
+        )
+        assert is_violated == True
+
+        # case where lower threshold is used and violated even with zero_threshold
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=6.0,
+                upper_objective_threshold=None,
+                zero_threshold=0.2,
+            )
+        assert len(wlist) == 1
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "lower_objective_threshold violated at optimum, no valid solutions",
+        )
+        assert is_violated == True
+
+        # case where lower threshold is used and violated even zero_threshold
+        # upper threshold also used but ignored
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            is_violated = pyomo_utils.objective_thresholds_violation_check(
+                objective=m.o,
+                objective_value=5.0,
+                lower_objective_threshold=6.0,
+                upper_objective_threshold=0.0,
+                zero_threshold=0.2,
+            )
+        assert len(wlist) == 1
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "lower_objective_threshold violated at optimum, no valid solutions",
+        )
+        assert is_violated == True
 
     def get_var_model(self):
         """
