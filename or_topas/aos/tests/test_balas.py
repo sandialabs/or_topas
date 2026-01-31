@@ -15,6 +15,8 @@ from pyomo.common import unittest
 from pyomo.common.dependencies import attempt_import
 from pyomo.common.dependencies import numpy as numpy, numpy_available
 import pyomo.opt
+import pyomo.environ as pyo
+import warnings
 
 parameterized, param_available = attempt_import("parameterized")
 if not param_available:
@@ -167,6 +169,182 @@ class TestBalasUnit(unittest.TestCase):
             sorted((round(soln.objective().value, 2) for soln in results), reverse=True)
         )
         assert_array_almost_equal(objectives, [6, 5, 4])
+
+    @parameterized.expand(input=solvers)
+    def test_trivial_2d_box_ip_minimize(self, mip_solver):
+        """
+        Simple AOS test on 2D box example.
+        Details in test_case.py for get_trivial_2d_box.
+        Minimization case
+        """
+
+        m = tc.get_trivial_2d_box_bp(sense=pyo.minimize)
+        sols = enumerate_binary_solutions(m, solver=mip_solver)
+        assert len(sols) == sum(m.num_ranked_solns)
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+    @parameterized.expand(input=solvers)
+    def test_trivial_2d_box_ip_maximize(self, mip_solver):
+        """
+        Simple AOS test on 2D box example.
+        Details in test_case.py for get_trivial_2d_box.
+        Minimization case
+        """
+
+        m = tc.get_trivial_2d_box_bp(sense=pyo.maximize)
+        sols = enumerate_binary_solutions(m, solver=mip_solver)
+        assert len(sols) == sum(m.num_ranked_solns)
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+    @parameterized.expand(input=solvers)
+    def test_balas_upper_objective_bound(self, mip_solver):
+        """
+        Simple AOS test on 2D box example using upper objective bound
+        Details in test_case.py for get_trivial_2d_box.
+        """
+
+        m = tc.get_trivial_2d_box_bp(sense=pyo.minimize)
+        # this case should keep all the same solutions
+        sols = enumerate_binary_solutions(
+            m, solver=mip_solver, upper_objective_threshold=2
+        )
+        assert len(sols) == sum(m.num_ranked_solns)
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get sol_list 0-2 as solutions
+        sols = enumerate_binary_solutions(
+            m, solver=mip_solver, upper_objective_threshold=1
+        )
+        assert len(sols) == sum(m.num_ranked_solns[0:2])
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols[0:3]) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get sol_list 0 as solutions
+        sols = enumerate_binary_solutions(
+            m, solver=mip_solver, upper_objective_threshold=0
+        )
+        assert len(sols) == sum(m.num_ranked_solns[0:1])
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get 0 solutions as none are feasible with this bound
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            sols = enumerate_binary_solutions(
+                m, solver=mip_solver, upper_objective_threshold=-1
+            )
+        assert len(wlist) == 1
+        assert len(sols) == 0
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "upper_objective_threshold violated at optimum, no valid solutions",
+        )
+
+    @parameterized.expand(input=solvers)
+    def test_balas_lower_objective_bound(self, mip_solver):
+        """
+        Simple AOS test on 2D box example using lower objective bound
+        Details in test_case.py for get_trivial_2d_box.
+        """
+        m = tc.get_trivial_2d_box_bp(sense=pyo.maximize)
+        # this case should keep all the same solutions
+        sols = enumerate_binary_solutions(
+            m, solver=mip_solver, lower_objective_threshold=0
+        )
+        assert len(sols) == sum(m.num_ranked_solns)
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            print(((int(s_x.value), int(s_y.value)), int(s.objective().value)))
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get sol_list 0-2 as solutions
+        sols = enumerate_binary_solutions(
+            m, solver=mip_solver, lower_objective_threshold=1
+        )
+        assert len(sols) == sum(m.num_ranked_solns[0:2])
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols[0:3]) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get sol_list 0 as solutions
+        sols = enumerate_binary_solutions(
+            m, solver=mip_solver, lower_objective_threshold=2
+        )
+        assert len(sols) == sum(m.num_ranked_solns[0:1])
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get 0 solutions as none are feasible with this bound
+        # should raise warning
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter("always")
+            sols = enumerate_binary_solutions(
+                m, solver=mip_solver, lower_objective_threshold=3
+            )
+        assert len(wlist) == 1
+        assert len(sols) == 0
+        self.assertIs(wlist[0].category, RuntimeWarning)
+        self.assertIn(
+            str(wlist[0].message),
+            "lower_objective_threshold violated at optimum, no valid solutions",
+        )
 
 
 if __name__ == "__main__":

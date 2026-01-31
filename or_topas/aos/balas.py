@@ -26,6 +26,8 @@ def enumerate_binary_solutions(
     variables=None,
     rel_opt_gap=None,
     abs_opt_gap=None,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
     search_mode="optimal",
     solver="gurobi",
     solver_options={},
@@ -58,6 +60,18 @@ def enumerate_binary_solutions(
         The absolute optimality gap for the original objective for which
         variable bounds will be found. None indicates that an absolute gap
         constraint will not be added to the model.
+    lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to add a constraint of
+        form objective >= lower_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to add a constraint of
+        form objective <= upper_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
     search_mode : 'optimal', 'random', or 'hamming'
         Indicates the mode that is used to generate alternative solutions.
         The optimal mode finds the next best solution. The random mode
@@ -181,6 +195,19 @@ def enumerate_binary_solutions(
     model.solutions.load_from(results)
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
+
+    # enforces objective threshold behvior if violated at optimum
+    objective_thresholds_violated = pyomo_utils.objective_thresholds_violation_check(
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
+    )
+    if objective_thresholds_violated:
+        return pool_manager
+
+    # TODO: this is different than how the rest of the AOS methods work
+    # LP Enum wouldn't do this, it would error, do we want this behavior
     pool_manager.add(variables=all_variables, objective=orig_objective)
     #
     # Return just this solution if there are no binary variables
@@ -192,7 +219,13 @@ def enumerate_binary_solutions(
     logger.info("Added block {} to the model.".format(aos_block))
     aos_block.no_good_cuts = pyo.ConstraintList()
     pyomo_utils.add_objective_constraint(
-        aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
+        target_block=aos_block,
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        rel_opt_gap=rel_opt_gap,
+        abs_opt_gap=abs_opt_gap,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
     )
 
     if search_mode in ["random", "hamming"]:
