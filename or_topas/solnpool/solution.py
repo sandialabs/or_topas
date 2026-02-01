@@ -19,7 +19,7 @@ import functools
 import pyomo.environ as pyo
 
 from or_topas.util.mymunch import MyMunch, to_dict
-
+from math import isnan, isinf
 nan = float("nan")
 
 
@@ -434,48 +434,93 @@ class PyomoSolution(Solution):
                 index += 1
 
         super().__init__(variables=vlist, objectives=olist, **kwargs)
-
-    # TODO: update to have solution come from self not external
-    # convert to instance method
-    def load_solution_into_model(
-        model,
-        solution,
-        solution_override_values_dict=dict(),
-        descend_into=True,
-        error_if_value_missing=False,
-        return_vars_missing_values=True,
-        fix_continuous=False,
-        fix_binary=False,
-        fix_integer=False,
-        fix_if_model_var_fixed=False,
-        fix_if_sol_var_fixed=False,
-        vars_to_fix_set=set(),
-    ):
+    def load_solution_variables_into_model(
+    self,
+    model: pyo.Model,
+    *,
+    value_overrides: dict[str, float | None] | None = None,
+    descend_into: bool = True,
+    skip_nan_inf: bool = True,
+    error_if_value_missing: bool = False,
+    track_missing: bool = True,
+    track_fixed: bool = True,
+    track_unfixed: bool = True,
+    track_nan_inf: bool = True,
+    fix_continuous: bool = False,
+    fix_binary: bool = False,
+    fix_integer: bool = False,
+    fix_if_sol_var_fixed: bool = False,
+    fix_var_names: set[str] | None = None,
+    check_assignment_domains: bool = False,
+) -> MyMunch:
         """
-        Docstring for load_solution_into_model
-        Loads into a Pyomo model value data from an or_topas Solution object
-        returns vars_missing_values_set and vars_fixed_set
-        vars_missing_values_set is None if return_vars_missing_values = False, otherwise set of variables unable to be assigned values
-        vars_fixed_set is set of variables fixed
+        Loads into a Pyomo model the variable data from an or_topas Solution object.
+        Variable fixing pattern can be subtle.
+        Enforces pattern that all model variables are unfixed,
+        then variables values may be fixed according to fix flag list
+        
+        **Important – fixing behavior**:
+        - This method **unfixes all variables first**, regardless of their prior status in the model.
+        - A variable is only fixed again if it matches **at least one** of:
+        • category flags (`fix_continuous`, `fix_binary`, `fix_integer`)
+        • name present in `fix_var_names`
+        • `fix_if_sol_var_fixed=True` **and** solution marked it fixed
+        - Previous model fix status is **never automatically preserved**.
 
-        :param model: Pyomo model to load solution values into
-        :param solution: or_topas Solution object to load values from
-        :param solution_override_values_dict: dictionary, keys are variables to use corresponding key-value value for
-        :param descend_into: boolean to decide to decend blocks
-        :param error_if_value_missing: boolean to raise runtime error if variable not found in Solution object
-        :param return_vars_missing_values: boolean to choose if model variables without corresponding values returned
-        :param fix_continuous: boolean to decide if continuous variables are fixed
-        :param fix_binary: boolean to decide if binary variables are fixed
-        :param fix_integer: boolean to decide if integer variables are fixed
-        :param fix_if_model_var_fixed: boolean to decide to fix if model variable fixed in model
-        :param fix_if_sol_var_fixed: boolean to decide to fix if model variable fixed in solution
-        :param vars_to_fix_set: set of variables to fix model variable if in set
+        Returns Munch with members
+        var_names_missing_values: None or set[str] 
+            None if track_missing == False,
+            otherwise set of variable names that could not be assigned a value
+            (missing from solution and no override provided or override was None)
+        var_names_fixed: None or set[str]
+            None if track_fixed == False,
+            otherwise set of names of variables fixed
+            (one of the flags indicated to fix this variable)
+        var_names_unfixed: None or set[str]
+            None if track_unfixed == False,
+            otherwise set of names of variables unfixed
+            (model variable was previously fixed and now is not)
+        var_names_nan_inf: None or set[str]
+            None if track_nan_inf == False
+            otherwise set of names of variables with nan/inf values
+            If skip_nan_inf, this is the set of variables skipped for this reason
+
+        model: Pyomo model
+            model to load solution values into
+        value_overrides: dictionary
+            keys are variable names to use corresponding key-value value for
+        descend_into: boolean
+            value True causes descent into all active blocks.
+            value False treats only current block
+        skip_nan_inf: boolean
+            Handle NaN and Inf values by ignoring them
+        error_if_value_missing: boolean 
+            flag to raise runtime error if variable not found in Solution object
+        track_missing: boolean 
+            flag to track model variables without corresponding values
+        track_fixed: boolean
+            flag to track model variables fixed
+        track_unfixed: boolean
+            flag to track model variables unfixed
+        fix_continuous: boolean 
+            flag to decide if continuous variables are fixed
+        fix_binary: boolean 
+            flag to decide if binary variables are fixed
+        fix_integer: boolean 
+            flag to decide if integer variables are fixed
+        fix_if_sol_var_fixed: boolean 
+            flag to decide to fix if model variable fixed in solution
+        fix_var_names: None or set[str]
+            set of variable names to fix model variable if in set
+        check_assignment_domains: boolean
+            flag to checking assignment value in variable domain
         """
-        if return_vars_missing_values:
-            vars_missing_values_set = {}
-        else:
-            vars_missing_values_set = None
-        vars_fixed_set = {}
+        value_overrides = dict() if value_overrides is None else value_overrides
+        fix_var_names = set() if fix_var_names is None else fix_var_names
+        var_names_missing_values = set() if track_missing else None
+        var_names_fixed = set() if track_fixed else None
+        var_names_unfixed = set() if track_unfixed else None
+        var_names_nan_inf = set() if track_nan_inf else None
 
         for model_var in model.component_data_objects(
             ctype=pyo.Var, descend_into=descend_into
@@ -483,37 +528,87 @@ class PyomoSolution(Solution):
             # handle all the fix if conditions that do not need the Solution object variable
 
             var_name = model_var.name
+            was_fixed = model_var.is_fixed()
+            model_var.unfix()
+            need_to_fix_value = False
+            is_nan_inf = False
             try:
-                solution_var = solution.get(var_name)
-            except RuntimeError as e:
+                #get solution variable
+                #this is what needs the error checking
+                solution_var = self.variable(var_name)
+                
+                #handle solution variable specific fix check
+                need_to_fix_value = (fix_if_sol_var_fixed and solution_var.fixed)
+
+                #if in override map, use that, otherwise get from solution level variable
+                var_value = value_overrides.get(var_name, solution_var.value)
+            except (AssertionError, RuntimeError) as e:
+                
                 if error_if_value_missing:
                     raise RuntimeError(
-                        f"Variable {var_name} has no value in Solution with id: {id(solution)}"
+                        f"Variable {var_name} has no value in Solution with id: {id(self)}"
                     )
-                if return_vars_missing_values:
-                    vars_missing_values_set.add(model_var)
-            # if we get past the try/except, we have the solution level variable as solution_var
+                
+                #error_if_value_missing is False block
+                if track_missing:
+                    #add missing var to tracking set
+                    var_names_missing_values.add(var_name)
+                
+                if var_name in value_overrides:
+                    #if there is an override value, use it
+                    var_value = value_overrides.get(var_name)
+                else:
+                    #if we get here, there is not a solution variable for this var_name
+                    #there is also not an override value
+                    #so skip to next var
+                    continue
+            
+            #treat var_value is None as missing
+            if var_value is None:
+                if track_missing:
+                    var_names_missing_values.add(var_name)
+                continue
 
-            # if in override map, use that, otherwise get from solution level variable
-            var_value = solution_override_values_dict.get(model_var, solution_var.value)
+            # if we get past the try/except, we have a value for the model_var
+            if isnan(var_value) or isinf(var_value):
+                is_nan_inf = True
+                if track_nan_inf:
+                    var_names_nan_inf.add(var_name)
+                if skip_nan_inf:
+                    continue
 
-            # handle all the need to fix if conditions
-            need_to_fix_value = (
-                (model_var in vars_to_fix_set)
-                or (fix_continuous and model_var.is_continuous())
-                or (fix_binary and model_var.is_binary())
-                or (fix_integer and model_var.is_integer())
-                or (fix_if_model_var_fixed and model_var.is_fixed())
-                or (fix_if_sol_var_fixed and solution_var.fixed)
-            )
 
+            # handle the remaining fix conditions
+            need_to_fix_value = (need_to_fix_value
+                                or (var_name in fix_var_names)
+                                or (fix_continuous and model_var.is_continuous())
+                                or (fix_binary and model_var.is_binary())
+                                or (fix_integer and model_var.is_integer()))
+            
+
+            #domain check
+            #ignores nan/inf values
+            if check_assignment_domains and not is_nan_inf:
+                if not model_var.domain.contains(var_value):
+                    raise ValueError(  # or keep assert, but ValueError is friendlier
+                        f"Domain violation for {var_name}: "
+                        f"domain={model_var.domain}, value={var_value!r}"
+                        )
+            
             if need_to_fix_value:
                 # if need to fix variable, fix it to correct value
                 model_var.fix(var_value)
-                vars_fixed_set.add(model_var)
+                var_names_fixed.add(var_name)
             else:
                 # if we get here, model_var does not need to be fixed
                 # value loading can be done by assignment
-                model_var = var_value
+                model_var.value = var_value
+                if was_fixed:
+                    var_names_unfixed.add(var_name)
 
-        return vars_missing_values_set, vars_fixed_set
+        return MyMunch(
+                var_names_missing_values = var_names_missing_values,
+                var_names_fixed = var_names_fixed,
+                var_names_unfixed = var_names_unfixed,
+                var_names_nan_inf = var_names_nan_inf,
+                )
