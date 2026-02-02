@@ -28,7 +28,7 @@ def enumerate_linear_solutions(
     abs_opt_gap=None,
     zero_threshold=1e-5,
     search_mode="optimal",
-    solver="gurobi",
+    solver="glpk",
     solver_options={},
     tee=False,
     seed=None,

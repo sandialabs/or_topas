@@ -27,7 +27,7 @@ def enumerate_binary_solutions(
     rel_opt_gap=None,
     abs_opt_gap=None,
     search_mode="optimal",
-    solver="gurobi",
+    solver="glpk",
     solver_options={},
     tee=False,
     seed=None,
@@ -81,6 +81,7 @@ def enumerate_binary_solutions(
         A PyomoPoolManager object
 
     """
+    print(f"Solver is {solver}")
     logger.info("STARTING NO-GOOD CUT ANALYSIS")
 
     if not (num_solutions >= 1):
