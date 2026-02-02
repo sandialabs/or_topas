@@ -7,12 +7,12 @@ dependencies:
   - black
   - flake8
   - glpk
+  - ipopt
   - munch
   - numpy
   - parameterized
   - pip
   - pip:
-    - ipopt
     - mpi4py
     - mpich
   - pyomo
