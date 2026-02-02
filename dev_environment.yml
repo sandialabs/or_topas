@@ -12,6 +12,7 @@ dependencies:
   - parameterized
   - pip
   - pip:
+    - ipopt
     - mpi4py
     - mpich
   - pyomo
