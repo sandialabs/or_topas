@@ -81,7 +81,6 @@ def enumerate_binary_solutions(
         A PyomoPoolManager object
 
     """
-    print(f"Solver is {solver}")
     logger.info("STARTING NO-GOOD CUT ANALYSIS")
 
     if not (num_solutions >= 1):
