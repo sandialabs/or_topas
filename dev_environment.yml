@@ -13,6 +13,7 @@ dependencies:
   - pip
   - pip:
     - mpi4py
+    - mpich
   - pyomo
   - pytest
   - pytest-cov
