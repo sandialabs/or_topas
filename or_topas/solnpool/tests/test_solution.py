@@ -688,7 +688,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
         )
         assert pyo.value(model.x) is not None
@@ -725,7 +725,7 @@ class TestSolutionUnit(unittest.TestCase):
 
         value_overrides = {"x": 1.0, "y": 0, "z": 2, "f": -3}
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model, value_overrides=value_overrides
         )
         assert pyo.value(model.x) is not None
@@ -762,7 +762,7 @@ class TestSolutionUnit(unittest.TestCase):
 
         value_overrides = {"x": float("nan"), "y": None}
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model, value_overrides=value_overrides
         )
         assert pyo.value(model.z) is not None
@@ -793,7 +793,7 @@ class TestSolutionUnit(unittest.TestCase):
 
         value_overrides = {"x": float("nan"), "y": None}
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
             value_overrides=value_overrides,
             skip_nan_inf=False,
@@ -826,7 +826,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
             track_missing=False,
             track_fixed=False,
@@ -868,7 +868,7 @@ class TestSolutionUnit(unittest.TestCase):
         sub_block = pyo.Block()
         sub_block.t = pyo.Var()
         model.sub_block = sub_block
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model, descend_into=False
         )
         assert pyo.value(model.x) is not None
@@ -907,7 +907,7 @@ class TestSolutionUnit(unittest.TestCase):
         sub_block = pyo.Block()
         model.sub_block = sub_block
         sub_block.t = pyo.Var()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
             error_if_value_missing=False,
         )
@@ -948,7 +948,7 @@ class TestSolutionUnit(unittest.TestCase):
         model.sub_block = sub_block
         sub_block.t = pyo.Var()
         with self.assertRaises(RuntimeError) as cm:
-            result_munch = solution.load_solution_variables_into_model(
+            result_munch = solution.load_into_model(
                 model,
                 error_if_value_missing=True,
             )
@@ -971,7 +971,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
             fix_continuous=True,
             fix_binary=False,
@@ -1013,7 +1013,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
             fix_continuous=False,
             fix_binary=True,
@@ -1055,7 +1055,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
             fix_continuous=False,
             fix_binary=False,
@@ -1098,7 +1098,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
             fix_continuous=False,
             fix_binary=False,
@@ -1139,7 +1139,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
             fix_continuous=False,
             fix_binary=False,
@@ -1180,7 +1180,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         model = self.get_model()
-        result_munch = solution.load_solution_variables_into_model(
+        result_munch = solution.load_into_model(
             model,
             fix_continuous=False,
             fix_binary=False,

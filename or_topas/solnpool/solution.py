@@ -436,7 +436,7 @@ class PyomoSolution(Solution):
 
         super().__init__(variables=vlist, objectives=olist, **kwargs)
 
-    def load_solution_variables_into_model(
+    def load_into_model(
         self,
         model: pyo.Model,
         *,
