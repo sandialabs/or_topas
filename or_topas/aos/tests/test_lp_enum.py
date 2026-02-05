@@ -342,7 +342,7 @@ class TestLPEnum(unittest.TestCase):
         )
 
     @unittest.skipIf(len(solvers_excluding_glpk) == 0, "Non-GLPK solvers Unavailable")
-    @parameterized.expand(input=solvers_excluding_glpk)
+    @parameterized.expand(input=solvers_excluding_glpk, skip_on_empty=True)
     def test_lp_enum_lower_objective_bound_gurobi(self, mip_solver):
         """
         Simple AOS test on 2D box example using lower objective bound
