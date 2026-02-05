@@ -39,7 +39,7 @@ timelimit = {"gurobi": "TimeLimit", "appsi_gurobi": "TimeLimit", "glpk": "tmlim"
 
 class TestLPEnum(unittest.TestCase):
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_bad_solver(self, mip_solver):
         """
         Confirm that an exception is thrown with a bad solver name.
@@ -48,7 +48,7 @@ class TestLPEnum(unittest.TestCase):
         with self.assertRaises(pyomo.common.errors.ApplicationError):
             lp_enum.enumerate_linear_solutions(m, solver="unknown_solver")
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_non_positive_num_solutions(self, mip_solver):
         """
         Confirm that an exception is thrown with a non-positive num solutions
@@ -58,7 +58,7 @@ class TestLPEnum(unittest.TestCase):
             lp_enum.enumerate_linear_solutions(m, num_solutions=-1, solver=mip_solver)
 
     @unittest.skipIf(True, "Ignoring fragile test for solver timeout.")
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_no_time(self, mip_solver):
         """
         Check that the correct bounds are found for a discrete problem where
@@ -70,7 +70,7 @@ class TestLPEnum(unittest.TestCase):
                 m, solver=mip_solver, solver_options={timelimit[mip_solver]: 0}
             )
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_3d_polyhedron(self, mip_solver):
         m = tc.get_3d_polyhedron_problem()
         m.o.deactivate()
@@ -81,7 +81,7 @@ class TestLPEnum(unittest.TestCase):
         for s in sols:
             assert s.objective().value == unittest.pytest.approx(4)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_3d_polyhedron_with_variable_count_check(self, mip_solver):
         """
         Test that model restored to same variables before and after AOS call
@@ -108,7 +108,7 @@ class TestLPEnum(unittest.TestCase):
             all_variables_after_solve_names
         )
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_3d_polyhedron_called_twice(self, mip_solver):
         """
         Test that AOS method can be called twice in a row with no issues
@@ -131,7 +131,7 @@ class TestLPEnum(unittest.TestCase):
         for s in sols:
             assert s.objective().value == unittest.pytest.approx(4)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_3d_polyhedron(self, mip_solver):
         m = tc.get_3d_polyhedron_problem()
         m.o.deactivate()
@@ -144,7 +144,7 @@ class TestLPEnum(unittest.TestCase):
                 9
             ) or s.objective().value == unittest.pytest.approx(10)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_2d_diamond_problem(self, mip_solver):
         m = tc.get_2d_diamond_problem()
         sols = lp_enum.enumerate_linear_solutions(m, solver=mip_solver, num_solutions=2)
@@ -154,7 +154,7 @@ class TestLPEnum(unittest.TestCase):
         assert sols[0].objective().value == unittest.pytest.approx(6.789473684210527)
         assert sols[1].objective().value == unittest.pytest.approx(3.6923076923076916)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_pentagonal_pyramid(self, mip_solver):
         n = tc.get_pentagonal_pyramid_mip()
@@ -167,7 +167,7 @@ class TestLPEnum(unittest.TestCase):
             print(s)
         assert len(sols) == 6
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_pentagon(self, mip_solver):
         n = tc.get_pentagonal_lp()
@@ -177,7 +177,7 @@ class TestLPEnum(unittest.TestCase):
             print(s)
         assert len(sols) == 6
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_triangle_lp(self, mip_solver):
         """
         Test that AOS method can be called multiple times in a row.
@@ -204,7 +204,7 @@ class TestLPEnum(unittest.TestCase):
                 )
             assert set(m.feasible_sols) == sol_set
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_triangle_milp_fix_integer(self, mip_solver):
         """
         Test that AOS method can be called multiple times in a row and handle all integers fixed
@@ -232,7 +232,7 @@ class TestLPEnum(unittest.TestCase):
                 )
             assert set(m.feasible_sols) == sol_set
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_trivial_2d_box_lp_minimize(self, mip_solver):
         """
         Simple AOS test on 2D box example.
@@ -253,7 +253,7 @@ class TestLPEnum(unittest.TestCase):
         assert set(m.feasible_sols) == set(sol_list)
         assert m.feasible_sols[0] == sol_list[0]
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_trivial_2d_box_lp_maximize(self, mip_solver):
         """
         Simple AOS test on 2D box example.
@@ -274,7 +274,7 @@ class TestLPEnum(unittest.TestCase):
         assert set(m.feasible_sols) == set(sol_list)
         assert m.feasible_sols[0] == sol_list[0]
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_lp_enum_upper_objective_bound(self, mip_solver):
         """
         Simple AOS test on 2D box example using upper objective bound

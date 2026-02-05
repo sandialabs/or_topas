@@ -40,7 +40,7 @@ solvers = pyomo_utils._get_testing_solver_names()
 
 class TestBalasUnit(unittest.TestCase):
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_bad_solver(self, mip_solver):
         """
         Confirm that an exception is thrown with a bad solver name.
@@ -49,7 +49,7 @@ class TestBalasUnit(unittest.TestCase):
         with self.assertRaises(pyomo.common.errors.ApplicationError):
             enumerate_binary_solutions(m, solver="unknown_solver")
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_non_positive_num_solutions(self, mip_solver):
         """
         Confirm that an exception is thrown with a non-positive num solutions
@@ -58,7 +58,7 @@ class TestBalasUnit(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             enumerate_binary_solutions(m, num_solutions=-1, solver=mip_solver)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_ip_feasibility(self, mip_solver):
         """
         Enumerate solutions for an ip: triangle_ip.
@@ -71,7 +71,7 @@ class TestBalasUnit(unittest.TestCase):
         for soln in results:
             assert soln.objective().value == unittest.pytest.approx(5)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(True, "Ignoring fragile test for solver timeout.")
     def test_no_time(self, mip_solver):
         """
@@ -85,7 +85,7 @@ class TestBalasUnit(unittest.TestCase):
                 m, num_solutions=100, solver=mip_solver, solver_options={"TimeLimit": 0}
             )
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_knapsack_all(self, mip_solver):
         """
@@ -103,7 +103,7 @@ class TestBalasUnit(unittest.TestCase):
         unique_solns_by_obj = [val for val in Counter(objectives).values()]
         assert_array_almost_equal(unique_solns_by_obj, m.num_ranked_solns)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_knapsack_x0_x1(self, mip_solver):
         """
@@ -124,7 +124,7 @@ class TestBalasUnit(unittest.TestCase):
         unique_solns_by_obj = [val for val in Counter(objectives).values()]
         assert_array_almost_equal(unique_solns_by_obj, [1, 1, 1, 1])
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_knapsack_optimal_3(self, mip_solver):
         """
@@ -140,7 +140,7 @@ class TestBalasUnit(unittest.TestCase):
         )
         assert_array_almost_equal(objectives, m.ranked_solution_values[:3])
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_knapsack_hamming_3(self, mip_solver):
         """
@@ -158,7 +158,7 @@ class TestBalasUnit(unittest.TestCase):
         )
         assert_array_almost_equal(objectives, [6, 3, 1])
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_knapsack_random_3(self, mip_solver):
         """
@@ -176,7 +176,7 @@ class TestBalasUnit(unittest.TestCase):
         )
         assert_array_almost_equal(objectives, [6, 5, 4])
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_trivial_2d_box_bp_minimize(self, mip_solver):
         """
         Simple AOS test on 2D box example.
@@ -197,7 +197,7 @@ class TestBalasUnit(unittest.TestCase):
         assert set(m.feasible_sols) == set(sol_list)
         assert m.feasible_sols[0] == sol_list[0]
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_trivial_2d_box_bp_maximize(self, mip_solver):
         """
         Simple AOS test on 2D box example.
@@ -218,7 +218,7 @@ class TestBalasUnit(unittest.TestCase):
         assert set(m.feasible_sols) == set(sol_list)
         assert m.feasible_sols[0] == sol_list[0]
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_balas_upper_objective_bound(self, mip_solver):
         """
         Simple AOS test on 2D box example using upper objective bound
@@ -285,7 +285,7 @@ class TestBalasUnit(unittest.TestCase):
             "upper_objective_threshold violated at optimum, no valid solutions",
         )
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_balas_lower_objective_bound(self, mip_solver):
         """
         Simple AOS test on 2D box example using lower objective bound
