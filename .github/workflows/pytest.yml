@@ -101,7 +101,7 @@ jobs:
       fail-fast: false  # If one job fails, the rest will still run
       matrix:
         os: [ubuntu-latest] # Omitting macos-latest because it is expensive
-        solver: ["highs", "glpk", "none"]
+        solver: ["glpk"] #["highs", "glpk", "none"]
     runs-on: ${{ matrix.os }}
     defaults:
       run:

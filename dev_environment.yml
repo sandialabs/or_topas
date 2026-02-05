@@ -6,7 +6,6 @@ channels:
 dependencies:
   - black
   - flake8
-  - glpk
   - ipopt
   - munch
   - numpy
