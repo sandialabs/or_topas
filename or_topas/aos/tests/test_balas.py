@@ -28,8 +28,14 @@ if numpy_available:
 
 from or_topas.aos import enumerate_binary_solutions
 import or_topas.aos.tests.test_cases as tc
+from or_topas.util import pyomo_utils
 
-solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi"))
+all_solvers = list(
+    pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi", "highs")
+)
+solvers_excluding_glpk = list(pyomo.opt.check_available_solvers("gurobi", "highs"))
+single_test_solver = list(pyomo.opt.check_available_solvers("highs"))
+solvers = pyomo_utils._get_testing_solver_names()
 
 
 class TestBalasUnit(unittest.TestCase):

@@ -18,7 +18,9 @@ import or_topas.util as au
 from or_topas.solnpool import PyomoSolution, Solution
 from or_topas.aos import enumerate_binary_solutions
 
+# some of the exact string comparison tests break when HIGHS used due to 1 vs 1.0 style issues
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
+gurobi_available = len(pyomo.opt.check_available_solvers("gurobi")) == 1
 
 parameterized, param_available = attempt_import("parameterized")
 if not param_available:

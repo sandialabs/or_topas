@@ -18,6 +18,15 @@ from pyomo.common.modeling import unique_component_name
 from pyomo.common.collections import ComponentSet
 import pyomo.util.vars_from_expressions as vfe
 import warnings
+from pyomo.opt import check_available_solvers
+
+
+# single point of control for which solvers to use
+def _get_testing_solver_names():
+    # all_solvers = ["glpk", "gurobi", "highs"]
+    # solvers_excluding_glpk = ["gurobi", "highs"]
+    # single_test_solver = ["highs"]
+    return list(check_available_solvers("glpk", "gurobi", "highs"))
 
 
 def get_active_objective(model):

@@ -30,8 +30,14 @@ from or_topas.aos import (
     obbt_analysis,
 )
 import or_topas.aos.tests.test_cases as tc
+from or_topas.util import pyomo_utils
 
-solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi"))
+# TODO:use of highs breaks these tests, need to fix
+solvers_minus_highs = list(
+    pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi")
+)
+# standard_solvers = pyomo_utils._get_testing_solver_names()
+solvers = solvers_minus_highs
 
 timelimit = {"gurobi": "TimeLimit", "appsi_gurobi": "TimeLimit", "glpk": "tmlim"}
 

@@ -20,6 +20,7 @@ parameterized, param_available = attempt_import("parameterized")
 if not param_available:
     raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
+gurobi_available = len(pyomo.opt.check_available_solvers("gurobi")) == 1
 
 import or_topas.aos.tests.test_cases as tc
 from or_topas.aos import lp_enum
@@ -27,9 +28,11 @@ from or_topas.util import pyomo_utils
 import warnings
 
 #
-# Find available solvers. Just use GLPK if it's available.
+# Single point of solver control for solver lists
 #
-solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
+
+solvers_excluding_glpk = list(pyomo.opt.check_available_solvers("gurobi", "highs"))
+solvers = pyomo_utils._get_testing_solver_names()
 
 timelimit = {"gurobi": "TimeLimit", "appsi_gurobi": "TimeLimit", "glpk": "tmlim"}
 
@@ -338,12 +341,13 @@ class TestLPEnum(unittest.TestCase):
             "upper_objective_threshold violated at optimum, no valid solutions",
         )
 
-    def test_lp_enum_lower_objective_bound_gurobi(self):
+    @unittest.skipIf(len(solvers_excluding_glpk) == 0, "Non-GLPK solvers Unavailable")
+    @parameterized.expand(input=solvers_excluding_glpk)
+    def test_lp_enum_lower_objective_bound_gurobi(self, mip_solver):
         """
         Simple AOS test on 2D box example using lower objective bound
         Details in test_case.py for get_trivial_2d_box.
         """
-        mip_solver = "gurobi"
         m = tc.get_trivial_2d_box_lp(sense=pyo.maximize)
         # this case should keep all the same solutions
         sols = lp_enum.enumerate_linear_solutions(

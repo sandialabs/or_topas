@@ -14,7 +14,7 @@ from math import ceil, floor
 from collections import Counter
 
 from pyomo.common.dependencies import numpy as np
-
+from pyomo.opt import check_available_solvers
 import pyomo.environ as pyo
 
 """
