@@ -25,17 +25,21 @@ parameterized = parameterized.parameterized
 
 import or_topas.aos.tests.test_cases as tc
 from or_topas.aos import shifted_lp
+from or_topas.util import pyomo_utils
 
 #
 # Find available solvers
 #
-solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
+# all_solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi", "highs"))
+# solvers_excluding_glpk = list(pyomo.opt.check_available_solvers("gurobi", "highs"))
+# single_test_solver = list(pyomo.opt.check_available_solvers("highs"))
+solvers = pyomo_utils._get_testing_solver_names()
 
 
 # TODO: add checks that confirm the shifted constraints make sense
 class TestShiftedIP(unittest.TestCase):
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_mip_abs_objective(self, lp_solver):
         m = tc.get_indexed_pentagonal_pyramid_mip()
@@ -51,7 +55,7 @@ class TestShiftedIP(unittest.TestCase):
 
         assert old_obj == unittest.pytest.approx(new_obj)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_polyhedron(self, lp_solver):
         m = tc.get_3d_polyhedron_problem()
 

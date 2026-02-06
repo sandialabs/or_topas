@@ -14,7 +14,7 @@ from math import ceil, floor
 from collections import Counter
 
 from pyomo.common.dependencies import numpy as np
-
+from pyomo.opt import check_available_solvers
 import pyomo.environ as pyo
 
 """
@@ -453,4 +453,351 @@ def get_bloated_pentagonal_pyramid_mip():
             + n[2] * (m.z - apex_point[2])
             >= 0
         )
+    return m
+
+
+def get_triangle_lp(level=5):
+    """
+    Simple 2d continuous problem where the feasible region looks like a 90-45-45
+    right triangle and the optimal solutions fall along the hypotenuse, where
+    x + y == 5.
+
+    Exact optimal solutions occur at (x,y) = (0,5) and (5,0)
+    Depending on suboptimality tolerance additional alternative solution vertices are induced
+
+    In terms of the level value L=(5 - absolute tolerance), then
+    approximate alterantive optimal solution vertices occur at:
+    If level in (4,5], no new vertices
+    If level in (0,4], let C = ceil(L) then vertices at (x,y) = (C, 0) and (0, C)
+    If level in (-infty, 0], then vertex at (x,y) = (0,0)
+    """
+    var_max = 5
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, var_max))
+    m.y = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, var_max))
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=pyo.maximize)
+    m.c = pyo.Constraint(expr=m.x + m.y <= var_max)
+
+    #
+    # N.B. this could be made by a loop
+    # Hard coding for clarity
+    #
+    feasible_sols = []
+    level = ceil(level)
+    if level >= 5:
+        feasible_sols = [((5, 0), 5), ((0, 5), 5)]
+    elif level >= 4:
+        feasible_sols = [((5, 0), 5), ((0, 5), 5), ((4, 0), 4), ((0, 4), 4)]
+    elif level >= 3:
+        feasible_sols = [((5, 0), 5), ((0, 5), 5), ((3, 0), 3), ((0, 3), 3)]
+    elif level >= 2:
+        feasible_sols = [((5, 0), 5), ((0, 5), 5), ((2, 0), 2), ((0, 2), 2)]
+    elif level >= 1:
+        feasible_sols = [((5, 0), 5), ((0, 5), 5), ((1, 0), 1), ((0, 1), 1)]
+    else:
+        feasible_sols = [((5, 0), 5), ((0, 5), 5), ((0, 0), 0)]
+
+    feasible_sols = sorted(feasible_sols, key=lambda sol: sol[1], reverse=True)
+    m.feasible_sols = feasible_sols
+    #
+    # Count of solutions from best to worst
+    #
+    if level >= 5:
+        m.num_ranked_solns = [2]
+    elif level >= 1:
+        m.num_ranked_solns = [2, 2]
+    else:
+        m.num_ranked_solns = [2, 1]
+    return m
+
+
+def get_triangle_milp_fix_integer(level=5):
+    """
+    Simple 2d continuous problem where the feasible region looks like a 90-45-45
+    right triangle and the optimal solutions fall along the hypotenuse, where
+    x + y == 5.
+
+    Modification of get_triangle_lp, makes y variables integer and fix at ceil of level
+    This is designed to test how lp_enum codes deal with fixed non-continuous vars that make
+    a MILP model into an LP model with fixed integer vars
+    """
+    var_max = 5
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, var_max))
+    m.y = pyo.Var(within=pyo.NonNegativeIntegers, bounds=(0, var_max))
+    m.y.fix(level)
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=pyo.maximize)
+    m.c = pyo.Constraint(expr=m.x + m.y <= var_max)
+
+    #
+    # N.B. this could be made by a loop
+    # Hard coding for clarity
+    #
+    feasible_sols = []
+    level = ceil(level)
+    if level >= 5:
+        feasible_sols = [((0, 5), 5)]
+    elif level >= 4:
+        feasible_sols = [((0, 4), 4)]
+    elif level >= 3:
+        feasible_sols = [((0, 3), 3)]
+    elif level >= 2:
+        feasible_sols = [((0, 2), 2)]
+    elif level >= 1:
+        feasible_sols = [((0, 1), 1)]
+    else:
+        feasible_sols = [((5, 0), 5), ((0, 0), 0)]
+
+    feasible_sols = sorted(feasible_sols, key=lambda sol: sol[1], reverse=True)
+    m.feasible_sols = feasible_sols
+    #
+    # Count of solutions from best to worst
+    #
+    if level >= 1:
+        m.num_ranked_solns = [1]
+    else:
+        m.num_ranked_solns = [1, 1]
+    return m
+
+
+def get_triangle_milp(level=5):
+    """
+    Simple 2d continuous problem where the feasible region looks like a 90-45-45
+    right triangle and the optimal solutions fall along the hypotenuse, where
+    x + y == 5.
+
+    Modification of get_triangle_lp
+    This is designed to test how lp_enum codes deal with milps
+    MILP AOS methods presently designed to
+    1. enumerate IP solutions
+    2. find vertices of the LP version of the MILP with integer vars fixed
+
+    In this problem it is the y variables that are integer
+    This results in bands of alternative solution points
+    """
+    var_max = 5
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, var_max))
+    m.y = pyo.Var(within=pyo.NonNegativeIntegers, bounds=(0, var_max))
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=pyo.maximize)
+    m.c = pyo.Constraint(expr=m.x + m.y <= var_max)
+
+    #
+    # N.B. this could be made by a loop
+    # Hard coding for clarity
+    #
+    default_sols = [
+        ((0, 5), 5),
+        ((1, 4), 5),
+        ((2, 3), 5),
+        ((3, 2), 5),
+        ((4, 1), 5),
+        ((5, 0), 5),
+    ]
+    level = ceil(level)
+    if level >= 5:
+        added_sols = []
+        m.num_ranked_solns = [6]
+    elif level >= 4:
+        added_sols = [
+            ((0, 4), 4),
+            ((1, 3), 4),
+            ((2, 2), 4),
+            ((3, 1), 4),
+            ((4, 0), 4),
+        ]
+        m.num_ranked_solns = [6, 5]
+    elif level >= 3:
+        added_sols = [
+            ((0, 4), 4),
+            ((0, 3), 3),
+            ((1, 2), 3),
+            ((2, 1), 3),
+            ((3, 0), 3),
+        ]
+        m.num_ranked_solns = [6, 1, 4]
+    elif level >= 2:
+        added_sols = [
+            ((0, 4), 4),
+            ((0, 3), 3),
+            ((0, 2), 2),
+            ((1, 1), 2),
+            ((2, 0), 2),
+        ]
+        m.num_ranked_solns = [6, 1, 1, 3]
+    elif level >= 1:
+        added_sols = [
+            ((0, 4), 4),
+            ((0, 3), 3),
+            ((0, 2), 2),
+            ((0, 1), 1),
+            ((1, 0), 1),
+        ]
+        m.num_ranked_solns = [6, 1, 1, 1, 2]
+    else:
+        added_sols = [
+            ((4, 0), 4),
+            ((3, 0), 3),
+            ((2, 0), 2),
+            ((1, 0), 1),
+            ((0, 0), 0),
+        ]
+        m.num_ranked_solns = [6, 1, 1, 1, 1, 1]
+
+    feasible_sols = default_sols + added_sols
+    feasible_sols = sorted(feasible_sols, key=lambda sol: sol[1], reverse=True)
+    m.feasible_sols = feasible_sols
+    #
+    # Count of solutions from best to worst
+    #
+    if level >= 1:
+        m.num_ranked_solns = [1]
+    else:
+        m.num_ranked_solns = [1, 1]
+    return m
+
+
+def get_trivial_2d_box_lp_variant(sense=pyo.minimize):
+    """
+    Simple LP example in 2D.
+    Feasibility region is box from [0,1] in both variables
+    Objective is x+y
+
+    Can control the sense of the problem.
+    Feasible vertices are (0,0), (1,0), (0,1), (1,1)
+    m.feasible_sols[0] is the optimal point
+
+    This variant uses within=NonNegativeReals
+    Test for GLPK maximization issue.
+    """
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, 1))
+    m.y = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, 1))
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=sense)
+
+    m.num_ranked_solns = [1, 2, 1]
+
+    #
+    # Enumerate all feasible solutions
+    #
+    feasible_sols = []
+    var_max = 1
+    for i in range(var_max + 1):
+        for j in range(var_max + 1):
+            feasible_sols.append(((i, j), i + j))
+
+    order_descending = sense == pyo.maximize
+    feasible_sols = sorted(
+        feasible_sols, key=lambda sol: sol[1], reverse=order_descending
+    )
+    m.feasible_sols = feasible_sols
+    return m
+
+
+def get_trivial_2d_box_lp(sense=pyo.minimize):
+    """
+    Simple LP example in 2D.
+    Feasibility region is box from [0,1] in both variables
+    Objective is x+y
+
+    Can control the sense of the problem.
+    Feasible vertices are (0,0), (1,0), (0,1), (1,1)
+    m.feasible_sols[0] is the optimal point
+    """
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.Reals, bounds=(0, 1))
+    m.y = pyo.Var(within=pyo.Reals, bounds=(0, 1))
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=sense)
+
+    m.num_ranked_solns = [1, 2, 1]
+
+    #
+    # Enumerate all feasible solutions
+    #
+    feasible_sols = []
+    var_max = 1
+    for i in range(var_max + 1):
+        for j in range(var_max + 1):
+            feasible_sols.append(((i, j), i + j))
+
+    order_descending = sense == pyo.maximize
+    feasible_sols = sorted(
+        feasible_sols, key=lambda sol: sol[1], reverse=order_descending
+    )
+    m.feasible_sols = feasible_sols
+    return m
+
+
+def get_trivial_2d_box_ip(sense=pyo.minimize):
+    """
+    Simple binary program example in 2D.
+    Feasibility region is box from {0,1} in both variables
+    Objective is x+y
+
+    Can control the sense of the problem.
+    Feasible points are (0,0), (1,0), (0,1), (1,1)
+    m.feasible_sols[0] is the optimal point
+    """
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.NonNegativeIntegers, bounds=(0, 1))
+    m.y = pyo.Var(within=pyo.NonNegativeIntegers, bounds=(0, 1))
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=sense)
+
+    m.num_ranked_solns = [1, 2, 1]
+
+    #
+    # Enumerate all feasible solutions
+    #
+    feasible_sols = []
+    var_max = 1
+    for i in range(var_max + 1):
+        for j in range(var_max + 1):
+            feasible_sols.append(((i, j), i + j))
+
+    order_descending = sense == pyo.maximize
+    feasible_sols = sorted(
+        feasible_sols, key=lambda sol: sol[1], reverse=order_descending
+    )
+    m.feasible_sols = feasible_sols
+    return m
+
+
+def get_trivial_2d_box_bp(sense=pyo.minimize):
+    """
+    Simple binary program example in 2D.
+    Feasibility region is box from {0,1} in both variables
+    Objective is x+y
+
+    Can control the sense of the problem.
+    Feasible points are (0,0), (1,0), (0,1), (1,1)
+    m.feasible_sols[0] is the optimal point
+    """
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(within=pyo.Binary)
+    m.y = pyo.Var(within=pyo.Binary)
+
+    m.o = pyo.Objective(expr=m.x + m.y, sense=sense)
+
+    m.num_ranked_solns = [1, 2, 1]
+
+    #
+    # Enumerate all feasible solutions
+    #
+    feasible_sols = []
+    var_max = 1
+    for i in range(var_max + 1):
+        for j in range(var_max + 1):
+            feasible_sols.append(((i, j), i + j))
+
+    order_descending = sense == pyo.maximize
+    feasible_sols = sorted(
+        feasible_sols, key=lambda sol: sol[1], reverse=order_descending
+    )
+    m.feasible_sols = feasible_sols
     return m

@@ -1,7 +1,7 @@
 #  ___________________________________________________________________________
 #
 #  Pyomo: Python Optimization Modeling Objects
-#  Copyright (c) 2008-2025
+#  Copyright (c) 2008-2026
 #  National Technology and Engineering Solutions of Sandia, LLC
 #  Under the terms of Contract DE-NA0003525 with National Technology and
 #  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
@@ -381,6 +381,10 @@ class Solution:
         return self._tuple_repn() <= soln._tuple_repn()
 
 
+# TODO: we need to extend this to for a SparowSolution
+# that makes the sparow as_solution method simply
+# def _as_sparow_solution(*args, **kwargs):
+#     return SparowSolution(*args, **kwargs)
 class PyomoSolution(Solution):
 
     def __init__(self, *, variables=None, objective=None, objectives=None, **kwargs):

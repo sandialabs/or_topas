@@ -18,7 +18,9 @@ import or_topas.util as au
 from or_topas.solnpool import PyomoSolution, Solution
 from or_topas.aos import enumerate_binary_solutions
 
+# some of the exact string comparison tests break when HIGHS used due to 1 vs 1.0 style issues
 solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
+gurobi_available = len(pyomo.opt.check_available_solvers("gurobi")) == 1
 
 parameterized, param_available = attempt_import("parameterized")
 if not param_available:
@@ -47,7 +49,7 @@ class TestSolutionUnit(unittest.TestCase):
         m.con_z = pyo.Constraint(expr=m.z <= 3)
         return m
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_solution(self, mip_solver):
         """
         Create a Solution Object, call its functions, and ensure the correct
@@ -250,7 +252,7 @@ class TestSolutionUnit(unittest.TestCase):
         assert set(sol_vars.keys()) == {"x", "y", "z", "f"}
         assert solution.fixed_variable_indices == None
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_solution_rebuild_indices_maps(self, mip_solver):
         """
         Create a Solution Object, call its functions, and ensure the correct
@@ -389,7 +391,7 @@ class TestSolutionUnit(unittest.TestCase):
             )
         self.assertEqual(str(cm.exception), expected_message)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_solution_variable_errors_check(self, mip_solver):
         """
         Create a Solution Object, call its functions, and ensure the correct
@@ -509,7 +511,7 @@ class TestSolutionUnit(unittest.TestCase):
             solution.variable(test_index, map_consistency_check=True)
         self.assertEqual(str(cm.exception), expected_message)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_soln_order(self, mip_solver):
         """ """
         values = [10, 9, 2, 1, 1]
@@ -538,7 +540,7 @@ class TestSolutionUnit(unittest.TestCase):
             [1, 0, 1, 0, 0],
         ]
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_solution_default_solution_not_pyomo_solution(self, mip_solver):
         # check that objective and objectives both being used in Solution gets the proper error
         expected_message = (
@@ -552,7 +554,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = Solution(variables=None, objective=1)
         assert solution._objectives == [1]
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_solution_external_var_maps(self, mip_solver):
         model = self.get_model()
         opt = pyo.SolverFactory(mip_solver)
