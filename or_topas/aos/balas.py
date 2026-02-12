@@ -26,6 +26,8 @@ def enumerate_binary_solutions(
     variables=None,
     rel_opt_gap=None,
     abs_opt_gap=None,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
     search_mode="optimal",
     solver="gurobi",
     solver_options={},
@@ -58,6 +60,18 @@ def enumerate_binary_solutions(
         The absolute optimality gap for the original objective for which
         variable bounds will be found. None indicates that an absolute gap
         constraint will not be added to the model.
+    lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to add a constraint of
+        form objective >= lower_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to add a constraint of
+        form objective <= upper_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
     search_mode : 'optimal', 'random', or 'hamming'
         Indicates the mode that is used to generate alternative solutions.
         The optimal mode finds the next best solution. The random mode
@@ -114,6 +128,9 @@ def enumerate_binary_solutions(
         non_binary_variables = []
         for var in variables:
             if var.is_binary():
+                # TODO: we add var to binary_variables even if var is fixed
+                # MPV: do we want to warn in this case?, I am unclear on what will happen in this mode with previously fixed binary variables
+                # Other option is we unfix and warn, unfix and warn preserves enumeration capability
                 binary_variables.add(var)
             else:  # pragma: no cover
                 non_binary_variables.append(var.name)
@@ -181,6 +198,33 @@ def enumerate_binary_solutions(
     model.solutions.load_from(results)
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
+
+    # enforces objective threshold behvior if violated at optimum
+    objective_thresholds_violated = pyomo_utils.objective_thresholds_violation_check(
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
+    )
+    if objective_thresholds_violated:
+        return pool_manager
+
+    """
+    TODO: figure out how we want to standardize for AOS methods 'given model is not of correct math program type'
+    the next three lines (copied below in comment for clarity) handle an edge case 
+    This edge case is that the balas.py's enumerate_binary_solutions method is called
+    on a model that has no binary variables.
+    There is a logger warning before the solver set up above that recognizes this case.
+    The odd behavior here is that the other AOS methods would error and halt in this sort of case.
+    This method is meant to act on a binary program, and still returns a solution to the program.
+    This is akin to in lp_enum.py where an exception is raised if the given model is not an LP.
+    One way to address this is to raise an exception in place of the logger warning earlier.
+
+    lines:
+    pool_manager.add(variables=all_variables, objective=orig_objective)
+    if len(binary_variables) == 0:
+        return pool_manager
+    """
     pool_manager.add(variables=all_variables, objective=orig_objective)
     #
     # Return just this solution if there are no binary variables
@@ -192,7 +236,13 @@ def enumerate_binary_solutions(
     logger.info("Added block {} to the model.".format(aos_block))
     aos_block.no_good_cuts = pyo.ConstraintList()
     pyomo_utils.add_objective_constraint(
-        aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
+        target_block=aos_block,
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        rel_opt_gap=rel_opt_gap,
+        abs_opt_gap=abs_opt_gap,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
     )
 
     if search_mode in ["random", "hamming"]:

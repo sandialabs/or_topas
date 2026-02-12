@@ -26,6 +26,8 @@ def enumerate_linear_solutions(
     num_solutions=10,
     rel_opt_gap=None,
     abs_opt_gap=None,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
     zero_threshold=1e-5,
     search_mode="optimal",
     solver="gurobi",
@@ -59,9 +61,22 @@ def enumerate_linear_solutions(
         The absolute optimality gap for the original objective for which
         variable bounds will be found. None indicates that an absolute gap
         constraint will not be added to the model.
+    lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to add a constraint of
+        form objective >= lower_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to add a constraint of
+        form objective <= upper_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
     zero_threshold: float
         The threshold for which a continuous variables' value is considered
         to be equal to zero.
+        Also used in objective_threshold type tests when not None.
     search_mode : 'optimal', 'random', or 'norm'
         Indicates the mode that is used to generate alternative solutions.
         The optimal mode finds the next best solution. The random mode
@@ -90,7 +105,6 @@ def enumerate_linear_solutions(
         raise ValueError("num_solutions must be positive integer")
     if num_solutions == 1:
         logger.warning("Running alternative_solutions method to find only 1 solution!")
-
     if not (search_mode in ["optimal", "random", "norm"]):
         raise ValueError('search mode must be "optimal", "random", or "norm".')
     # TODO: Implement the random and norm objectives. I think it is sufficient
@@ -190,9 +204,26 @@ def enumerate_linear_solutions(
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
+    # enforces objective threshold behvior if violated at optimum
+    objective_thresholds_violated = pyomo_utils.objective_thresholds_violation_check(
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
+        zero_threshold=zero_threshold,
+    )
+    if objective_thresholds_violated:
+        return pool_manager
+
     aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
     pyomo_utils.add_objective_constraint(
-        aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
+        target_block=aos_block,
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        rel_opt_gap=rel_opt_gap,
+        abs_opt_gap=abs_opt_gap,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
     )
     logger.info("Added block {} to the model.".format(aos_block))
 

@@ -13,9 +13,10 @@ from collections import Counter
 
 from pyomo.common import unittest
 from pyomo.common.dependencies import numpy as np, numpy_available
-
+import pyomo.environ as pyo
 from or_topas.aos import gurobi_generate_solutions
 from pyomo.contrib.appsi.solvers import Gurobi
+from pyomo.common.errors import ApplicationError
 import or_topas.aos.tests.test_cases as tc
 
 gurobipy_available = Gurobi().available()
@@ -172,6 +173,172 @@ class TestGurobiSolnPoolUnit(unittest.TestCase):
             m, num_solutions=100, solver_options={"TimeLimit": 0.0}, quiet=False
         )
         assert len(results) == 0
+
+    def test_infeasible_minimization_ip(self):
+        """
+        Simple AOS test on 2D box example made to be infeasible
+        Details in test_case.py for get_trivial_2d_box.
+        Minimization case
+        """
+
+        m = tc.get_trivial_2d_box_ip(sense=pyo.minimize)
+        m.c = pyo.Constraint(expr=m.x + m.y <= -1)
+        with self.assertRaises(ApplicationError) as cm:
+            sols = gurobi_generate_solutions(m, lower_objective_threshold=3)
+        self.assertIn("Model cannot be solved, ", str(cm.exception))
+
+    def test_infeasible_maximization_ip(self):
+        """
+        Simple AOS test on 2D box example made to be infeasible
+        Details in test_case.py for get_trivial_2d_box.
+        Maximization case
+        """
+
+        m = tc.get_trivial_2d_box_ip(sense=pyo.maximize)
+        m.c = pyo.Constraint(expr=m.x + m.y >= 3)
+        with self.assertRaises(ApplicationError) as cm:
+            sols = gurobi_generate_solutions(m, lower_objective_threshold=3)
+        self.assertIn("Model cannot be solved, ", str(cm.exception))
+
+    def test_trivial_2d_box_ip_minimize(self):
+        """
+        Simple AOS test on 2D box example.
+        Details in test_case.py for get_trivial_2d_box.
+        Minimization case
+        """
+
+        m = tc.get_trivial_2d_box_ip(sense=pyo.minimize)
+        sols = gurobi_generate_solutions(m)
+        assert len(sols) == sum(m.num_ranked_solns)
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+    def test_trivial_2d_box_ip_maximize(self):
+        """
+        Simple AOS test on 2D box example.
+        Details in test_case.py for get_trivial_2d_box.
+        Minimization case
+        """
+
+        m = tc.get_trivial_2d_box_ip(sense=pyo.maximize)
+        sols = gurobi_generate_solutions(m)
+        assert len(sols) == sum(m.num_ranked_solns)
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+    def test_gurobi_generate_solutions_upper_objective_bound(self):
+        """
+        Simple AOS test on 2D box example using upper objective bound
+        Details in test_case.py for get_trivial_2d_box.
+        """
+
+        m = tc.get_trivial_2d_box_ip(sense=pyo.minimize)
+        # this case should keep all the same solutions
+        sols = gurobi_generate_solutions(m, upper_objective_threshold=2)
+        assert len(sols) == sum(m.num_ranked_solns)
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get sol_list 0-2 as solutions
+        sols = gurobi_generate_solutions(m, upper_objective_threshold=1)
+        assert len(sols) == sum(m.num_ranked_solns[0:2])
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols[0:3]) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get sol_list 0 as solutions
+        sols = gurobi_generate_solutions(m, upper_objective_threshold=0)
+        assert len(sols) == sum(m.num_ranked_solns[0:1])
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get 0 solutions as none are feasible with this bound
+        # should raise ApplicationError
+        with self.assertRaises(ApplicationError) as cm:
+            sols = gurobi_generate_solutions(m, upper_objective_threshold=-1)
+        self.assertIn("Model cannot be solved, ", str(cm.exception))
+
+    def test_gurobi_generate_solutions_lower_objective_bound(self):
+        """
+        Simple AOS test on 2D box example using lower objective bound
+        Details in test_case.py for get_trivial_2d_box.
+        """
+        m = tc.get_trivial_2d_box_ip(sense=pyo.maximize)
+        # this case should keep all the same solutions
+        sols = gurobi_generate_solutions(m, lower_objective_threshold=0)
+        assert len(sols) == sum(m.num_ranked_solns)
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            print(((int(s_x.value), int(s_y.value)), int(s.objective().value)))
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get sol_list 0-2 as solutions
+        sols = gurobi_generate_solutions(m, lower_objective_threshold=1)
+        assert len(sols) == sum(m.num_ranked_solns[0:2])
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert set(m.feasible_sols[0:3]) == set(sol_list)
+        assert m.feasible_sols[0] == sol_list[0]
+
+        # this case should get sol_list 0 as solutions
+        sols = gurobi_generate_solutions(m, lower_objective_threshold=2)
+        assert len(sols) == sum(m.num_ranked_solns[0:1])
+        sol_list = list()
+        for s in sols:
+            s_x = s.variable("x")
+            s_y = s.variable("y")
+            sol_list.append(
+                ((int(s_x.value), int(s_y.value)), int(s.objective().value))
+            )
+        assert m.feasible_sols[0] == sol_list[0]
+
+        with self.assertRaises(ApplicationError) as cm:
+            sols = gurobi_generate_solutions(m, lower_objective_threshold=3)
+        self.assertIn("Model cannot be solved, ", str(cm.exception))
 
 
 if __name__ == "__main__":

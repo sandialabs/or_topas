@@ -27,6 +27,8 @@ def gurobi_generate_solutions(
     num_solutions=10,
     rel_opt_gap=None,
     abs_opt_gap=None,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
     solver_options={},
     tee=False,
     pool_manager=None,
@@ -54,6 +56,18 @@ def gurobi_generate_solutions(
         None implies that there is no limit on the absolute optimality gap
         (i.e. that any feasible solution can be considered by Gurobi).
         This parameter maps to the PoolGapAbs parameter in Gurobi.
+    lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to add a constraint of
+        form objective >= lower_objective_threshold. If not satisfied at
+        the optimal objective, method returns ApplicationError as infeasible program.
+        None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to add a constraint of
+        form objective <= upper_objective_threshold. If not satisfied at
+        the optimal objective, method returns ApplicationError as infeasible program.
+        None indicates that a lower objective threshold will not
+        be added to the model.
     solver_options : dict
         Solver option-value pairs to be passed to the Gurobi solver.
     tee : boolean
@@ -88,6 +102,24 @@ def gurobi_generate_solutions(
         pool_manager.add_pool(
             name="gurobi_generate_solutions", policy=PoolPolicy.keep_all
         )
+
+    # this is a different behavior than the other AOS methods
+    # this is because we do not repeatedly call the solver
+    # the gurobi solution pool works by a single pass
+    if (lower_objective_threshold is not None) or (
+        upper_objective_threshold is not None
+    ):
+        orig_objective = pyomo_utils.get_active_objective(model)
+        pyomo_utils.add_objective_constraint(
+            target_block=model,
+            objective=orig_objective,
+            objective_value=None,
+            rel_opt_gap=None,
+            abs_opt_gap=None,
+            lower_objective_threshold=lower_objective_threshold,
+            upper_objective_threshold=upper_objective_threshold,
+        )
+
     #
     # Setup gurobi
     #
@@ -112,8 +144,8 @@ def gurobi_generate_solutions(
     condition = results.termination_condition
     if not (condition == appsi.base.TerminationCondition.optimal):
         raise ApplicationError(
-            "Model cannot be solved, " "TerminationCondition = {}"
-        ).format(condition.value)
+            "Model cannot be solved, " f"TerminationCondition = {condition.value}"
+        )
     #
     # Collect solutions
     #

@@ -381,6 +381,9 @@ class Solution:
         return self._tuple_repn() <= soln._tuple_repn()
 
 
+# that makes the sparow as_solution method simply
+# def _as_sparow_solution(*args, **kwargs):
+#     return SparowSolution(*args, **kwargs)
 class PyomoSolution(Solution):
 
     def __init__(self, *, variables=None, objective=None, objectives=None, **kwargs):

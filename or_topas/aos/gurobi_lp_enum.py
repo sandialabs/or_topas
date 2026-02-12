@@ -93,6 +93,8 @@ def gurobi_enumerate_linear_solutions(
     num_solutions=10,
     rel_opt_gap=None,
     abs_opt_gap=None,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
     zero_threshold=1e-5,
     solver_options={},
     tee=False,
@@ -122,9 +124,22 @@ def gurobi_enumerate_linear_solutions(
         The absolute optimality gap for the original objective for which
         variable bounds will be found. None indicates that an absolute gap
         constraint will not be added to the model.
+        lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to add a constraint of
+        form objective >= lower_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to add a constraint of
+        form objective <= upper_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
     zero_threshold: float
         The threshold for which a continuous variables' value is considered
         to be equal to zero.
+        Also used in objective_threshold type tests when not None.
     solver_options : dict
         Solver option-value pairs to be passed to the solver.
     tee : boolean
@@ -186,10 +201,27 @@ def gurobi_enumerate_linear_solutions(
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
+    # enforces objective threshold behvior if violated at optimum
+    objective_thresholds_violated = pyomo_utils.objective_thresholds_violation_check(
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
+        zero_threshold=zero_threshold,
+    )
+    if objective_thresholds_violated:
+        return pool_manager
+
     aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
     logger.info("Added block {} to the model.".format(aos_block))
     pyomo_utils.add_objective_constraint(
-        aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
+        target_block=aos_block,
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        rel_opt_gap=rel_opt_gap,
+        abs_opt_gap=abs_opt_gap,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
     )
 
     canonical_block = shifted_lp.get_shifted_linear_model(model)
