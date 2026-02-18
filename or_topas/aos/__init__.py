@@ -12,4 +12,3 @@ from or_topas.aos.gurobi_lp_enum import (
 from or_topas.aos.gurobi_solnpool import (
     gurobi_generate_solutions,
 )
-from or_topas.aos.milp_enum import enumerate_mixed_integer_linear_solutions
