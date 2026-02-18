@@ -14,7 +14,6 @@ from math import ceil, floor
 from collections import Counter
 
 from pyomo.common.dependencies import numpy as np
-
 import pyomo.environ as pyo
 
 """

@@ -1,5 +1,4 @@
 [![Pytest Tests](https://github.com/sandialabs/or_topas/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/sandialabs/or_topas/actions/workflows/pytest.yml?query=branch%3Amain)
-[![Coverage Status](https://github.com/sandialabs/or_topas/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/sandialabs/or_topas/actions/workflows/coverage.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/sandialabs/or_topas/branch/main/graph/badge.svg)](https://codecov.io/gh/sandialabs/or_topas)
 [![Documentation Status](https://readthedocs.org/projects/or-topas/badge/?version=latest)](https://or-topas.readthedocs.org/en/latest/)
 [![GitHub contributors](https://img.shields.io/github/contributors/sandialabs/or_topas.svg)](https://github.com/sandialabs/or_topas/graphs/contributors)

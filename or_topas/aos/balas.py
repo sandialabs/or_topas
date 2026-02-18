@@ -128,6 +128,9 @@ def enumerate_binary_solutions(
         non_binary_variables = []
         for var in variables:
             if var.is_binary():
+                # TODO: we add var to binary_variables even if var is fixed
+                # MPV: do we want to warn in this case?, I am unclear on what will happen in this mode with previously fixed binary variables
+                # Other option is we unfix and warn, unfix and warn preserves enumeration capability
                 binary_variables.add(var)
             else:  # pragma: no cover
                 non_binary_variables.append(var.name)
@@ -206,8 +209,22 @@ def enumerate_binary_solutions(
     if objective_thresholds_violated:
         return pool_manager
 
-    # TODO: this is different than how the rest of the AOS methods work
-    # LP Enum wouldn't do this, it would error, do we want this behavior
+    """
+    TODO: figure out how we want to standardize for AOS methods 'given model is not of correct math program type'
+    the next three lines (copied below in comment for clarity) handle an edge case 
+    This edge case is that the balas.py's enumerate_binary_solutions method is called
+    on a model that has no binary variables.
+    There is a logger warning before the solver set up above that recognizes this case.
+    The odd behavior here is that the other AOS methods would error and halt in this sort of case.
+    This method is meant to act on a binary program, and still returns a solution to the program.
+    This is akin to in lp_enum.py where an exception is raised if the given model is not an LP.
+    One way to address this is to raise an exception in place of the logger warning earlier.
+
+    lines:
+    pool_manager.add(variables=all_variables, objective=orig_objective)
+    if len(binary_variables) == 0:
+        return pool_manager
+    """
     pool_manager.add(variables=all_variables, objective=orig_objective)
     #
     # Return just this solution if there are no binary variables

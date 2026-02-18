@@ -30,15 +30,21 @@ from or_topas.aos import (
     obbt_analysis,
 )
 import or_topas.aos.tests.test_cases as tc
+from or_topas.util import pyomo_utils
 
-solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi"))
+# TODO:use of highs breaks these tests, need to fix
+solvers_minus_highs = list(
+    pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi")
+)
+# standard_solvers = pyomo_utils._get_testing_solver_names()
+solvers = solvers_minus_highs
 
 timelimit = {"gurobi": "TimeLimit", "appsi_gurobi": "TimeLimit", "glpk": "tmlim"}
 
 
 class TestOBBTUnit(unittest.TestCase):
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_bad_solver(self, mip_solver):
         """
@@ -48,7 +54,7 @@ class TestOBBTUnit(unittest.TestCase):
         with self.assertRaises(pyomo.common.errors.ApplicationError):
             obbt_analysis(m, solver="unknown_solver")
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_obbt_analysis(self, mip_solver):
         """
@@ -60,7 +66,7 @@ class TestOBBTUnit(unittest.TestCase):
         for var, bounds in all_bounds.items():
             assert_array_almost_equal(bounds, m.continuous_bounds[var])
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_obbt_error1(self, mip_solver):
         """
         ERROR: Cannot restrict variable list when warmstart is specified
@@ -69,7 +75,7 @@ class TestOBBTUnit(unittest.TestCase):
         with unittest.pytest.raises(ValueError):
             obbt_analysis_bounds_and_solutions(m, variables=[m.x], solver=mip_solver)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_obbt_some_vars(self, mip_solver):
         """
@@ -84,7 +90,7 @@ class TestOBBTUnit(unittest.TestCase):
         for var, bounds in all_bounds.items():
             assert_array_almost_equal(bounds, m.continuous_bounds[var])
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_obbt_continuous(self, mip_solver):
         """
@@ -97,7 +103,7 @@ class TestOBBTUnit(unittest.TestCase):
         for var, bounds in all_bounds.items():
             assert_array_almost_equal(bounds, m.continuous_bounds[var])
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_mip_rel_objective(self, mip_solver):
         """
@@ -110,7 +116,7 @@ class TestOBBTUnit(unittest.TestCase):
         assert len(solns) == 2 * len(all_bounds) + 1
         assert m._obbt.optimality_tol_rel.lb == unittest.pytest.approx(2.5)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_mip_abs_objective(self, mip_solver):
         """
@@ -123,7 +129,7 @@ class TestOBBTUnit(unittest.TestCase):
         assert len(solns) == 2 * len(all_bounds) + 1
         assert m._obbt.optimality_tol_abs.lb == unittest.pytest.approx(3.01)
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_obbt_warmstart(self, mip_solver):
         """
@@ -140,7 +146,7 @@ class TestOBBTUnit(unittest.TestCase):
         for var, bounds in all_bounds.items():
             assert_array_almost_equal(bounds, m.continuous_bounds[var])
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_obbt_mip(self, mip_solver):
         """
@@ -166,7 +172,7 @@ class TestOBBTUnit(unittest.TestCase):
         assert bounds_tightened
         assert bounds_not_tightened
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_obbt_unbounded(self, mip_solver):
         """
@@ -184,7 +190,7 @@ class TestOBBTUnit(unittest.TestCase):
             assert_array_almost_equal(bounds, m.continuous_bounds[var])
         assert len(solns) == num
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")
     def test_bound_tightening(self, mip_solver):
         """
@@ -199,7 +205,7 @@ class TestOBBTUnit(unittest.TestCase):
             assert_array_almost_equal(bounds, m.var_bounds[var])
 
     @unittest.skipIf(True, "Ignoring fragile test for solver timeout.")
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_no_time(self, mip_solver):
         """
         Check that the correct bounds are found for a discrete problem where
@@ -211,7 +217,7 @@ class TestOBBTUnit(unittest.TestCase):
                 m, solver=mip_solver, solver_options={timelimit[mip_solver]: 0}
             )
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_bound_refinement(self, mip_solver):
         """
         Check that the correct bounds are found for a discrete problem where
@@ -245,7 +251,7 @@ class TestOBBTUnit(unittest.TestCase):
                     var, bounds[1]
                 )
 
-    @parameterized.expand(input=solvers)
+    @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_obbt_infeasible(self, mip_solver):
         """
         Check that code catches cases where the problem is infeasible.
