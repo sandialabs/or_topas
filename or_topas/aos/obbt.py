@@ -194,8 +194,7 @@ def obbt_analysis_bounds_and_solutions(
         unbdd_tc = appsi.base.TerminationCondition.unbounded
         use_appsi = True
     else:
-        opt = pyo.SolverFactory(solver)
-        opt.available()
+        opt = pyomo_utils.create_solver(solver)
         for parameter, value in solver_options.items():
             opt.options[parameter] = value
         try:

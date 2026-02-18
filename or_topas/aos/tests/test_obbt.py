@@ -51,8 +51,11 @@ class TestOBBTUnit(unittest.TestCase):
         Confirm that an exception is thrown with a bad solver name.
         """
         m = tc.get_2d_diamond_problem()
-        with self.assertRaises(pyomo.common.errors.ApplicationError):
-            obbt_analysis(m, solver="unknown_solver")
+        with self.assertRaises(RuntimeError) as cm:
+            solver_name = "unknown_solver"
+            obbt_analysis(m, solver=solver_name)
+        expected_message = f"Attempted to create a Pyomo SolverFactory object with {solver_name=}, which created an UnknownSolver"
+        self.assertIn(expected_message, str(cm.exception))
 
     @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")

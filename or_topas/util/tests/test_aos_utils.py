@@ -854,7 +854,15 @@ class TestPyomoUtilsUnit(unittest.TestCase):
             self.assertEqual(expected_message, str(cm.exception))
 
     def test_create_solver_unknown_solver_names(self):
-        test_names = ["UnknownSolver", 'InvalidSolver', 'LorumIpsomSolver', 'TopasTEST', '', "", "Invalid"]
+        test_names = [
+            "UnknownSolver",
+            "InvalidSolver",
+            "LorumIpsomSolver",
+            "TopasTEST",
+            "",
+            "",
+            "Invalid",
+        ]
         for name in test_names:
             with self.assertRaises(RuntimeError) as cm:
                 pyomo_utils.create_solver(name)
@@ -862,9 +870,12 @@ class TestPyomoUtilsUnit(unittest.TestCase):
             expected_message = f"Attempted to create a Pyomo SolverFactory object with {solver_name=}, which created an UnknownSolver"
             self.assertEqual(expected_message, str(cm.exception))
 
-    @unittest.skipIf(len(check_available_solvers('cbc', 'ipopt', 'xpress_direct')) == 3, "Skipping Uninstalled Solvers Test")
+    @unittest.skipIf(
+        len(check_available_solvers("cbc", "ipopt", "xpress_direct")) == 3,
+        "Skipping Uninstalled Solvers Test",
+    )
     def test_create_solver_valid_not_installed_solvers(self):
-        s_names = ['cbc', 'ipopt', 'xpress_direct']
+        s_names = ["cbc", "ipopt", "xpress_direct"]
         test_names = [s for s in s_names if len(check_available_solvers(s)) == 0]
         for solver_name in test_names:
             with self.assertRaises(RuntimeError) as cm:
@@ -872,11 +883,14 @@ class TestPyomoUtilsUnit(unittest.TestCase):
             expected_message = f"Attempted to create a Pyomo SolverFactory object for {solver_name}, which is"
             self.assertIn(expected_message, str(cm.exception))
 
-    @unittest.skipIf(len(pyomo_utils._get_testing_solver_names()) == 0, "No Solvers Available")
+    @unittest.skipIf(
+        len(pyomo_utils._get_testing_solver_names()) == 0, "No Solvers Available"
+    )
     def test_create_solver_valid_solver_names(self):
         test_names = pyomo_utils._get_testing_solver_names()
         for name in test_names:
             pyomo_utils.create_solver(name)
+
 
 if __name__ == "__main__":
     unittest.main()

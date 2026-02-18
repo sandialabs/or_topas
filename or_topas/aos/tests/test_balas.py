@@ -46,8 +46,11 @@ class TestBalasUnit(unittest.TestCase):
         Confirm that an exception is thrown with a bad solver name.
         """
         m = tc.get_triangle_ip()
-        with self.assertRaises(pyomo.common.errors.ApplicationError):
-            enumerate_binary_solutions(m, solver="unknown_solver")
+        with self.assertRaises(RuntimeError) as cm:
+            solver_name = "unknown_solver"
+            enumerate_binary_solutions(m, solver=solver_name)
+        expected_message = f"Attempted to create a Pyomo SolverFactory object with {solver_name=}, which created an UnknownSolver"
+        self.assertIn(expected_message, str(cm.exception))
 
     @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_non_positive_num_solutions(self, mip_solver):
