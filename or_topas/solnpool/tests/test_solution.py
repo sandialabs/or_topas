@@ -725,9 +725,7 @@ class TestSolutionUnit(unittest.TestCase):
 
         value_overrides = {"x": 1.0, "y": 0, "z": 2, "f": -3}
         model = self.get_model()
-        result_munch = solution.load_into_model(
-            model, value_overrides=value_overrides
-        )
+        result_munch = solution.load_into_model(model, value_overrides=value_overrides)
         assert pyo.value(model.x) is not None
         self.assertAlmostEqual(pyo.value(model.x), 1.0, delta=delta)
         assert pyo.value(model.y) is not None
@@ -762,9 +760,7 @@ class TestSolutionUnit(unittest.TestCase):
 
         value_overrides = {"x": float("nan"), "y": None}
         model = self.get_model()
-        result_munch = solution.load_into_model(
-            model, value_overrides=value_overrides
-        )
+        result_munch = solution.load_into_model(model, value_overrides=value_overrides)
         assert pyo.value(model.z) is not None
         self.assertAlmostEqual(pyo.value(model.z), 3.0, delta=delta)
         assert pyo.value(model.f) is not None
@@ -868,9 +864,7 @@ class TestSolutionUnit(unittest.TestCase):
         sub_block = pyo.Block()
         sub_block.t = pyo.Var()
         model.sub_block = sub_block
-        result_munch = solution.load_into_model(
-            model, descend_into=False
-        )
+        result_munch = solution.load_into_model(model, descend_into=False)
         assert pyo.value(model.x) is not None
         self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
         assert pyo.value(model.y) is not None
