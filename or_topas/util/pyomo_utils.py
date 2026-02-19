@@ -377,25 +377,31 @@ def objective_thresholds_violation_check(
     return False
 
 
+class SolverSetupError(ValueError):
+    """Error Type for Solver Setup Issues"""
+
+    pass
+
+
 def create_solver(solver_name, options=dict()):
     if not isinstance(solver_name, str):
         # catch non-string solver_name
-        raise RuntimeError(
-            f"Attempted to create a Pyomo SolverFactory object with a solver name that was not a string, was {type(solver_name)}"
+        raise SolverSetupError(
+            f"Error in creating Solver object with a solver name that was not a string, was {type(solver_name)}"
         )
 
     opt = pyo.SolverFactory(solver_name, **options)
     if isinstance(opt, UnknownSolver):
-        raise RuntimeError(
-            f"Attempted to create a Pyomo SolverFactory object with {solver_name=}, which created an UnknownSolver"
+        raise SolverSetupError(
+            f"Error in creating Solver object with {solver_name=}, which created an UnknownSolver"
         )
 
     if hasattr(opt, "available") and not opt.available(exception_flag=False):
         # check that the valid solver name is runnable on this machine
         # we have custom exception here, so use that
         status = opt.available(exception_flag=False)
-        raise RuntimeError(
-            f"Attempted to create a Pyomo SolverFactory object for {solver_name}, which is {status!r}"
+        raise SolverSetupError(
+            f"Error in creating Solver object with {solver_name}, which has status {status!r}"
         )
 
     return opt

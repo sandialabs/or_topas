@@ -169,7 +169,7 @@ def gurobi_enumerate_linear_solutions(
     # Setup gurobi
     #
     if not gurobi_available:
-        raise pyomo.common.errors.ApplicationError(f"Solver (gurobi) not available")
+        raise pyomo_utils.SolverSetupError(f"Solver (gurobi) not available")
 
     all_variables = pyomo_utils.get_model_variables(model)
     for var in all_variables:

@@ -846,11 +846,11 @@ class TestPyomoUtilsUnit(unittest.TestCase):
 
     def test_create_solver_non_string(self):
         test_names = [True, 7, -7.0, None]
-        for name in test_names:
-            with self.assertRaises(RuntimeError) as cm:
-                pyomo_utils.create_solver(name)
+        for solver_name in test_names:
+            with self.assertRaises(pyomo_utils.SolverSetupError) as cm:
+                pyomo_utils.create_solver(solver_name)
 
-            expected_message = f"Attempted to create a Pyomo SolverFactory object with a solver name that was not a string, was {type(name)}"
+            expected_message = f"Error in creating Solver object with a solver name that was not a string, was {type(solver_name)}"
             self.assertEqual(expected_message, str(cm.exception))
 
     def test_create_solver_unknown_solver_names(self):
@@ -863,11 +863,10 @@ class TestPyomoUtilsUnit(unittest.TestCase):
             "",
             "Invalid",
         ]
-        for name in test_names:
-            with self.assertRaises(RuntimeError) as cm:
-                pyomo_utils.create_solver(name)
-            solver_name = name
-            expected_message = f"Attempted to create a Pyomo SolverFactory object with {solver_name=}, which created an UnknownSolver"
+        for solver_name in test_names:
+            with self.assertRaises(pyomo_utils.SolverSetupError) as cm:
+                pyomo_utils.create_solver(solver_name)
+            expected_message = f"Error in creating Solver object with {solver_name=}, which created an UnknownSolver"
             self.assertEqual(expected_message, str(cm.exception))
 
     @unittest.skipIf(
@@ -878,9 +877,9 @@ class TestPyomoUtilsUnit(unittest.TestCase):
         s_names = ["cbc", "ipopt", "xpress_direct"]
         test_names = [s for s in s_names if len(check_available_solvers(s)) == 0]
         for solver_name in test_names:
-            with self.assertRaises(RuntimeError) as cm:
+            with self.assertRaises(pyomo_utils.SolverSetupError) as cm:
                 pyomo_utils.create_solver(solver_name)
-            expected_message = f"Attempted to create a Pyomo SolverFactory object for {solver_name}, which is"
+            expected_message = f"Error in creating Solver object with {solver_name},"
             self.assertIn(expected_message, str(cm.exception))
 
     @unittest.skipIf(

@@ -40,16 +40,15 @@ solvers = pyomo_utils._get_testing_solver_names()
 
 class TestBalasUnit(unittest.TestCase):
 
-    @parameterized.expand(input=solvers, skip_on_empty=True)
-    def test_bad_solver(self, mip_solver):
+    def test_bad_solver(self):
         """
         Confirm that an exception is thrown with a bad solver name.
         """
         m = tc.get_triangle_ip()
-        with self.assertRaises(RuntimeError) as cm:
+        with self.assertRaises(pyomo_utils.SolverSetupError) as cm:
             solver_name = "unknown_solver"
             enumerate_binary_solutions(m, solver=solver_name)
-        expected_message = f"Attempted to create a Pyomo SolverFactory object with {solver_name=}, which created an UnknownSolver"
+        expected_message = f"Error in creating Solver object with {solver_name=}, which created an UnknownSolver"
         self.assertIn(expected_message, str(cm.exception))
 
     @parameterized.expand(input=solvers, skip_on_empty=True)
