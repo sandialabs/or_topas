@@ -480,8 +480,9 @@ class PyomoSolution(Solution):
             (missing from solution and no override provided or override was None)
         var_names_fixed: None or set[str]
             None if track_fixed == False,
-            otherwise set of names of variables fixed
-            (one of the flags indicated to fix this variable)
+            otherwise set of names of fixed variables on returned model
+            if unfix_by_default == True, inclusion means one of the flags indicated to fix this variable
+            if unfix_by_default == False, inclusion means either was previously fixed or one of the flags indicated to fix this variabl
         var_names_unfixed: None or set[str]
             None if track_unfixed == False,
             otherwise set of names of variables unfixed
@@ -621,7 +622,7 @@ class PyomoSolution(Solution):
             #             f"Domain violation for {var_name}: "
             #             f"domain={model_var.domain}, value={var_value!r}"
             #             )
-            if need_to_fix_value:
+            if need_to_fix_value or (was_fixed and not unfix_by_default):
                 # if need to fix variable, fix it to correct value
                 model_var.fix(var_value)
                 var_names_fixed.add(var_name)

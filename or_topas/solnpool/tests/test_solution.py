@@ -50,6 +50,25 @@ class TestSolutionUnit(unittest.TestCase):
         m.con_z = pyo.Constraint(expr=m.z <= 3)
         return m
 
+    def get_model_2(self):
+        """
+        Simple modified model with all variable types and fixed variables to test the
+        Solution code.
+        """
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(domain=pyo.NonNegativeReals)
+        m.y = pyo.Var(domain=pyo.Binary)
+        m.z = pyo.Var(domain=pyo.NonNegativeIntegers)
+        m.f = pyo.Var(domain=pyo.Reals)
+
+        m.f.fix(2)
+        m.obj = pyo.Objective(expr=m.x + m.y + m.z + m.f, sense=pyo.maximize)
+
+        m.con_x = pyo.Constraint(expr=m.x <= 2.5)
+        m.con_y = pyo.Constraint(expr=m.y <= 1)
+        m.con_z = pyo.Constraint(expr=m.z <= 8)
+        return m
+
     @parameterized.expand(input=solvers, skip_on_empty=True)
     def test_solution(self, mip_solver):
         """
@@ -678,7 +697,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -689,7 +709,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -719,7 +739,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_with_overrides(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -731,7 +752,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         value_overrides = {"x": 1.0, "y": 0, "z": 2, "f": -3}
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -762,7 +783,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_with_overrides_2(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -774,7 +796,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         value_overrides = {"x": float("nan"), "y": None}
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -799,7 +821,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_with_overrides_3(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -811,7 +834,7 @@ class TestSolutionUnit(unittest.TestCase):
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
         value_overrides = {"x": float("nan"), "y": None}
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -838,7 +861,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_no_tracking(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -849,7 +873,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             track_missing=False,
@@ -882,7 +906,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_descend_into(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -893,7 +918,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         sub_block = pyo.Block()
         sub_block.t = pyo.Var()
         model.sub_block = sub_block
@@ -927,7 +952,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_error_if_missing_1(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -938,7 +964,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         sub_block = pyo.Block()
         model.sub_block = sub_block
         sub_block.t = pyo.Var()
@@ -972,7 +998,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_error_if_missing_2(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -983,7 +1010,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         sub_block = pyo.Block()
         model.sub_block = sub_block
         sub_block.t = pyo.Var()
@@ -1004,7 +1031,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_with_variables_fixed_1(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -1015,7 +1043,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -1047,7 +1075,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_with_variables_fixed_2(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -1058,7 +1087,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -1090,7 +1119,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_with_variables_fixed_3(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -1101,7 +1131,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -1134,7 +1164,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_with_variables_fixed_4(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -1145,7 +1176,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -1176,7 +1207,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_with_variables_fixed_5(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -1187,7 +1219,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -1218,7 +1250,8 @@ class TestSolutionUnit(unittest.TestCase):
     def test_solution_load_with_variables_fixed_6(self, mip_solver):
         # vars are x,y,z,f
         # obj is sum of variables
-        # at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
         # f is fixed
         # x non-negative reals, y binary, z non-negative integer, z real
         delta = 1e-5
@@ -1229,7 +1262,7 @@ class TestSolutionUnit(unittest.TestCase):
         opt.solve(orig_model)
         solution = PyomoSolution(variables=all_vars, objective=obj)
 
-        model = self.get_model()
+        model = self.get_model_2()
         result_munch = solution.load_into_model(
             model,
             unfix_by_default=True,
@@ -1256,6 +1289,323 @@ class TestSolutionUnit(unittest.TestCase):
         assert len(result_munch.var_names_nan_inf) == 0
         assert result_munch.var_names_fixed == {"x", "y", "z"}
         assert "f" in result_munch.var_names_unfixed
+
+    @parameterized.expand(input=solvers)
+    def test_solution_load_with_variables_fixed_and_unfix_default_false_1(
+        self, mip_solver
+    ):
+        # vars are x,y,z,f
+        # obj is sum of variables
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
+        # f is fixed
+        # x non-negative reals, y binary, z non-negative integer, z real
+        delta = 1e-5
+        orig_model = self.get_model()
+        all_vars = au.pyomo_utils.get_model_variables(orig_model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(orig_model)
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(orig_model)
+        solution = PyomoSolution(variables=all_vars, objective=obj)
+
+        model = self.get_model_2()
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=False,
+            fix_continuous=True,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
+            fix_var_names=None,
+        )
+        assert pyo.value(model.x) is not None
+        self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
+        assert pyo.value(model.y) is not None
+        self.assertAlmostEqual(pyo.value(model.y), 1.0, delta=delta)
+        assert pyo.value(model.z) is not None
+        self.assertAlmostEqual(pyo.value(model.z), 3.0, delta=delta)
+        assert pyo.value(model.f) is not None
+        self.assertAlmostEqual(pyo.value(model.f), 1.0, delta=delta)
+        assert pyo.value(model.obj) is not None
+        self.assertAlmostEqual(pyo.value(model.obj), 6.5, delta=delta)
+
+        assert len(result_munch.var_names_missing_values) == 0
+        assert len(result_munch.var_names_fixed) == 2
+        assert len(result_munch.var_names_unfixed) == 0
+        assert len(result_munch.var_names_nan_inf) == 0
+        assert "f" in result_munch.var_names_fixed
+        assert "x" in result_munch.var_names_fixed
+
+    @parameterized.expand(input=solvers)
+    def test_solution_load_with_variables_fixed_and_unfix_default_false_2(
+        self, mip_solver
+    ):
+        # vars are x,y,z,f
+        # obj is sum of variables
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
+        # f is fixed
+        # x non-negative reals, y binary, z non-negative integer, z real
+        delta = 1e-5
+        orig_model = self.get_model()
+        all_vars = au.pyomo_utils.get_model_variables(orig_model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(orig_model)
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(orig_model)
+        solution = PyomoSolution(variables=all_vars, objective=obj)
+
+        model = self.get_model_2()
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=False,
+            fix_continuous=False,
+            fix_binary=True,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
+            fix_var_names=None,
+        )
+        assert pyo.value(model.x) is not None
+        self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
+        assert pyo.value(model.y) is not None
+        self.assertAlmostEqual(pyo.value(model.y), 1.0, delta=delta)
+        assert pyo.value(model.z) is not None
+        self.assertAlmostEqual(pyo.value(model.z), 3.0, delta=delta)
+        assert pyo.value(model.f) is not None
+        self.assertAlmostEqual(pyo.value(model.f), 1.0, delta=delta)
+        assert pyo.value(model.obj) is not None
+        self.assertAlmostEqual(pyo.value(model.obj), 6.5, delta=delta)
+
+        assert len(result_munch.var_names_missing_values) == 0
+        assert len(result_munch.var_names_fixed) == 2
+        assert len(result_munch.var_names_unfixed) == 0
+        assert len(result_munch.var_names_nan_inf) == 0
+        assert "y" in result_munch.var_names_fixed
+        assert "f" in result_munch.var_names_fixed
+
+    @parameterized.expand(input=solvers)
+    def test_solution_load_with_variables_fixed_and_unfix_default_false_3(
+        self, mip_solver
+    ):
+        # vars are x,y,z,f
+        # obj is sum of variables
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
+        # f is fixed
+        # x non-negative reals, y binary, z non-negative integer, z real
+        delta = 1e-5
+        orig_model = self.get_model()
+        all_vars = au.pyomo_utils.get_model_variables(orig_model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(orig_model)
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(orig_model)
+        solution = PyomoSolution(variables=all_vars, objective=obj)
+
+        model = self.get_model_2()
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=False,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=True,
+            fix_if_sol_var_fixed=False,
+            fix_var_names=None,
+        )
+        assert pyo.value(model.x) is not None
+        self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
+        assert pyo.value(model.y) is not None
+        self.assertAlmostEqual(pyo.value(model.y), 1.0, delta=delta)
+        assert pyo.value(model.z) is not None
+        self.assertAlmostEqual(pyo.value(model.z), 3.0, delta=delta)
+        assert pyo.value(model.f) is not None
+        self.assertAlmostEqual(pyo.value(model.f), 1.0, delta=delta)
+        assert pyo.value(model.obj) is not None
+        self.assertAlmostEqual(pyo.value(model.obj), 6.5, delta=delta)
+
+        assert len(result_munch.var_names_missing_values) == 0
+        assert len(result_munch.var_names_fixed) == 3
+        assert len(result_munch.var_names_unfixed) == 0
+        assert len(result_munch.var_names_nan_inf) == 0
+        assert "y" in result_munch.var_names_fixed
+        assert "z" in result_munch.var_names_fixed
+        assert "f" in result_munch.var_names_fixed
+
+    @parameterized.expand(input=solvers)
+    def test_solution_load_with_variables_fixed_and_unfix_default_false_4(
+        self, mip_solver
+    ):
+        # vars are x,y,z,f
+        # obj is sum of variables
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
+        # f is fixed
+        # x non-negative reals, y binary, z non-negative integer, z real
+
+        # there are two cases to this one
+        # 1. since f is fixed in both models, check it doesn't break
+        # 2. unfix f in creation of Pyomo Solution
+
+        # case 1
+        delta = 1e-5
+        orig_model = self.get_model()
+        all_vars = au.pyomo_utils.get_model_variables(orig_model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(orig_model)
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(orig_model)
+        solution = PyomoSolution(variables=all_vars, objective=obj)
+
+        model = self.get_model_2()
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=False,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=True,
+            fix_var_names=None,
+        )
+        assert pyo.value(model.x) is not None
+        self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
+        assert pyo.value(model.y) is not None
+        self.assertAlmostEqual(pyo.value(model.y), 1.0, delta=delta)
+        assert pyo.value(model.z) is not None
+        self.assertAlmostEqual(pyo.value(model.z), 3.0, delta=delta)
+        assert pyo.value(model.f) is not None
+        self.assertAlmostEqual(pyo.value(model.f), 1.0, delta=delta)
+        assert pyo.value(model.obj) is not None
+        self.assertAlmostEqual(pyo.value(model.obj), 6.5, delta=delta)
+
+        assert len(result_munch.var_names_missing_values) == 0
+        assert len(result_munch.var_names_fixed) == 1
+        assert len(result_munch.var_names_unfixed) == 0
+        assert len(result_munch.var_names_nan_inf) == 0
+        assert "f" in result_munch.var_names_fixed
+
+        # case 2
+        delta = 1e-5
+        orig_model = self.get_model()
+        all_vars = au.pyomo_utils.get_model_variables(orig_model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(orig_model)
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(orig_model)
+        orig_model.f.unfix()
+        solution = PyomoSolution(variables=all_vars, objective=obj)
+
+        model = self.get_model_2()
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=False,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=True,
+            fix_var_names=None,
+        )
+        assert pyo.value(model.x) is not None
+        self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
+        assert pyo.value(model.y) is not None
+        self.assertAlmostEqual(pyo.value(model.y), 1.0, delta=delta)
+        assert pyo.value(model.z) is not None
+        self.assertAlmostEqual(pyo.value(model.z), 3.0, delta=delta)
+        assert pyo.value(model.f) is not None
+        self.assertAlmostEqual(pyo.value(model.f), 1.0, delta=delta)
+        assert pyo.value(model.obj) is not None
+        self.assertAlmostEqual(pyo.value(model.obj), 6.5, delta=delta)
+
+        assert len(result_munch.var_names_missing_values) == 0
+        assert len(result_munch.var_names_fixed) == 1
+        assert len(result_munch.var_names_unfixed) == 0
+        assert len(result_munch.var_names_nan_inf) == 0
+        assert "f" in result_munch.var_names_fixed
+
+    @parameterized.expand(input=solvers)
+    def test_solution_load_with_variables_fixed_and_unfix_default_false_5(
+        self, mip_solver
+    ):
+        # vars are x,y,z,f
+        # obj is sum of variables
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
+        # f is fixed
+        # x non-negative reals, y binary, z non-negative integer, z real
+        delta = 1e-5
+        orig_model = self.get_model()
+        all_vars = au.pyomo_utils.get_model_variables(orig_model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(orig_model)
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(orig_model)
+        solution = PyomoSolution(variables=all_vars, objective=obj)
+
+        model = self.get_model_2()
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=False,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
+            fix_var_names=set(),
+        )
+        assert pyo.value(model.x) is not None
+        self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
+        assert pyo.value(model.y) is not None
+        self.assertAlmostEqual(pyo.value(model.y), 1.0, delta=delta)
+        assert pyo.value(model.z) is not None
+        self.assertAlmostEqual(pyo.value(model.z), 3.0, delta=delta)
+        assert pyo.value(model.f) is not None
+        self.assertAlmostEqual(pyo.value(model.f), 1.0, delta=delta)
+        assert pyo.value(model.obj) is not None
+        self.assertAlmostEqual(pyo.value(model.obj), 6.5, delta=delta)
+
+        assert len(result_munch.var_names_missing_values) == 0
+        assert len(result_munch.var_names_fixed) == 1
+        assert len(result_munch.var_names_unfixed) == 0
+        assert len(result_munch.var_names_nan_inf) == 0
+        assert "f" in result_munch.var_names_fixed
+
+    @parameterized.expand(input=solvers)
+    def test_solution_load_with_variables_fixed_and_unfix_default_false_6(
+        self, mip_solver
+    ):
+        # vars are x,y,z,f
+        # obj is sum of variables
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
+        # f is fixed
+        # x non-negative reals, y binary, z non-negative integer, z real
+        delta = 1e-5
+        orig_model = self.get_model()
+        all_vars = au.pyomo_utils.get_model_variables(orig_model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(orig_model)
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(orig_model)
+        solution = PyomoSolution(variables=all_vars, objective=obj)
+
+        model = self.get_model_2()
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=False,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
+            fix_var_names={"x", "y", model.z.name},
+        )
+        assert pyo.value(model.x) is not None
+        self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
+        assert pyo.value(model.y) is not None
+        self.assertAlmostEqual(pyo.value(model.y), 1.0, delta=delta)
+        assert pyo.value(model.z) is not None
+        self.assertAlmostEqual(pyo.value(model.z), 3.0, delta=delta)
+        assert pyo.value(model.f) is not None
+        self.assertAlmostEqual(pyo.value(model.f), 1.0, delta=delta)
+        assert pyo.value(model.obj) is not None
+        self.assertAlmostEqual(pyo.value(model.obj), 6.5, delta=delta)
+
+        assert len(result_munch.var_names_missing_values) == 0
+        assert len(result_munch.var_names_fixed) == 4
+        assert len(result_munch.var_names_unfixed) == 0
+        assert len(result_munch.var_names_nan_inf) == 0
+        assert result_munch.var_names_fixed == {"f", "x", "y", "z"}
 
 
 if __name__ == "__main__":
