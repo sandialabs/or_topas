@@ -692,6 +692,11 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         result_munch = solution.load_into_model(
             model,
+            unfix_by_default=True,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
         )
         assert pyo.value(model.x) is not None
         self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
@@ -727,7 +732,15 @@ class TestSolutionUnit(unittest.TestCase):
 
         value_overrides = {"x": 1.0, "y": 0, "z": 2, "f": -3}
         model = self.get_model()
-        result_munch = solution.load_into_model(model, value_overrides=value_overrides)
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=True,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
+            value_overrides=value_overrides,
+        )
         assert pyo.value(model.x) is not None
         self.assertAlmostEqual(pyo.value(model.x), 1.0, delta=delta)
         assert pyo.value(model.y) is not None
@@ -762,7 +775,15 @@ class TestSolutionUnit(unittest.TestCase):
 
         value_overrides = {"x": float("nan"), "y": None}
         model = self.get_model()
-        result_munch = solution.load_into_model(model, value_overrides=value_overrides)
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=True,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
+            value_overrides=value_overrides,
+        )
         assert pyo.value(model.z) is not None
         self.assertAlmostEqual(pyo.value(model.z), 3.0, delta=delta)
         assert pyo.value(model.f) is not None
@@ -793,6 +814,11 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         result_munch = solution.load_into_model(
             model,
+            unfix_by_default=True,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
             value_overrides=value_overrides,
             skip_nan_inf=False,
         )
@@ -830,6 +856,11 @@ class TestSolutionUnit(unittest.TestCase):
             track_fixed=False,
             track_unfixed=False,
             track_nan_inf=False,
+            unfix_by_default=True,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
         )
         assert pyo.value(model.x) is not None
         self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
@@ -866,7 +897,15 @@ class TestSolutionUnit(unittest.TestCase):
         sub_block = pyo.Block()
         sub_block.t = pyo.Var()
         model.sub_block = sub_block
-        result_munch = solution.load_into_model(model, descend_into=False)
+        result_munch = solution.load_into_model(
+            model,
+            unfix_by_default=True,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
+            descend_into=False,
+        )
         assert pyo.value(model.x) is not None
         self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
         assert pyo.value(model.y) is not None
@@ -906,6 +945,11 @@ class TestSolutionUnit(unittest.TestCase):
         result_munch = solution.load_into_model(
             model,
             error_if_value_missing=False,
+            unfix_by_default=True,
+            fix_continuous=False,
+            fix_binary=False,
+            fix_integer=False,
+            fix_if_sol_var_fixed=False,
         )
         assert pyo.value(model.x) is not None
         self.assertAlmostEqual(pyo.value(model.x), 1.5, delta=delta)
@@ -947,6 +991,11 @@ class TestSolutionUnit(unittest.TestCase):
             result_munch = solution.load_into_model(
                 model,
                 error_if_value_missing=True,
+                unfix_by_default=True,
+                fix_continuous=False,
+                fix_binary=False,
+                fix_integer=False,
+                fix_if_sol_var_fixed=False,
             )
         expected_message = f"Variable {sub_block.t.name} has no value in Solution with id: {id(solution)}"
         assert str(cm.exception) == expected_message
@@ -969,6 +1018,7 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         result_munch = solution.load_into_model(
             model,
+            unfix_by_default=True,
             fix_continuous=True,
             fix_binary=False,
             fix_integer=False,
@@ -1011,6 +1061,7 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         result_munch = solution.load_into_model(
             model,
+            unfix_by_default=True,
             fix_continuous=False,
             fix_binary=True,
             fix_integer=False,
@@ -1053,6 +1104,7 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         result_munch = solution.load_into_model(
             model,
+            unfix_by_default=True,
             fix_continuous=False,
             fix_binary=False,
             fix_integer=True,
@@ -1096,6 +1148,7 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         result_munch = solution.load_into_model(
             model,
+            unfix_by_default=True,
             fix_continuous=False,
             fix_binary=False,
             fix_integer=False,
@@ -1137,6 +1190,7 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         result_munch = solution.load_into_model(
             model,
+            unfix_by_default=True,
             fix_continuous=False,
             fix_binary=False,
             fix_integer=False,
@@ -1178,6 +1232,7 @@ class TestSolutionUnit(unittest.TestCase):
         model = self.get_model()
         result_munch = solution.load_into_model(
             model,
+            unfix_by_default=True,
             fix_continuous=False,
             fix_binary=False,
             fix_integer=False,

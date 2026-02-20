@@ -447,26 +447,31 @@ class PyomoSolution(Solution):
         track_fixed: bool = True,
         track_unfixed: bool = True,
         track_nan_inf: bool = True,
-        fix_continuous: bool = False,
-        fix_binary: bool = False,
-        fix_integer: bool = False,
-        fix_if_sol_var_fixed: bool = False,
+        unfix_by_default: bool = None,
+        fix_continuous: bool = None,
+        fix_binary: bool = None,
+        fix_integer: bool = None,
+        fix_if_sol_var_fixed: bool = None,
         fix_var_names: set[str] | None = None,
         # check_assignment_domains: bool = False, #TODO: implement domain check
     ) -> MyMunch:
         """
         Loads into a Pyomo model the variable data from an or_topas Solution object.
         Variable fixing pattern can be subtle.
-        Enforces pattern that all model variables are unfixed,
-        then variables values may be fixed according to fix flag list
+        All of the fix_Y (continuous, binary, integer, if_sol_var_fixed) must be assigned a boolean value.
+        unfix_by_default must also be assigned a boolean value.
+        If any of these are not binary variables, an AssertationError will result.
 
         **Important – fixing behavior**:
-        - This method **unfixes all variables first**, regardless of their prior status in the model.
+        - This method has multiple paths for fixing and unfixing, subtle behavior can occur.
+        - unfix_by_default = True enforces a paradigm where all variables are first unfixed, regardless of their prior status in the model.
         - A variable is only fixed again if it matches **at least one** of:
-        • category flags (`fix_continuous`, `fix_binary`, `fix_integer`)
-        • name present in `fix_var_names`
-        • `fix_if_sol_var_fixed=True` **and** solution marked it fixed
-        - Previous model fix status is **never automatically preserved**.
+        a) category flags (fix_continuous, fix_binary, fix_integer)
+        b) name present in fix_var_names
+        c) fix_if_sol_var_fixed=True **and** solution marked it fixed
+        d) fixed in model before load and unfix_by_default == True
+        - The most stable/predictable paradigm is to unfix all and then control the fixing behavior
+
 
         Returns Munch with members
         var_names_missing_values: None or set[str]
@@ -502,7 +507,9 @@ class PyomoSolution(Solution):
         track_fixed: boolean
             flag to track model variables fixed
         track_unfixed: boolean
-            flag to track model variables unfixed
+            flag to track model variables that were previous fixed and were unfixed
+        unfix_by_default: bool
+            flag to control if all variables are unfixed at start
         fix_continuous: boolean
             flag to decide if continuous variables are fixed
         fix_binary: boolean
@@ -514,9 +521,27 @@ class PyomoSolution(Solution):
             flag to decide to fix if model variable fixed in solution
         fix_var_names: None or set[str]
             set of variable names to fix model variable if in set
-        check_assignment_domains: boolean
-            flag to checking assignment value in variable domain
+        # check_assignment_domains: boolean
+        #     flag to checking assignment value in variable domain
         """
+
+        # check boolean values
+        assert isinstance(
+            unfix_by_default, bool
+        ), f"For load_into_model, must assign boolean to {unfix_by_default=}"
+        assert isinstance(
+            fix_continuous, bool
+        ), f"For load_into_model, must assign boolean to {fix_continuous=}"
+        assert isinstance(
+            fix_binary, bool
+        ), f"For load_into_model, must assign boolean to {fix_binary=}"
+        assert isinstance(
+            fix_integer, bool
+        ), f"For load_into_model, must assign boolean to {fix_integer=}"
+        assert isinstance(
+            fix_if_sol_var_fixed, bool
+        ), f"For load_into_model, must assign boolean to {fix_if_sol_var_fixed=}"
+
         value_overrides = dict() if value_overrides is None else value_overrides
         fix_var_names = set() if fix_var_names is None else fix_var_names
         var_names_missing_values = set() if track_missing else None
@@ -531,7 +556,8 @@ class PyomoSolution(Solution):
 
             var_name = model_var.name
             was_fixed = model_var.is_fixed()
-            model_var.unfix()
+            if unfix_by_default:
+                model_var.unfix()
             need_to_fix_value = False
             is_nan_inf = False
             try:
@@ -603,7 +629,7 @@ class PyomoSolution(Solution):
                 # if we get here, model_var does not need to be fixed
                 # value loading can be done by assignment
                 model_var.value = var_value
-                if was_fixed and var_names_unfixed is not None:
+                if unfix_by_default and was_fixed and (var_names_unfixed is not None):
                     var_names_unfixed.add(var_name)
 
         return MyMunch(
