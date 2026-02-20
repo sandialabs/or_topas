@@ -1607,6 +1607,192 @@ class TestSolutionUnit(unittest.TestCase):
         assert len(result_munch.var_names_nan_inf) == 0
         assert result_munch.var_names_fixed == {"f", "x", "y", "z"}
 
+    @parameterized.expand(input=solvers)
+    def test_solution_load_missing_fixing_args(self, mip_solver):
+        # vars are x,y,z,f
+        # obj is sum of variables
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
+        # f is fixed
+        # x non-negative reals, y binary, z non-negative integer, z real
+        delta = 1e-5
+        orig_model = self.get_model()
+        all_vars = au.pyomo_utils.get_model_variables(orig_model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(orig_model)
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(orig_model)
+        solution = PyomoSolution(variables=all_vars, objective=obj)
+
+        model = self.get_model_2()
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                # unfix_by_default=False,
+                fix_continuous=False,
+                fix_binary=False,
+                fix_integer=False,
+                fix_if_sol_var_fixed=False,
+                fix_var_names={"x", "y", model.z.name},
+            )
+        unfix_by_default = None
+        expected_message = (
+            f"For load_into_model, must assign boolean to {unfix_by_default=}"
+        )
+        self.assertEqual(str(cm.exception), expected_message)
+
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                unfix_by_default=False,
+                # fix_continuous=False,
+                fix_binary=False,
+                fix_integer=False,
+                fix_if_sol_var_fixed=False,
+                fix_var_names={"x", "y", model.z.name},
+            )
+        fix_continuous = None
+        expected_message = (
+            f"For load_into_model, must assign boolean to {fix_continuous=}"
+        )
+        self.assertEqual(str(cm.exception), expected_message)
+
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                unfix_by_default=False,
+                fix_continuous=False,
+                # fix_binary=False,
+                fix_integer=False,
+                fix_if_sol_var_fixed=False,
+                fix_var_names={"x", "y", model.z.name},
+            )
+        fix_binary = None
+        expected_message = f"For load_into_model, must assign boolean to {fix_binary=}"
+        self.assertEqual(str(cm.exception), expected_message)
+
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                unfix_by_default=False,
+                fix_continuous=False,
+                fix_binary=False,
+                # fix_integer=False,
+                fix_if_sol_var_fixed=False,
+                fix_var_names={"x", "y", model.z.name},
+            )
+        fix_integer = None
+        expected_message = f"For load_into_model, must assign boolean to {fix_integer=}"
+        self.assertEqual(str(cm.exception), expected_message)
+
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                unfix_by_default=False,
+                fix_continuous=False,
+                fix_binary=False,
+                fix_integer=False,
+                # fix_if_sol_var_fixed=False,
+                fix_var_names={"x", "y", model.z.name},
+            )
+        fix_if_sol_var_fixed = None
+        expected_message = (
+            f"For load_into_model, must assign boolean to {fix_if_sol_var_fixed=}"
+        )
+        self.assertEqual(str(cm.exception), expected_message)
+
+    @parameterized.expand(input=solvers)
+    def test_solution_load_bad_fixing_args(self, mip_solver):
+        # vars are x,y,z,f
+        # obj is sum of variables
+        # model at optimal x = 1.5, y = 1, z = 3, f = 1
+        # model_2 at optimal x = 2.5, y = 1, z= 8, f = 2
+        # f is fixed
+        # x non-negative reals, y binary, z non-negative integer, z real
+        delta = 1e-5
+        orig_model = self.get_model()
+        all_vars = au.pyomo_utils.get_model_variables(orig_model, include_fixed=True)
+        obj = au.pyomo_utils.get_active_objective(orig_model)
+        opt = pyo.SolverFactory(mip_solver)
+        opt.solve(orig_model)
+        solution = PyomoSolution(variables=all_vars, objective=obj)
+
+        model = self.get_model_2()
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                unfix_by_default="TestValue",
+                fix_continuous=False,
+                fix_binary=False,
+                fix_integer=False,
+                fix_if_sol_var_fixed=False,
+                fix_var_names={"x", "y", model.z.name},
+            )
+        unfix_by_default = "TestValue"
+        expected_message = (
+            f"For load_into_model, must assign boolean to {unfix_by_default=}"
+        )
+        self.assertEqual(str(cm.exception), expected_message)
+
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                unfix_by_default=False,
+                fix_continuous="TestValue",
+                fix_binary=False,
+                fix_integer=False,
+                fix_if_sol_var_fixed=False,
+                fix_var_names={"x", "y", model.z.name},
+            )
+        fix_continuous = "TestValue"
+        expected_message = (
+            f"For load_into_model, must assign boolean to {fix_continuous=}"
+        )
+        self.assertEqual(str(cm.exception), expected_message)
+
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                unfix_by_default=False,
+                fix_continuous=False,
+                fix_binary="TestValue",
+                fix_integer=False,
+                fix_if_sol_var_fixed=False,
+                fix_var_names={"x", "y", model.z.name},
+            )
+        fix_binary = "TestValue"
+        expected_message = f"For load_into_model, must assign boolean to {fix_binary=}"
+        self.assertEqual(str(cm.exception), expected_message)
+
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                unfix_by_default=False,
+                fix_continuous=False,
+                fix_binary=False,
+                fix_integer="TestValue",
+                fix_if_sol_var_fixed=False,
+                fix_var_names={"x", "y", model.z.name},
+            )
+        fix_integer = "TestValue"
+        expected_message = f"For load_into_model, must assign boolean to {fix_integer=}"
+        self.assertEqual(str(cm.exception), expected_message)
+
+        with self.assertRaises(AssertionError) as cm:
+            result_munch = solution.load_into_model(
+                model,
+                unfix_by_default=False,
+                fix_continuous=False,
+                fix_binary=False,
+                fix_integer=False,
+                fix_if_sol_var_fixed="TestValue",
+                fix_var_names={"x", "y", model.z.name},
+            )
+        fix_if_sol_var_fixed = "TestValue"
+        expected_message = (
+            f"For load_into_model, must assign boolean to {fix_if_sol_var_fixed=}"
+        )
+        self.assertEqual(str(cm.exception), expected_message)
+
 
 if __name__ == "__main__":
     unittest.main()
