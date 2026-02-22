@@ -22,7 +22,6 @@ from or_topas.benders.benders_serial import (
 )
 import pyomo.environ as pyo
 
-
 """
 To run this example:
 

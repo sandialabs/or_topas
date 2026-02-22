@@ -17,8 +17,8 @@ from pyomo.common.dependencies import attempt_import
 from pyomo.common.errors import ApplicationError
 
 from pyomo.contrib import appsi
-import or_topas.aos_utils as aos_utils
-from or_topas import PyomoPoolManager, PoolPolicy
+from or_topas.util import pyomo_utils
+from or_topas.solnpool import PyomoPoolManager, PoolPolicy
 
 
 def gurobi_generate_solutions(
@@ -27,6 +27,8 @@ def gurobi_generate_solutions(
     num_solutions=10,
     rel_opt_gap=None,
     abs_opt_gap=None,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
     solver_options={},
     tee=False,
     pool_manager=None,
@@ -54,6 +56,18 @@ def gurobi_generate_solutions(
         None implies that there is no limit on the absolute optimality gap
         (i.e. that any feasible solution can be considered by Gurobi).
         This parameter maps to the PoolGapAbs parameter in Gurobi.
+    lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to add a constraint of
+        form objective >= lower_objective_threshold. If not satisfied at
+        the optimal objective, method returns ApplicationError as infeasible program.
+        None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to add a constraint of
+        form objective <= upper_objective_threshold. If not satisfied at
+        the optimal objective, method returns ApplicationError as infeasible program.
+        None indicates that a lower objective threshold will not
+        be added to the model.
     solver_options : dict
         Solver option-value pairs to be passed to the Gurobi solver.
     tee : boolean
@@ -88,6 +102,24 @@ def gurobi_generate_solutions(
         pool_manager.add_pool(
             name="gurobi_generate_solutions", policy=PoolPolicy.keep_all
         )
+
+    # this is a different behavior than the other AOS methods
+    # this is because we do not repeatedly call the solver
+    # the gurobi solution pool works by a single pass
+    if (lower_objective_threshold is not None) or (
+        upper_objective_threshold is not None
+    ):
+        orig_objective = pyomo_utils.get_active_objective(model)
+        pyomo_utils.add_objective_constraint(
+            target_block=model,
+            objective=orig_objective,
+            objective_value=None,
+            rel_opt_gap=None,
+            abs_opt_gap=None,
+            lower_objective_threshold=lower_objective_threshold,
+            upper_objective_threshold=upper_objective_threshold,
+        )
+
     #
     # Setup gurobi
     #
@@ -112,14 +144,14 @@ def gurobi_generate_solutions(
     condition = results.termination_condition
     if not (condition == appsi.base.TerminationCondition.optimal):
         raise ApplicationError(
-            "Model cannot be solved, " "TerminationCondition = {}"
-        ).format(condition.value)
+            "Model cannot be solved, " f"TerminationCondition = {condition.value}"
+        )
     #
     # Collect solutions
     #
     solution_count = opt.get_model_attr("SolCount")
-    variables = aos_utils.get_model_variables(model, include_fixed=True)
-    objective = aos_utils.get_active_objective(model)
+    variables = pyomo_utils.get_model_variables(model, include_fixed=True)
+    objective = pyomo_utils.get_active_objective(model)
     solutions = []
     for i in range(solution_count):
         #
@@ -129,6 +161,6 @@ def gurobi_generate_solutions(
         #
         # Pull the solution from the model, and cache it in a solution pool.
         #
-        pool_manager.add(variable=variables, objective=objective)
+        pool_manager.add(variables=variables, objective=objective)
 
     return pool_manager

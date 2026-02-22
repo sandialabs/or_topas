@@ -18,7 +18,7 @@ import json
 import weakref
 import math
 
-from or_topas.aos_utils import MyMunch, to_dict
+from or_topas.util.mymunch import MyMunch, to_dict
 from .solution import Solution, PyomoSolution
 
 nan = float("nan")
@@ -86,10 +86,20 @@ class SolutionPoolBase:
         A value of None will result in a new PoolCounter object being created and used.
     policy : PoolPolicy
         Enum value to describe the pool construction and management policy.
+    copy_fixed_variable_maps: Boolean
+        Boolean value to decide if each solution will build
     """
 
-    def __init__(self, name, as_solution, counter, policy=PoolPolicy.unspecified):
+    def __init__(
+        self,
+        name,
+        as_solution,
+        counter,
+        policy=PoolPolicy.unspecified,
+        copy_name_to_variable_maps=True,
+    ):
         self._solutions = {}
+        self._copy_name_to_variable_maps = copy_name_to_variable_maps
         if as_solution is None:
             self._as_solution = default_as_solution
         else:

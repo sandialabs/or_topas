@@ -13,7 +13,7 @@ import pyomo.environ as pyo
 from pyomo.common.collections import ComponentMap
 from pyomo.gdp.util import clone_without_expression_components
 from pyomo.contrib.fbbt.fbbt import compute_bounds_on_expr
-from or_topas import aos_utils
+from or_topas.util import pyomo_utils
 
 
 def _get_unique_name(collection, name):
@@ -85,7 +85,7 @@ def get_shifted_linear_model(model, block=None):
     """
 
     # Gather all variables and confirm the model is bounded
-    all_vars = aos_utils.get_model_variables(model)
+    all_vars = pyomo_utils.get_model_variables(model)
     new_vars = {}
     all_vars_new = {}
     var_map = ComponentMap()
@@ -112,7 +112,7 @@ def get_shifted_linear_model(model, block=None):
 
     if block is None:
         block = model
-    shifted_lp = aos_utils._add_aos_block(block, name="_shifted_lp")
+    shifted_lp = pyomo_utils.add_aos_block(block, name="_shifted_lp")
 
     # Replace original variables with shifted lower and upper variables
     shifted_lp.var_lower = pyo.Var(
@@ -139,7 +139,7 @@ def get_shifted_linear_model(model, block=None):
     # Substitute the new s variables into the objective function
     # The c_fix_zeros calculation is used to find any constant terms that exist
     # in the objective expression to avoid double counting
-    active_objective = aos_utils.get_active_objective(model)
+    active_objective = pyomo_utils.get_active_objective(model)
     c_var_lower = clone_without_expression_components(
         active_objective.expr, substitute=var_lower_map
     )

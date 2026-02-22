@@ -21,8 +21,8 @@ import pyomo.environ as pyo
 import pyomo.common.errors
 from pyomo.contrib import appsi
 
-from or_topas import aos_utils
-from or_topas import PyomoPoolManager, PoolPolicy
+from or_topas.util import pyomo_utils
+from or_topas.solnpool import PyomoPoolManager, PoolPolicy
 from . import shifted_lp
 
 
@@ -41,7 +41,7 @@ class NoGoodCutGenerator:
         self.model = model
         self.zero_threshold = zero_threshold
         self.variable_groups = variable_groups
-        self.variables = aos_utils.get_model_variables(model)
+        self.variables = pyomo_utils.get_model_variables(model)
         self.orig_model = orig_model
         self.all_variables = all_variables
         self.orig_objective = orig_objective
@@ -93,6 +93,8 @@ def gurobi_enumerate_linear_solutions(
     num_solutions=10,
     rel_opt_gap=None,
     abs_opt_gap=None,
+    lower_objective_threshold=None,
+    upper_objective_threshold=None,
     zero_threshold=1e-5,
     solver_options={},
     tee=False,
@@ -122,9 +124,22 @@ def gurobi_enumerate_linear_solutions(
         The absolute optimality gap for the original objective for which
         variable bounds will be found. None indicates that an absolute gap
         constraint will not be added to the model.
+        lower_objective_threshold : float or None
+        Sense dependent, used in maximization problems to add a constraint of
+        form objective >= lower_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
+    upper_objective_threshold : float or None
+        Sense dependent, used in minimization problems to add a constraint of
+        form objective <= upper_objective_threshold. If not satisfied at
+        the optimal objective, method returns pool manager with no solutions
+        added. None indicates that a lower objective threshold will not
+        be added to the model.
     zero_threshold: float
         The threshold for which a continuous variables' value is considered
         to be equal to zero.
+        Also used in objective_threshold type tests when not None.
     solver_options : dict
         Solver option-value pairs to be passed to the solver.
     tee : boolean
@@ -147,7 +162,7 @@ def gurobi_enumerate_linear_solutions(
     if pool_manager is None:
         pool_manager = PyomoPoolManager()
         pool_manager.add_pool(
-            name="enumerate_binary_solutions", policy=PoolPolicy.keep_all
+            name="enumerate_gurobi_linear_solutions", policy=PoolPolicy.keep_all
         )
 
     #
@@ -156,7 +171,7 @@ def gurobi_enumerate_linear_solutions(
     if not gurobi_available:
         raise pyomo.common.errors.ApplicationError(f"Solver (gurobi) not available")
 
-    all_variables = aos_utils.get_model_variables(model)
+    all_variables = pyomo_utils.get_model_variables(model)
     for var in all_variables:
         if var.is_integer():
             raise pyomo.common.errors.ApplicationError(
@@ -182,14 +197,31 @@ def gurobi_enumerate_linear_solutions(
             ).format(status.value, condition.value)
         )
 
-    orig_objective = aos_utils.get_active_objective(model)
+    orig_objective = pyomo_utils.get_active_objective(model)
     orig_objective_value = pyo.value(orig_objective)
     logger.info("Found optimal solution, value = {}.".format(orig_objective_value))
 
-    aos_block = aos_utils._add_aos_block(model, name="_lp_enum")
+    # enforces objective threshold behvior if violated at optimum
+    objective_thresholds_violated = pyomo_utils.objective_thresholds_violation_check(
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
+        zero_threshold=zero_threshold,
+    )
+    if objective_thresholds_violated:
+        return pool_manager
+
+    aos_block = pyomo_utils.add_aos_block(model, name="_lp_enum")
     logger.info("Added block {} to the model.".format(aos_block))
-    aos_utils._add_objective_constraint(
-        aos_block, orig_objective, orig_objective_value, rel_opt_gap, abs_opt_gap
+    pyomo_utils.add_objective_constraint(
+        target_block=aos_block,
+        objective=orig_objective,
+        objective_value=orig_objective_value,
+        rel_opt_gap=rel_opt_gap,
+        abs_opt_gap=abs_opt_gap,
+        lower_objective_threshold=lower_objective_threshold,
+        upper_objective_threshold=upper_objective_threshold,
     )
 
     canonical_block = shifted_lp.get_shifted_linear_model(model)
@@ -256,7 +288,10 @@ def gurobi_enumerate_linear_solutions(
     opt.set_callback(cut_generator.cut_generator_callback)
     opt.solve(cb)
 
-    aos_block.deactivate()
+    # need to delete blocks not deactivate them to be able to run method again
+    # N.B. if anyone uses this outside this method, we can put the deletion under flag control
+    model.del_component(aos_block)
+    model.del_component(canonical_block)
     logger.info("COMPLETED LP ENUMERATION ANALYSIS")
 
     return cut_generator.pool_manager

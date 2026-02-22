@@ -28,6 +28,7 @@ classifiers=[
 test = [
     "pytest",
     "pytest-cov",
+    "parameterized",
     ]
 
 [tool.setuptools.packages.find]
