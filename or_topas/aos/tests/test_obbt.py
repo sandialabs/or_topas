@@ -36,6 +36,7 @@ from or_topas.util import pyomo_utils
 solvers_minus_highs = list(
     pyomo.opt.check_available_solvers("glpk", "gurobi", "appsi_gurobi")
 )
+solvers_minus_highs_appsi = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
 # standard_solvers = pyomo_utils._get_testing_solver_names()
 solvers = solvers_minus_highs
 
@@ -44,15 +45,16 @@ timelimit = {"gurobi": "TimeLimit", "appsi_gurobi": "TimeLimit", "glpk": "tmlim"
 
 class TestOBBTUnit(unittest.TestCase):
 
-    @parameterized.expand(input=solvers, skip_on_empty=True)
-    @unittest.skipIf(not numpy_available, "Numpy not installed")
-    def test_bad_solver(self, mip_solver):
+    def test_bad_solver(self):
         """
         Confirm that an exception is thrown with a bad solver name.
         """
         m = tc.get_2d_diamond_problem()
-        with self.assertRaises(pyomo.common.errors.ApplicationError):
-            obbt_analysis(m, solver="unknown_solver")
+        with self.assertRaises(pyomo_utils.SolverSetupError) as cm:
+            solver_name = "unknown_solver"
+            obbt_analysis(m, solver=solver_name)
+        expected_message = f"Error in creating Solver object with {solver_name=}, which created an UnknownSolver"
+        self.assertIn(expected_message, str(cm.exception))
 
     @parameterized.expand(input=solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "Numpy not installed")

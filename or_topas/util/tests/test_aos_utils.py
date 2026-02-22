@@ -18,6 +18,7 @@ import pyomo.common.unittest as unittest
 from pyomo.common.collections import ComponentSet
 
 from or_topas.util import pyomo_utils, numpy_utils
+from pyomo.opt import check_available_solvers
 import warnings
 
 
@@ -842,6 +843,52 @@ class TestPyomoUtilsUnit(unittest.TestCase):
         components = [m.con, m.obj]
         var = pyomo_utils.get_model_variables(m, components=components)
         self.assertEqual(var, m.unfixed_vars)
+
+    def test_create_solver_non_string(self):
+        test_names = [True, 7, -7.0, None]
+        for solver_name in test_names:
+            with self.assertRaises(pyomo_utils.SolverSetupError) as cm:
+                pyomo_utils.create_solver(solver_name)
+
+            expected_message = f"Error in creating Solver object with a solver name that was not a string, was {type(solver_name)}"
+            self.assertEqual(expected_message, str(cm.exception))
+
+    def test_create_solver_unknown_solver_names(self):
+        test_names = [
+            "UnknownSolver",
+            "InvalidSolver",
+            "LorumIpsomSolver",
+            "TopasTEST",
+            "",
+            "",
+            "Invalid",
+        ]
+        for solver_name in test_names:
+            with self.assertRaises(pyomo_utils.SolverSetupError) as cm:
+                pyomo_utils.create_solver(solver_name)
+            expected_message = f"Error in creating Solver object with {solver_name=}, which created an UnknownSolver"
+            self.assertEqual(expected_message, str(cm.exception))
+
+    @unittest.skipIf(
+        len(check_available_solvers("cbc", "ipopt", "xpress_direct")) == 3,
+        "Skipping Uninstalled Solvers Test",
+    )
+    def test_create_solver_valid_not_installed_solvers(self):
+        s_names = ["cbc", "ipopt", "xpress_direct"]
+        test_names = [s for s in s_names if len(check_available_solvers(s)) == 0]
+        for solver_name in test_names:
+            with self.assertRaises(pyomo_utils.SolverSetupError) as cm:
+                pyomo_utils.create_solver(solver_name)
+            expected_message = f"Error in creating Solver object with {solver_name},"
+            self.assertIn(expected_message, str(cm.exception))
+
+    @unittest.skipIf(
+        len(pyomo_utils._get_testing_solver_names()) == 0, "No Solvers Available"
+    )
+    def test_create_solver_valid_solver_names(self):
+        test_names = pyomo_utils._get_testing_solver_names()
+        for name in test_names:
+            pyomo_utils.create_solver(name)
 
 
 if __name__ == "__main__":

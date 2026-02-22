@@ -168,8 +168,7 @@ def enumerate_linear_solutions(
         for parameter, value in solver_options.items():
             opt.gurobi_options[parameter] = value
     else:
-        opt = pyo.SolverFactory(solver)
-        opt.available()
+        opt = pyomo_utils.create_solver(solver)
         for parameter, value in solver_options.items():
             opt.options[parameter] = value
         if solver == "gurobi":

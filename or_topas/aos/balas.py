@@ -151,8 +151,8 @@ def enumerate_binary_solutions(
     #
     # Setup solver
     #
-    opt = pyo.SolverFactory(solver)
-    opt.available()
+    opt = pyomo_utils.create_solver(solver)
+
     for parameter, value in solver_options.items():
         opt.options[parameter] = value
     #
