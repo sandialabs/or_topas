@@ -18,10 +18,12 @@ logger = logging.getLogger(__name__)
 @declare_custom_block(name="BendersGenerator_Serial")
 class Benders_Serial(Benders_Abstract):
     # TODO: this is for generate multi-subproblem cut
+    # This Serial solver is designed to closely mirror the parallel solver as much as possible
+    # to ease testing and moving back and forth between serial and parallel tools.
 
     def __init__(self, component):
         if not numpy_available:
-            raise ImportError("BendersGenerator_Parallel requires numpy.")
+            raise ImportError("BendersGenerator_Serial requires numpy.")
         super().__init__(component)
         self.transform_to_cut_map = {
             "feasibility": Benders_Serial.generate_cut_feasibility_transform,

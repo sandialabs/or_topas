@@ -15,17 +15,18 @@ import time
 
 from pyomo.common.dependencies import mpi4py
 
-# from or_topas.benders.benders_cuts import BendersCutGenerator
-# from or_topas.benders.benders_parallel import BendersGenerator_Parallel as BendersCutGenerator
 from or_topas.benders.benders_serial import (
     BendersGenerator_Serial as BendersCutGenerator,
 )
 import pyomo.environ as pyo
 
 """
+This example presently is designed to work with gurobi_persistent
+Adapted from the Pyomo.contrib.Benders Farmer problem to work with serial solver.
+
 To run this example:
 
-mpirun -np 3 python farmer.py
+python farmer_serial.py
 """
 
 
@@ -149,10 +150,7 @@ def create_subproblem(root, farmer, scenario):
     return m, complicating_vars_map
 
 
-def main():
-    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
-    if rank != 0:
-        sys.stdout = open(os.devnull, "w")
+def main(solver_name="gurobi_persistent"):
 
     t0 = time.time()
     farmer = Farmer()
@@ -169,9 +167,9 @@ def main():
             subproblem_fn=create_subproblem,
             subproblem_fn_kwargs=subproblem_fn_kwargs,
             root_eta=m.eta[s],
-            subproblem_solver="gurobi_persistent",
+            subproblem_solver=solver_name,
         )
-    opt = pyo.SolverFactory("gurobi_persistent")
+    opt = pyo.SolverFactory(solver_name)
     opt.set_instance(m)
 
     print(

@@ -17,6 +17,16 @@ from or_topas.benders.benders_serial import (
 
 import pyomo.environ as pyo
 
+"""
+This example presently is designed to work with gurobi_persistent and ipopt
+Adapted from the Pyomo.contrib.Benders Grothey problem to work with serial solver.
+
+To run this example:
+
+python grothey_ex.py
+
+"""
+
 
 def create_root():
     m = pyo.ConcreteModel()
