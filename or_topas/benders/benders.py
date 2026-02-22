@@ -220,7 +220,49 @@ class Benders_Abstract(BlockData):
             subproblem_var.bounds = (None, None)
 
     @staticmethod
-    def _fix_first_stage_var_copies(*, subproblem, root_vars, complicating_vars_map):
+    def _fix_first_stage_var_copies(
+        *, subproblem, root_vars, complicating_vars_map, mode=1
+    ):
+        """
+        There are several ways to handle enforcing sub_var.val = root_var.val
+        First is by adding constraints to enforce equality.
+        Second is by fixing the values of the sub_var variables to root_var values.
+        Third is by replacing the sub_var variables with parameters and setting the value of the parameters to the root_var values
+        """
+        if mode == 1:
+            # method 1
+            return Benders_Abstract._fix_first_stage_var_copies_by_constraint(
+                subproblem=subproblem,
+                root_vars=root_vars,
+                complicating_vars_map=complicating_vars_map,
+            )
+        elif mode == 2:
+            # method 2
+            return Benders_Abstract._fix_first_stage_var_copies_by_value(
+                subproblem=subproblem,
+                root_vars=root_vars,
+                complicating_vars_map=complicating_vars_map,
+            )
+        elif mode == 3:
+            return Benders_Abstract._fix_first_stage_var_copies_by_parameter_value(
+                subproblem=subproblem,
+                root_vars=root_vars,
+                complicating_vars_map=complicating_vars_map,
+            )
+        else:
+            raise RuntimeError(
+                f"Asked for fix_first_Stage_var_copies {mode=} that does not exist"
+            )
+
+    @staticmethod
+    def _fix_first_stage_var_copies_by_constraint(
+        *, subproblem, root_vars, complicating_vars_map
+    ):
+        """
+        There are several ways to handle enforcing sub_var.val = root_var.val
+        One of the most direct is to directly add constraints that enforce it.
+        This method handles the enforcement of the constraint based equality method.
+        """
         subproblem.fix_complicating_vars = pyo.ConstraintList()
         var_to_con_map = pyo.ComponentMap()
         for root_var in root_vars:
@@ -231,6 +273,57 @@ class Benders_Abstract(BlockData):
                     sub_var - root_var.value == 0
                 )
                 var_to_con_map[root_var] = new_con
+        return var_to_con_map
+
+    @staticmethod
+    def _fix_first_stage_var_copies_by_value(
+        *, subproblem, root_vars, complicating_vars_map
+    ):
+        """
+        There are several ways to handle enforcing sub_var.val = root_var.val
+        One of the most direct is to directly add constraints that enforce it.
+        This method handles the enforcement by fixing the sub_vars to the root_var value
+
+        Returns an empty ComponentMap since no constraints were added
+        """
+        subproblem.fix_complicating_vars = pyo.ConstraintList()
+        var_to_con_map = pyo.ComponentMap()
+        for root_var in root_vars:
+            if root_var in complicating_vars_map:
+                sub_var = complicating_vars_map[root_var]
+                # sub_var.set_value(root_var.value, skip_validation=True)
+                # new_con = subproblem.fix_complicating_vars.add(
+                #     sub_var - root_var.value == 0
+                # )
+                # var_to_con_map[root_var] = new_con
+                sub_var.fix(root_var.value)
+        return var_to_con_map
+
+    @staticmethod
+    def _fix_first_stage_var_copies_by_parameter_value(
+        *, subproblem, root_vars, complicating_vars_map
+    ):
+        """
+        There are several ways to handle enforcing sub_var.val = root_var.val
+        One of the most direct is to directly add constraints that enforce it.
+        This method handles the enforcement by fixing the parameter replacements of sub_vars to the root_var value
+        Retuires parameters to be mutable
+
+        Returns empty ComponentMap since no constraints were added
+        """
+        subproblem.fix_complicating_vars = pyo.ConstraintList()
+        var_to_con_map = pyo.ComponentMap()
+        for root_var in root_vars:
+            if root_var in complicating_vars_map:
+                sub_var_param_version = complicating_vars_map[root_var]
+                # sub_var.set_value(root_var.value, skip_validation=True)
+                # new_con = subproblem.fix_complicating_vars.add(
+                #     sub_var - root_var.value == 0
+                # )
+                # var_to_con_map[root_var] = new_con
+
+                # set the value of the parameter
+                sub_var_param_version = root_var.value
         return var_to_con_map
 
     @staticmethod
@@ -316,7 +409,7 @@ class Benders_Abstract(BlockData):
 
         b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
 
-    #TODO: work in progress, no changes made
+    # TODO: work in progress, no changes made
     @staticmethod
     def _standard_lp_subproblem_transform(*args, **kwargs):
         assert "b" in kwargs, "Need argument b in _feasibility_subproblem_transform"
@@ -379,7 +472,6 @@ class Benders_Abstract(BlockData):
                 Benders_Abstract._del_con(c)
 
         b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
-
 
 
 """
