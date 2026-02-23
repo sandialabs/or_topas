@@ -238,16 +238,18 @@ class Benders_Abstract(BlockData):
             )
         elif mode == 2:
             # method 2
-            return Benders_Abstract._fix_first_stage_var_copies_by_value(
+            return Benders_Abstract._fix_first_stage_var_copies_by_variable_fixing(
                 subproblem=subproblem,
                 root_vars=root_vars,
                 complicating_vars_map=complicating_vars_map,
             )
         elif mode == 3:
-            return Benders_Abstract._fix_first_stage_var_copies_by_parameter_value(
-                subproblem=subproblem,
-                root_vars=root_vars,
-                complicating_vars_map=complicating_vars_map,
+            return (
+                Benders_Abstract._fix_first_stage_var_copies_by_parameter_value_setting(
+                    subproblem=subproblem,
+                    root_vars=root_vars,
+                    complicating_vars_map=complicating_vars_map,
+                )
             )
         else:
             raise RuntimeError(
@@ -262,68 +264,70 @@ class Benders_Abstract(BlockData):
         There are several ways to handle enforcing sub_var.val = root_var.val
         One of the most direct is to directly add constraints that enforce it.
         This method handles the enforcement of the constraint based equality method.
+
+        This requires that the values in the complicating_vars_map are variables.
+        It then adds a constraint for each key-value pair where the constraint is of form
+        for k_var, v_var:
+            new_con = Constraint(v_var - k_var.value == 0)
+
+        Returns a ComponentMap from the root variables as keys to the equality enforcing constraint
         """
         subproblem.fix_complicating_vars = pyo.ConstraintList()
         var_to_con_map = pyo.ComponentMap()
-        for root_var in root_vars:
-            if root_var in complicating_vars_map:
-                sub_var = complicating_vars_map[root_var]
-                sub_var.set_value(root_var.value, skip_validation=True)
-                new_con = subproblem.fix_complicating_vars.add(
-                    sub_var - root_var.value == 0
-                )
-                var_to_con_map[root_var] = new_con
+
+        for root_var, sub_var in complicating_vars_map.items():
+            sub_var.set_value(root_var.value, skip_validation=True)
+            new_con = subproblem.fix_complicating_vars.add(
+                sub_var - root_var.value == 0
+            )
+            var_to_con_map[root_var] = new_con
         return var_to_con_map
 
     @staticmethod
-    def _fix_first_stage_var_copies_by_value(
+    def _fix_first_stage_var_copies_by_variable_fixing(
         *, subproblem, root_vars, complicating_vars_map
     ):
         """
         There are several ways to handle enforcing sub_var.val = root_var.val
-        One of the most direct is to directly add constraints that enforce it.
         This method handles the enforcement by fixing the sub_vars to the root_var value
 
-        Returns an empty ComponentMap since no constraints were added
+        This requires that the values in the complicating_vars_map are variables.
+        It then adds a constraint for each key-value pair where the constraint is of form
+        for k_var, v_var:
+            v_var.fix(k_var.value)
+
+        Returns an empty ComponentMap since no constraints are added.
+        This is generally meant to be used with solver_options={'treat_fixed_vars_as_params': True}
+        In absence of that as_params flag, need custom way of handling dual information from variable bounds
+        This is normally different from constraint duals, called reduced costs 'rc' suffix.
         """
         subproblem.fix_complicating_vars = pyo.ConstraintList()
         var_to_con_map = pyo.ComponentMap()
-        for root_var in root_vars:
-            if root_var in complicating_vars_map:
-                sub_var = complicating_vars_map[root_var]
-                # sub_var.set_value(root_var.value, skip_validation=True)
-                # new_con = subproblem.fix_complicating_vars.add(
-                #     sub_var - root_var.value == 0
-                # )
-                # var_to_con_map[root_var] = new_con
-                sub_var.fix(root_var.value)
+        for root_var, sub_var in complicating_vars_map.items():
+            sub_var.fix(root_var.value)
         return var_to_con_map
 
     @staticmethod
-    def _fix_first_stage_var_copies_by_parameter_value(
+    def _fix_first_stage_var_copies_by_parameter_value_setting(
         *, subproblem, root_vars, complicating_vars_map
     ):
         """
         There are several ways to handle enforcing sub_var.val = root_var.val
-        One of the most direct is to directly add constraints that enforce it.
         This method handles the enforcement by fixing the parameter replacements of sub_vars to the root_var value
         Retuires parameters to be mutable
 
-        Returns empty ComponentMap since no constraints were added
+        This methods is meant for when the values in the complicating_vars_map are mutable parameters.
+        It then adds a constraint for each key-value pair where the constraint is of form
+        for k_var, v_param:
+            v_param = k_var.value
+
+        Returns an empty ComponentMap since no constraints are added.
+        If used with values as variables, this will change level values but not gurantee fixing.
         """
         subproblem.fix_complicating_vars = pyo.ConstraintList()
         var_to_con_map = pyo.ComponentMap()
-        for root_var in root_vars:
-            if root_var in complicating_vars_map:
-                sub_var_param_version = complicating_vars_map[root_var]
-                # sub_var.set_value(root_var.value, skip_validation=True)
-                # new_con = subproblem.fix_complicating_vars.add(
-                #     sub_var - root_var.value == 0
-                # )
-                # var_to_con_map[root_var] = new_con
-
-                # set the value of the parameter
-                sub_var_param_version = root_var.value
+        for root_var, sub_param in complicating_vars_map.items():
+            sub_param = root_var.value
         return var_to_con_map
 
     @staticmethod
