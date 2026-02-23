@@ -20,7 +20,6 @@ from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 
 import pyomo.environ as pyo
 
-
 # TODO: do we have a topas logger?
 logger = logging.getLogger(__name__)
 
