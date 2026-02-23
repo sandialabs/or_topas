@@ -20,6 +20,8 @@ import pyomo.util.vars_from_expressions as vfe
 import warnings
 from pyomo.opt import check_available_solvers
 from pyomo.opt.base.solvers import UnknownSolver
+from pyomo.repn.standard_repn import generate_standard_repn
+from or_topas.util.mymunch import MyMunch
 
 
 # single point of control for which solvers to use
@@ -375,6 +377,29 @@ def objective_thresholds_violation_check(
             )
             return True
     return False
+
+
+def split_expr(expr, vars_set, check_linearity=False):
+    # TODO: implement linearity check
+    # possibly add check for .is_constant to avoid generating standard_repn
+
+    # TODO, can we do anything here to check linearity
+    # is there an efficiency improvement if we assume linearity
+    repn = generate_standard_repn(expr, compute_values=False)
+    expr_vars_in_vars_set = sum(
+        c * v for c, v in zip(repn.linear_coefs, repn.linear_vars) if v in vars_set
+    )
+    expr_vars_not_int_vars_set = sum(
+        c * v for c, v in zip(repn.linear_coefs, repn.linear_vars) if not v in vars_set
+    )
+    expr_constant = repn.constant
+    return MyMunch(
+        in_set=expr_vars_in_vars_set,
+        not_in_set=expr_vars_not_int_vars_set,
+        constant=expr_constant,
+        in_plus_cons=expr_vars_in_vars_set + expr_constant,
+        out=expr_vars_not_int_vars_set,
+    )
 
 
 class SolverSetupError(ValueError):

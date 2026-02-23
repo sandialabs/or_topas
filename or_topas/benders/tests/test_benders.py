@@ -309,10 +309,15 @@ class TestBenders(unittest.TestCase):
 
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     @unittest.skipIf(len(qp_solvers) == 0, "No Solver with Quadratic Support Available")
-    @unittest.skipIf(len(non_linear_solvers) == 0, "No Solver with general Non-linear Support Available")
-    @parameterized.expand(input=iter_product(qp_solvers, non_linear_solvers),
-                          name_func=lambda func, num, params: f"{func.__name__}_master_sol_{params.args[0]}_sub_sol_{params.args[1]}",
-                          skip_on_empty=True)
+    @unittest.skipIf(
+        len(non_linear_solvers) == 0,
+        "No Solver with general Non-linear Support Available",
+    )
+    @parameterized.expand(
+        input=iter_product(qp_solvers, non_linear_solvers),
+        name_func=lambda func, num, params: f"{func.__name__}_master_sol_{params.args[0]}_sub_sol_{params.args[1]}",
+        skip_on_empty=True,
+    )
     def test_grothey(self, qp_solver, nl_solver):
         def create_root():
             m = pyo.ConcreteModel()

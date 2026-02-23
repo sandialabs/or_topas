@@ -2,7 +2,6 @@ import sys
 import pprint
 import json
 import copy
-import munch
 import logging
 
 import logging
@@ -19,6 +18,7 @@ from pyomo.core.expr.visitor import identify_variables
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 
 import pyomo.environ as pyo
+from or_topas.util import pyomo_utils
 
 # TODO: do we have a topas logger?
 logger = logging.getLogger(__name__)
@@ -134,6 +134,7 @@ class Benders_Abstract(BlockData):
         self.subproblems.append(subproblem)
         self.complicating_vars_maps.append(complicating_vars_map)
         b = subproblem
+        # TODO: how is this any different from list(complicating_vars_map.keys())
         root_vars = [
             complicating_vars_map[i]
             for i in self.root_vars
@@ -415,18 +416,47 @@ class Benders_Abstract(BlockData):
     # TODO: work in progress, no changes made
     @staticmethod
     def _standard_lp_subproblem_transform(*args, **kwargs):
+        """
+        The goal of this is to take a program of the form:
+        min <p, x> + <q, y>
+        Ax + By <= c
+        Dx + Ey >= f
+        Gx + Hy == l
+
+        Where x are the first-stage (or 'master') problem variables,
+        and y are the second-stage (or 'subproblem') problem variables
+
+        And convert it to:
+        min <p, x> + <q, y>
+        By  <= c - Ax (alpha)
+        -Ey <= Dx - f (beta)
+        Hy  == l - Gx (gamma)
+
+        So all the subproblem variables on the lhs, and constants/master variables on rhs.
+        This is so the dual objective takes the form:
+        <c - Ax, alpha> + <Dx - f, beta> + <l - Gx, gamma>
+
+        Or otherwise formable as:
+        sum_{c \in cons} c.val * c.dual
+
+        This directly makes the forming of classical Benders optimality and feasibility cuts easier.
+        """
         assert "b" in kwargs, "Need argument b in _feasibility_subproblem_transform"
         assert (
             "root_vars" in kwargs
-        ), "Need argument root_vars in _feasibility_subproblem_transform"
+        ), "Need argument root_vars in _standard_lp_subproblem_transform"
         assert (
             "relax_subproblem_cons" in kwargs
-        ), "Need argument relax_subproblem_cons in _feasibility_subproblem_transform"
+        ), "Need argument relax_subproblem_cons in _standard_lp_subproblem_transform"
+        assert (
+            "complicating_vars_map" in kwargs
+        ), "Need argument complicating_vars_map in _standard_lp_subproblem_transform"
         b = kwargs.get("b")
         root_vars = kwargs.get("root_vars")
         relax_subproblem_cons = kwargs.get("relax_subproblem_cons")
+        complicating_vars_map = kwargs.get("complicating_vars_map")
+        subproblem_master_vars = complicating_vars_map.values()
         # check for all of these b, root_vars, relax_subproblem_cons
-        # first get the objective and turn it into a constraint
         root_vars = ComponentSet(root_vars)
 
         objs = list(
@@ -435,13 +465,9 @@ class Benders_Abstract(BlockData):
         if len(objs) != 1:
             raise ValueError("Subproblem must have exactly one objective")
         orig_obj = objs[0]
-        orig_obj_expr = orig_obj.expr
-        b.del_component(orig_obj)
 
-        b._z = pyo.Var(bounds=(0, None))
-        b.objective = pyo.Objective(expr=b._z)
+        # make sure dual vars are imported
         b.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
-        b._eta = pyo.Var()
 
         b.aux_cons = pyo.ConstraintList()
         for c in list(
@@ -450,31 +476,49 @@ class Benders_Abstract(BlockData):
             )
         ):
             if not relax_subproblem_cons:
+                # TODO: MPV figure out what this code actually does
+                # should this be root_vars here or subproblem_master_vars?
+                # why would there be root versions in the subproblems?
                 c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
                 if not Benders_Abstract._any_common_elements(root_vars, c_vars):
                     continue
+
+            body_split = pyomo_utils.split_expr(c.body, subproblem_master_vars)
+            # TODO: there is a version of this where we check c.upper.is_constant or c.lower
+            # and if it is, we don't need to split the expr, skipping that for now as we work on correctness
             if c.equality:
-                body = c.body
-                rhs = pyo.value(c.lower)
-                body -= rhs
-                b.aux_cons.add(body - b._z <= 0)
-                b.aux_cons.add(-body - b._z <= 0)
+                # in this case upper and lower eval to the same thing
+                # so use upper
+                # body.expr == upper.expr
+                upper_split = pyomo_utils.split_expr(c.upper, subproblem_master_vars)
+                rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
+                lhs = body_split.out - upper_split.out
+                b.aux_cons.add(lhs == rhs)
                 Benders_Abstract._del_con(c)
             else:
-                body = c.body
                 lower = pyo.value(c.lower)
                 upper = pyo.value(c.upper)
                 if upper is not None:
-                    body_upper = body - upper - b._z
-                    b.aux_cons.add(body_upper <= 0)
+                    # case where upper has contents
+                    # body.expr <= upper.expr
+                    upper_split = pyomo_utils.split_expr(
+                        c.upper, subproblem_master_vars
+                    )
+                    rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
+                    lhs = body_split.out - upper_split.out
+                    b.aux_cons.add(lhs <= rhs)
                 if lower is not None:
-                    body_lower = body - lower
-                    body_lower = -body_lower
-                    body_lower -= b._z
-                    b.aux_cons.add(body_lower <= 0)
+                    # case where lower has contents
+                    # lower.expr <= body.expr
+                    lower_split = pyomo_utils.split_expr(
+                        c.upper, subproblem_master_vars
+                    )
+                    rhs = body_split.in_plus_cons - lower_split.in_plus_cons
+                    lhs = -body_split.out + lower_split.in_plus_cons
+                    b.aux_cons.add(lhs <= rhs)
                 Benders_Abstract._del_con(c)
 
-        b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
+        # b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
 
 
 """
