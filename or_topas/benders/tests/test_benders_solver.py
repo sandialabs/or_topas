@@ -65,15 +65,23 @@ class TestBendersSolver(unittest.TestCase):
     def test_farmer_single_scenarios(self, mip_solver):
 
         outer_farmer = tc.Farmer()
-        expected_crop_answers = {"BelowAverageScenario" : {"WHEAT": 100,        "CORN" : 25,            "SUGAR_BEETS" : 375},
-                                 "AverageScenario"      : {"WHEAT": 120,        "CORN" : 80,            "SUGAR_BEETS" : 300},
-                                 "AboveAverageScenario" : {"WHEAT": 550.0/3.0,  "CORN" : 200.0/3.0,     "SUGAR_BEETS" : 250}}
-        expected_obj_answers = { "BelowAverageScenario" : - 59_950,
-                                 "AverageScenario"      : -118_600,
-                                 "AboveAverageScenario" : -167_667}
+        expected_crop_answers = {
+            "BelowAverageScenario": {"WHEAT": 100, "CORN": 25, "SUGAR_BEETS": 375},
+            "AverageScenario": {"WHEAT": 120, "CORN": 80, "SUGAR_BEETS": 300},
+            "AboveAverageScenario": {
+                "WHEAT": 550.0 / 3.0,
+                "CORN": 200.0 / 3.0,
+                "SUGAR_BEETS": 250,
+            },
+        }
+        expected_obj_answers = {
+            "BelowAverageScenario": -59_950,
+            "AverageScenario": -118_600,
+            "AboveAverageScenario": -167_667,
+        }
         for scen, prob in outer_farmer.scenario_probabilities.items():
             local_farmer = tc.Farmer()
-            local_farmer.scenario_probabilities = {scen : 1.0}
+            local_farmer.scenario_probabilities = {scen: 1.0}
             local_farmer.scenarios = [scen]
             t0 = time.time()
             opt, m = tc.Farmer.setup_farmer(local_farmer, solver_name=mip_solver)
@@ -101,9 +109,18 @@ class TestBendersSolver(unittest.TestCase):
                     break
 
             expected_result = expected_crop_answers[scen]
-            self.assertAlmostEqual(m.devoted_acreage["CORN"].value, expected_result["CORN"], 7)
-            self.assertAlmostEqual(m.devoted_acreage["SUGAR_BEETS"].value, expected_result["SUGAR_BEETS"], 7)
-            self.assertAlmostEqual(m.devoted_acreage["WHEAT"].value, expected_result["WHEAT"], 7)
+            self.assertAlmostEqual(
+                m.devoted_acreage["CORN"].value, expected_result["CORN"], 7
+            )
+            self.assertAlmostEqual(
+                m.devoted_acreage["SUGAR_BEETS"].value,
+                expected_result["SUGAR_BEETS"],
+                7,
+            )
+            self.assertAlmostEqual(
+                m.devoted_acreage["WHEAT"].value, expected_result["WHEAT"], 7
+            )
+            self.assertAlmostEqual(pyo.value(m.obj), expected_obj_answers[scen], 0)
 
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     @unittest.skipIf(not gurobi_available, "Gurobi is not available.")
