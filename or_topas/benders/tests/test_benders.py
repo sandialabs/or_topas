@@ -32,7 +32,7 @@ if not param_available:
 parameterized = parameterized.parameterized
 
 non_persistnet_mip_solvers = list(
-    pyomo.opt.check_available_solvers("glpk", "highs", "gurobi_direct", "scip")
+    pyomo.opt.check_available_solvers("glpk", "highs", "gurobi_direct")
 )
 
 qp_solvers = list(pyomo.opt.check_available_solvers("ipopt", "gurobi_direct", "highs"))

@@ -39,7 +39,6 @@ class Benders_Abstract(BlockData):
         cbc=-1,
         xpress_direct=-1,
         highs=-1,
-        scip=-1,
     )
     default_transform_name = "default"
 
@@ -157,10 +156,9 @@ class Benders_Abstract(BlockData):
         # general code
         if isinstance(subproblem_solver, str):
             if "scip" in subproblem_solver:
-                # print("Hi")
-                subproblem_solver = pyo.SolverFactory(subproblem_solver, solver_io="nl")
-                self.check_dual_info = True
-                # subproblem_solver = pyo.SolverFactory(subproblem_solver)
+                raise NotImplementedError(
+                    "Unable to use SCIP as a subproblem solver due to SCIPAMPL interface not supporting LP dual information"
+                )
             else:
                 self.check_dual_info = False
                 subproblem_solver = pyo.SolverFactory(subproblem_solver)

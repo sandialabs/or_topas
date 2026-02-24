@@ -157,20 +157,20 @@ class Benders_Serial(Benders_Abstract):
 
             constants[global_subproblem_ndx] = pyo.value(subproblem._z)
 
-            if self.check_dual_info:
-                # Question
-                # why is the dual information from SCIP empty
-                print("\nAll dual information via .display():")
-                print(f"Subproblem number: {local_subproblem_ndx}")
-                subproblem.dual.display()
+            # if self.check_dual_info:
+            #     # Question
+            #     # why is the dual information from SCIP empty
+            #     print("\nAll dual information via .display():")
+            #     print(f"Subproblem number: {local_subproblem_ndx}")
+            #     subproblem.dual.display()
 
             for root_var in self.root_vars:
                 if root_var in complicating_vars_map:
                     c = var_to_con_map[root_var]
-                    if self.check_dual_info:
-                        assert (
-                            c in subproblem.dual
-                        ), "Constraint information missing in dual, can't form cut"
+                    # if self.check_dual_info:
+                    #     assert (
+                    #         c in subproblem.dual
+                    #     ), "Constraint information missing in dual, can't form cut"
                     coefficients[coeff_ndx] = sign_convention * pyo.value(
                         subproblem.dual[c]
                     )
