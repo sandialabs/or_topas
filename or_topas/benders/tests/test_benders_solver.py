@@ -59,6 +59,52 @@ class TestBendersSolver(unittest.TestCase):
     #
 
     # TODO: add single scenario farmer test
+
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
+    def test_farmer_single_scenarios(self, mip_solver):
+
+        outer_farmer = tc.Farmer()
+        expected_crop_answers = {"BelowAverageScenario" : {"WHEAT": 100,        "CORN" : 25,            "SUGAR_BEETS" : 375},
+                                 "AverageScenario"      : {"WHEAT": 120,        "CORN" : 80,            "SUGAR_BEETS" : 300},
+                                 "AboveAverageScenario" : {"WHEAT": 550.0/3.0,  "CORN" : 200.0/3.0,     "SUGAR_BEETS" : 250}}
+        expected_obj_answers = { "BelowAverageScenario" : - 59_950,
+                                 "AverageScenario"      : -118_600,
+                                 "AboveAverageScenario" : -167_667}
+        for scen, prob in outer_farmer.scenario_probabilities.items():
+            local_farmer = tc.Farmer()
+            local_farmer.scenario_probabilities = {scen : 1.0}
+            local_farmer.scenarios = [scen]
+            t0 = time.time()
+            opt, m = tc.Farmer.setup_farmer(local_farmer, solver_name=mip_solver)
+
+            print(
+                "{0:<15}{1:<15}{2:<15}{3:<15}{4:<15}".format(
+                    "# Cuts", "Corn", "Sugar Beets", "Wheat", "Total_Time"
+                )
+            )
+            for i in range(30):
+                res = opt.solve(m, tee=False)
+                cuts_added = m.benders.generate_cut()
+                # for c in cuts_added:
+                #     opt.add_constraint(c)
+                print(
+                    "{0:<15}{1:<15.2f}{2:<15.2f}{3:<15.2f}{4:<15.2f}".format(
+                        len(cuts_added),
+                        m.devoted_acreage["CORN"].value,
+                        m.devoted_acreage["SUGAR_BEETS"].value,
+                        m.devoted_acreage["WHEAT"].value,
+                        time.time() - t0,
+                    )
+                )
+                if len(cuts_added) == 0:
+                    break
+
+            expected_result = expected_crop_answers[scen]
+            self.assertAlmostEqual(m.devoted_acreage["CORN"].value, expected_result["CORN"], 7)
+            self.assertAlmostEqual(m.devoted_acreage["SUGAR_BEETS"].value, expected_result["SUGAR_BEETS"], 7)
+            self.assertAlmostEqual(m.devoted_acreage["WHEAT"].value, expected_result["WHEAT"], 7)
+
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     @unittest.skipIf(not gurobi_available, "Gurobi is not available.")
     def test_farmer_gurobi_persistent(self):
@@ -92,6 +138,7 @@ class TestBendersSolver(unittest.TestCase):
         self.assertAlmostEqual(m.devoted_acreage["CORN"].value, 80, 7)
         self.assertAlmostEqual(m.devoted_acreage["SUGAR_BEETS"].value, 250, 7)
         self.assertAlmostEqual(m.devoted_acreage["WHEAT"].value, 170, 7)
+        self.assertAlmostEqual(pyo.value(m.obj), -108390, 0)
 
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
