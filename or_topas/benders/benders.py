@@ -507,7 +507,7 @@ class Benders_Abstract(BlockData):
                 # so use upper
                 # body.expr == upper.expr
 
-                #TODO: if we know the constraint is cannonical, will c.upper have anything in it?
+                # TODO: if we know the constraint is cannonical, will c.upper have anything in it?
                 upper_split = pyomo_utils.split_expr(c.upper, subproblem_master_vars)
                 rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
                 lhs = body_split.out - upper_split.out
@@ -517,7 +517,7 @@ class Benders_Abstract(BlockData):
             else:
                 lower = pyo.value(c.lower)
                 upper = pyo.value(c.upper)
-                #TODO: if we know the constraint is cannonical, will c.upper/lower have anything non-zero in it?
+                # TODO: if we know the constraint is cannonical, will c.upper/lower have anything non-zero in it?
                 if upper is not None:
                     # case where upper has contents
                     # body.expr <= upper.expr
