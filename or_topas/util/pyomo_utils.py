@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 import pyomo.environ as pyo
 from pyomo.common.modeling import unique_component_name
-from pyomo.common.collections import ComponentSet
+from pyomo.common.collections import ComponentSet, ComponentMap
 import pyomo.util.vars_from_expressions as vfe
 import warnings
 from pyomo.opt import check_available_solvers
@@ -379,13 +379,49 @@ def objective_thresholds_violation_check(
     return False
 
 
-def split_expr(expr, vars_set, check_linearity=False):
+def split_expr(expr, vars_set, check_linearity=False, allow_iterables=False):
+    """
+    This method expects vars_set to be a group of ScalarVar or VarData objects.
+    Giving IndexedVar style variables will cause this to fail
+    There is a difference between:
+    m.x = pyo.Var([1,2], domain=pyo.NonNegativeReals)
+    set1 = ComponentSet([m.x])
+    set2 = ComponentSet([m.x[1], m.x[2]])
+
+    m.x[1] in set1 is False
+    m.x[1] in set2 is True
+    """
+    if not isinstance(vars_set, ComponentMap) and not isinstance(
+        vars_set, ComponentSet
+    ):
+        if allow_iterables:
+            try:
+                iter(vars_set)
+            except TypeError:
+                raise TypeError(
+                    f"Tried to use split_expr using var_set as {type(vars_set)}, must be iterable"
+                )
+            try:
+                vars_set = ComponentSet(vars_set)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Tried to use split_expr using var_set as {type(vars_set)}, could not convert to ComponentSet"
+                ) from exc
+        else:
+            raise TypeError(
+                f"Tried to split expr using var_set as {type(vars_set)}, must be ComponentSet or ComponentMap"
+            )
+
     # TODO: implement linearity check
     # possibly add check for .is_constant to avoid generating standard_repn
 
     # TODO, can we do anything here to check linearity
     # is there an efficiency improvement if we assume linearity
+    # print(f"{str(expr)=}")
     repn = generate_standard_repn(expr, compute_values=False)
+    # print(f"{str(repn)=}")
+    # t = [v for v in repn.linear_vars if v in vars_set]
+    # print(f"{t=}")
     expr_vars_in_vars_set = sum(
         c * v for c, v in zip(repn.linear_coefs, repn.linear_vars) if v in vars_set
     )
@@ -393,6 +429,7 @@ def split_expr(expr, vars_set, check_linearity=False):
         c * v for c, v in zip(repn.linear_coefs, repn.linear_vars) if not v in vars_set
     )
     expr_constant = repn.constant
+    # print(f"{str(expr_vars_in_vars_set)=}")
     return MyMunch(
         in_set=expr_vars_in_vars_set,
         not_in_set=expr_vars_not_int_vars_set,
