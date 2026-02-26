@@ -476,6 +476,7 @@ class Benders_Abstract(BlockData):
         b.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
 
         b.aux_cons = pyo.ConstraintList()
+        b.aux_cons_rhs_exprs = []
         for c in list(
             b.component_data_objects(
                 pyo.Constraint, descend_into=True, active=True, sort=True
@@ -492,18 +493,31 @@ class Benders_Abstract(BlockData):
             body_split = pyomo_utils.split_expr(c.body, subproblem_master_vars)
             # TODO: there is a version of this where we check c.upper.is_constant or c.lower
             # and if it is, we don't need to split the expr, skipping that for now as we work on correctness
+
+            # TODO: the new constraints are probably switched into a cannonical form
+            # do we just need to make a map from which con in aux_cons constaint list as what is the RHS to form cuts?
+
+            # so we have the reformatted constraints in aux_con as Wy+Tx - h <= 0, and fix_cons as x - x_general = 0
+            # the single scenario cut then becomes dual_sign_conv*[sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con)) + sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value)) for rv in root_vars]
+            # note that then the following evals to a scalar: sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
+            # this is then the part dealing with master problem vars: sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value) for rv in root_vars)
+            # we then have |root_vars| + 1 params to move around to form the multiple scenario cut when probablity weighted
             if c.equality:
                 # in this case upper and lower eval to the same thing
                 # so use upper
                 # body.expr == upper.expr
+
+                #TODO: if we know the constraint is cannonical, will c.upper have anything in it?
                 upper_split = pyomo_utils.split_expr(c.upper, subproblem_master_vars)
                 rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
                 lhs = body_split.out - upper_split.out
+                b.aux_cons_rhs_exprs.append(rhs)
                 b.aux_cons.add(lhs == rhs)
                 Benders_Abstract._del_con(c)
             else:
                 lower = pyo.value(c.lower)
                 upper = pyo.value(c.upper)
+                #TODO: if we know the constraint is cannonical, will c.upper/lower have anything non-zero in it?
                 if upper is not None:
                     # case where upper has contents
                     # body.expr <= upper.expr
@@ -512,6 +526,7 @@ class Benders_Abstract(BlockData):
                     )
                     rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
                     lhs = body_split.out - upper_split.out
+                    b.aux_cons_rhs_exprs.append(rhs)
                     b.aux_cons.add(lhs <= rhs)
                 if lower is not None:
                     # case where lower has contents
@@ -521,6 +536,7 @@ class Benders_Abstract(BlockData):
                     )
                     rhs = body_split.in_plus_cons - lower_split.in_plus_cons
                     lhs = -body_split.out + lower_split.in_plus_cons
+                    b.aux_cons_rhs_exprs.append(rhs)
                     b.aux_cons.add(lhs <= rhs)
                 Benders_Abstract._del_con(c)
 
