@@ -520,7 +520,7 @@ class Benders_Abstract(BlockData):
             else:
                 lower = pyo.value(c.lower)
                 upper = pyo.value(c.upper)
-                #TODO: if we know the constraint is cannonical, will c.upper/lower have anything non-zero in it?
+                # TODO: if we know the constraint is cannonical, will c.upper/lower have anything non-zero in it?
                 if upper is not None:
                     # case where upper has contents
                     # body.expr <= upper.expr
