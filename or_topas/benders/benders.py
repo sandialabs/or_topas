@@ -447,7 +447,7 @@ class Benders_Abstract(BlockData):
 
         This directly makes the forming of classical Benders optimality and feasibility cuts easier.
         """
-        assert "b" in kwargs, "Need argument b in _feasibility_subproblem_transform"
+        assert "b" in kwargs, "Need argument b in _standard_lp_subproblem_transform"
         assert (
             "root_vars" in kwargs
         ), "Need argument root_vars in _standard_lp_subproblem_transform"
@@ -508,6 +508,9 @@ class Benders_Abstract(BlockData):
                 # body.expr == upper.expr
 
                 #TODO: if we know the constraint is cannonical, will c.upper have anything in it?
+
+                #TODO: this needs to be lower now upper, need to fix
+
                 upper_split = pyomo_utils.split_expr(c.upper, subproblem_master_vars)
                 rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
                 lhs = body_split.out - upper_split.out
@@ -521,6 +524,10 @@ class Benders_Abstract(BlockData):
                 if upper is not None:
                     # case where upper has contents
                     # body.expr <= upper.expr
+
+                    #TODO: upper and lower should both be constants
+                    #don't need to split upper and lower, treat as constants
+
                     upper_split = pyomo_utils.split_expr(
                         c.upper, subproblem_master_vars
                     )
@@ -531,6 +538,10 @@ class Benders_Abstract(BlockData):
                 if lower is not None:
                     # case where lower has contents
                     # lower.expr <= body.expr
+
+                    #TODO: upper and lower should both be constants
+                    #don't need to split upper and lower, treat as constants
+
                     lower_split = pyomo_utils.split_expr(
                         c.upper, subproblem_master_vars
                     )
