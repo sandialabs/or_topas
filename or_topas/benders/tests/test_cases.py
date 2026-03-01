@@ -5,6 +5,30 @@ from or_topas.benders import (
 )
 
 
+class absolute_value:
+    @staticmethod
+    def create_root():
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(bounds=(None, None), initialize=0)
+        m.eta = pyo.Var(bounds=(-10, None))
+        m.obj = pyo.Objective(expr=m.eta)
+        return m
+
+    @staticmethod
+    def create_subproblem(root):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        m.y1 = pyo.Var(bounds=(0, None))
+        m.y2 = pyo.Var(bounds=(0, None))
+        m.obj = pyo.Objective(expr=m.y1 + m.y2)
+        m.c1 = pyo.Constraint(expr=m.y1 - m.y2 == m.x)
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root.x] = m.x
+
+        return m, complicating_vars_map
+
+
 class Farmer:
     def __init__(self):
         self.crops = ["WHEAT", "CORN", "SUGAR_BEETS"]
@@ -150,7 +174,9 @@ class Farmer:
 
     @staticmethod
     def setup_farmer_gurobi_persistent(
-        Farmer_Data, CutGenerator=BendersGenerator_Serial
+        Farmer_Data,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
     ):
         # designed for gurobi_persistent
         solver_name = "gurobi_persistent"
@@ -158,7 +184,8 @@ class Farmer:
         m = Farmer.create_root(farmer=farmer)
         root_vars = list(m.devoted_acreage.values())
         m.benders = CutGenerator()
-        m.benders.set_input(root_vars=root_vars, tol=1e-8)
+        transform = kwargs.get("transform", None)
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
         for s in farmer.scenarios:
             subproblem_fn_kwargs = dict()
             subproblem_fn_kwargs["root"] = m
@@ -175,12 +202,18 @@ class Farmer:
         return opt, m
 
     @staticmethod
-    def setup_farmer(Farmer_Data, solver_name, CutGenerator=BendersGenerator_Serial):
+    def setup_farmer(
+        Farmer_Data,
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
         farmer = Farmer_Data
         m = Farmer.create_root(farmer=farmer)
         root_vars = list(m.devoted_acreage.values())
         m.benders = CutGenerator()
-        m.benders.set_input(root_vars=root_vars, tol=1e-8)
+        transform = kwargs.get("transform", None)
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
         for s in farmer.scenarios:
             subproblem_fn_kwargs = dict()
             subproblem_fn_kwargs["root"] = m
