@@ -465,13 +465,13 @@ class Benders_Abstract(BlockData):
         root_vars = kwargs.get("root_vars")
         relax_subproblem_cons = kwargs.get("relax_subproblem_cons")
         complicating_vars_map = kwargs.get("complicating_vars_map")
-        print(f"The complicating vars map is of type {type(complicating_vars_map)}")
+        # print(f"The complicating vars map is of type {type(complicating_vars_map)}")
         subproblem_master_vars = [
             v for k, v in complicating_vars_map.items()
         ]  # complicating_vars_map.values()
-        print(
-            f"The type inside subproblem_master_vars is {type(subproblem_master_vars[0])}"
-        )
+        # print(
+        #     f"The type inside subproblem_master_vars is {type(subproblem_master_vars[0])}"
+        # )
         subproblem_master_vars = ComponentSet(subproblem_master_vars)
         # check for all of these b, root_vars, relax_subproblem_cons
         root_vars = ComponentSet(root_vars)
@@ -490,15 +490,15 @@ class Benders_Abstract(BlockData):
 
         b.aux_cons = pyo.ConstraintList()
         b.aux_cons_rhs_exprs = []
-        print("In standard lp transform")
-        print(f"The subproblem_master_vars are {type(subproblem_master_vars)}")
+        # print("In standard lp transform")
+        # print(f"The subproblem_master_vars are {type(subproblem_master_vars)}")
         for c in list(
             b.component_data_objects(
                 pyo.Constraint, descend_into=True, active=True, sort=True
             )
         ):
-            print("\n Next Constraint")
-            c.pprint()
+            # print("\n Next Constraint")
+            # c.pprint()
 
             #
             #
@@ -529,10 +529,11 @@ class Benders_Abstract(BlockData):
             # note that then the following evals to a scalar: sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
             # this is then the part dealing with master problem vars: sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value) for rv in root_vars)
             # we then have |root_vars| + 1 params to move around to form the multiple scenario cut when probablity weighted
-            
-            #TODO: since we are just moving constants to one side, we may not need split_expr anymore
-            #look at it
-            #there is the other way to handle it where fixing local_x makes it act like a parameter and then we need this
+
+            # TODO: there are two possible versions of this transform
+            # in case one, we do Wy + Tx <= h, x = x_bar and cuts become <pi, h> + <gamma, x_bar>
+            # in case two, we do Wy <= h-Tx, x= x_bar and cuts become <pi, h-Tx> + <gamma, x_bar-x_var.value>
+            # case one is probably more efficient
 
             if c.equality:
                 # in this case upper and lower eval to the same thing
@@ -580,7 +581,6 @@ class Benders_Abstract(BlockData):
                     # rhs = -body_split.in_plus_cons + c.upper
                     # lhs = body_split.out
 
-
                     rhs = body_split.constant + c.upper
                     lhs = body_split.in_set + body_split.out
                     b.aux_cons_rhs_exprs.append(rhs)
@@ -601,14 +601,12 @@ class Benders_Abstract(BlockData):
                     # )
                     # rhs = body_split.in_plus_cons - lower_split.in_plus_cons
                     # lhs = -body_split.out + lower_split.out
-                    
-                    
+
                     # rhs = body_split.in_plus_cons - c.lower
                     # lhs = -body_split.out
 
-
                     rhs = body_split.constant - c.lower
-                    lhs = -body_split.out - body_split.in_set   
+                    lhs = -body_split.out - body_split.in_set
                     b.aux_cons_rhs_exprs.append(rhs)
                     b.aux_cons.add(lhs <= rhs)
                     # print(f"LEQ Lower Case: {str(lhs)=} <= {str(rhs)=}")

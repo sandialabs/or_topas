@@ -309,7 +309,11 @@ class Benders_Serial(Benders_Abstract):
                     coefficients[coeff_ndx] = sign_convention * pyo.value(
                         subproblem.dual[c]
                     )
-                    constant_2 += sign_convention * pyo.value(subproblem.dual[c]) * pyo.value(root_var)
+                    constant_2 += (
+                        sign_convention
+                        * pyo.value(subproblem.dual[c])
+                        * pyo.value(root_var)
+                    )
                 coeff_ndx += 1
 
             # the constants are come from the sum of everything else for the subproblem as:
@@ -400,10 +404,10 @@ class Benders_Serial(Benders_Abstract):
                     cut_expr -= coeff * root_var
                     coeff_ndx += 1
                 new_cut = self.cuts.add(cut_expr <= root_eta)
-                print(f"Cut expr at present point: {pyo.value(cut_expr)}")
+                # print(f"Cut expr at present point: {pyo.value(cut_expr)}")
                 # print(f"Present master eta value: {pyo.value(root_eta)}")
                 # print(f"Present subproblem eta value: {pyo.value()}")
-                new_cut.pprint()
+                # new_cut.pprint()
                 # see that this is single cut
                 cuts_added.append(new_cut)
             else:
