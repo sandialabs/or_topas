@@ -362,6 +362,73 @@ class Benders_Abstract(BlockData):
 
     @staticmethod
     def _feasibility_subproblem_transform(*args, **kwargs):
+        """
+        It is easier to understand this transform after reading Grothey, Leyffer,
+        and McKinnon "A note on feasibility in Benders Decomposition" [GLM99]_
+        N.B. this transform is directly adapted from Pyomo.contrib.benders.
+        Repeating formulation details below:
+        
+        Original problem:
+
+        .. math::
+        :nowrap:
+
+        \[\begin{array}{ll}
+            \min & f(x, y) + h0(y) \\
+            s.t. & g(x, y) <= 0 \\
+                & h(y) <= 0
+        \end{array}\]
+
+        where y are the complicating variables. Reformulate to
+
+        .. math::
+        :nowrap:
+
+        \[\begin{array}{ll}
+        \min & h0(y) + \eta \\
+        s.t. & g(x, y) <= 0 \\
+                & f(x, y) <= \eta \\
+                & h(y) <= 0
+        \end{array}\]
+
+        Root problem must be of the form
+
+        .. math::
+        :nowrap:
+
+        \[\begin{array}{ll}
+            \min & h0(y) + \eta \\
+            s.t. & h(y) <= 0 \\
+                & \{benders\ cuts\}
+        \end{array}\]
+
+        where the last constraint will be generated automatically with
+        BendersCutGenerators. The BendersCutGenerators must be handed a
+        subproblem of the form
+
+        .. math::
+        :nowrap:
+
+        \[\begin{array}{ll}
+            \min & f(x, y) \\
+            s.t. & g(x, y) <= 0
+        \end{array}\]
+
+        except the constraints don't actually have to be in this form. The
+        subproblem will automatically be transformed to
+
+        .. math::
+        :nowrap:
+
+        \[\begin{array}{lll}
+            \min & z & \\
+            s.t. & g(x, y) - z <= 0        & (\alpha) \\
+                & f(x, y) - \eta - z <= 0 & (\beta)  \\
+                & y - y_k = 0             & (\gamma) \\
+                & \eta - \eta_k = 0       & (\delta)
+        \end{array}\]
+
+        """
         assert "b" in kwargs, "Need argument b in _feasibility_subproblem_transform"
         assert (
             "root_vars" in kwargs
@@ -423,7 +490,6 @@ class Benders_Abstract(BlockData):
 
         b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
 
-    # TODO: work in progress, no changes made
     @staticmethod
     def _standard_lp_subproblem_transform(*args, **kwargs):
         """
@@ -465,157 +531,131 @@ class Benders_Abstract(BlockData):
         root_vars = kwargs.get("root_vars")
         relax_subproblem_cons = kwargs.get("relax_subproblem_cons")
         complicating_vars_map = kwargs.get("complicating_vars_map")
-        # print(f"The complicating vars map is of type {type(complicating_vars_map)}")
-        subproblem_master_vars = [
-            v for k, v in complicating_vars_map.items()
-        ]  # complicating_vars_map.values()
-        # print(
-        #     f"The type inside subproblem_master_vars is {type(subproblem_master_vars[0])}"
-        # )
+        display_transform_info = kwargs.get("display_transform_info", False)
+
+        # want ComponentSet versisons of complicating_vars_map .keys() and .values()
+        subproblem_master_vars = [v for k, v in complicating_vars_map.items()]
         subproblem_master_vars = ComponentSet(subproblem_master_vars)
-        # check for all of these b, root_vars, relax_subproblem_cons
         root_vars = ComponentSet(root_vars)
 
+        # check that there is only one active objective in subproblem
         objs = list(
             b.component_data_objects(pyo.Objective, descend_into=False, active=True)
         )
         if len(objs) != 1:
             raise ValueError("Subproblem must have exactly one objective")
 
+        # preserve the expr of active objective for easy use later
         orig_obj = objs[0]
         b.orig_obj_expr = orig_obj.expr
 
         # make sure dual vars are imported
+        # implicitly requiring using a solver that supports duals
         b.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
 
+        # holder objects for reformulated constraints and rhs_exprs
+        # rhs_exprs will be used to form dual cuts later
         b.aux_cons = pyo.ConstraintList()
         b.aux_cons_rhs_exprs = []
-        # print("In standard lp transform")
-        # print(f"The subproblem_master_vars are {type(subproblem_master_vars)}")
+
+        if display_transform_info:
+            print("In standard lp transform")
+
+        # iterate through all active constraints on block
         for c in list(
             b.component_data_objects(
                 pyo.Constraint, descend_into=True, active=True, sort=True
             )
         ):
-            # print("\n Next Constraint")
-            # c.pprint()
+            if display_transform_info:
+                print("\n Next Constraint starts as:")
+                c.pprint()
 
-            #
-            #
-            # Why is this here, it breaks, the farmers problem, for classical_lp_transform
-            # it causes some constraints to be skiped, looks like it is if no first_stage variables occur, skip it
-            # that may work for the feasibility transform but it doesn't in general
-            #
-
-            # if not relax_subproblem_cons:
-            #     # TODO: MPV figure out what this code actually does
-            #     # should this be root_vars here or subproblem_master_vars?
-            #     # why would there be root versions in the subproblems?
-            #     c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
-            #     if not Benders_Abstract._any_common_elements(root_vars, c_vars):
-            #         continue
-            # c.pprint()
+            # TODO: in the move constants to RHS version, we may not need a full split_expr
+            # check and possibly replace
             body_split = pyomo_utils.split_expr(
                 c.body, subproblem_master_vars, allow_iterables=True
             )
-            # TODO: there is a version of this where we check c.upper.is_constant or c.lower
-            # and if it is, we don't need to split the expr, skipping that for now as we work on correctness
 
-            # TODO: the new constraints are probably switched into a cannonical form
-            # do we just need to make a map from which con in aux_cons constaint list as what is the RHS to form cuts?
-
-            # so we have the reformatted constraints in aux_con as Wy+Tx - h <= 0, and fix_cons as x - x_general = 0
-            # the single scenario cut then becomes dual_sign_conv*[sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con)) + sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value)) for rv in root_vars]
-            # note that then the following evals to a scalar: sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
-            # this is then the part dealing with master problem vars: sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value) for rv in root_vars)
-            # we then have |root_vars| + 1 params to move around to form the multiple scenario cut when probablity weighted
-
-            # TODO: there are two possible versions of this transform
+            # N.B.: there are two possible versions of this transform
             # in case one, we do Wy + Tx <= h, x = x_bar and cuts become <pi, h> + <gamma, x_bar>
             # in case two, we do Wy <= h-Tx, x= x_bar and cuts become <pi, h-Tx> + <gamma, x_bar-x_var.value>
-            # case one is probably more efficient
+            # case one is probably more efficient, the difference is between treating x implicitly like a parameter or like a fixed variable with reduced cost terms
 
             if c.equality:
-                # in this case upper and lower eval to the same thing
-                # so use upper
-                # body.expr == upper.expr
+                # in this case user lower eval due to equality
+                # starts as lower.expr == body.expr
 
-                # TODO: if we know the constraint is cannonical, will c.upper have anything in it?
+                # transform case 1
+                rhs = body_split.constant - c.lower
+                lhs = -body_split.out - body_split.in_set
 
-                # TODO: this needs to be lower now upper, need to fix
-
-                # lower == body
-                # lower_split = pyomo_utils.split_expr(c.lower, subproblem_master_vars, allow_iterables=True)
-                # rhs = body_split.in_plus_cons - lower_split.in_plus_cons
-                # lhs = - body_split.out + lower_split.out
-
+                # transform case 2
                 # rhs = body_split.in_plus_cons - c.lower
                 # lhs = -body_split.out
 
-                rhs = body_split.constant - c.lower
-                lhs = -body_split.out - body_split.in_set
-                # print(f"EQ CASE: {str(lhs)=} == {str(rhs)=}")
+                # update constraint and tracking info
                 b.aux_cons_rhs_exprs.append(rhs)
                 b.aux_cons.add(lhs == rhs)
-                # last_added_cons = b.aux_cons[len(b.aux_cons)]
-                # print("Added constraint:")
-                # last_added_cons.pprint()
+                # delete old version of constraint
                 Benders_Abstract._del_con(c)
+
+                if display_transform_info:
+                    print("Equality Constraint case")
+                    print(f"Sides now: {str(lhs)=} == {str(rhs)=}")
+                    last_added_cons = b.aux_cons[len(b.aux_cons)]
+                    print("Newly Added Constraint is:")
+                    last_added_cons.pprint()
             else:
                 lower = pyo.value(c.lower)
                 upper = pyo.value(c.upper)
-                # TODO: if we know the constraint is cannonical, will c.upper/lower have anything non-zero in it?
+
                 if upper is not None:
                     # case where upper has contents
                     # body.expr <= upper.expr
 
-                    # TODO: upper and lower should both be constants
-                    # don't need to split upper and lower, treat as constants
+                    # transform case 1
+                    rhs = body_split.constant + c.upper
+                    lhs = body_split.in_set + body_split.out
 
-                    # upper_split = pyomo_utils.split_expr(
-                    #     c.upper, subproblem_master_vars, allow_iterables=True
-                    # )
-                    # rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
-                    # lhs = body_split.out - upper_split.out
-
+                    # transform case 2
                     # rhs = -body_split.in_plus_cons + c.upper
                     # lhs = body_split.out
 
-                    rhs = body_split.constant + c.upper
-                    lhs = body_split.in_set + body_split.out
+                    # update constraint and tracking info
                     b.aux_cons_rhs_exprs.append(rhs)
                     b.aux_cons.add(lhs <= rhs)
-                    # print(f"LEQ Upper Case: {str(lhs)=} <= {str(rhs)=}")
-                    # last_added_cons = b.aux_cons[len(b.aux_cons)]
-                    # print("Added constraint:")
-                    # last_added_cons.pprint()
+
+                    if display_transform_info:
+                        print("LEQ Constraint case")
+                        print(f"Sides now: {str(lhs)=} <= {str(rhs)=}")
+                        last_added_cons = b.aux_cons[len(b.aux_cons)]
+                        print("Newly Added Constraint is:")
+                        last_added_cons.pprint()
                 if lower is not None:
                     # case where lower has contents
                     # lower.expr <= body.expr
 
-                    # TODO: upper and lower should both be constants
-                    # don't need to split upper and lower, treat as constants
+                    # transform case 1
+                    rhs = body_split.constant - c.lower
+                    lhs = -body_split.out - body_split.in_set
 
-                    # lower_split = pyomo_utils.split_expr(
-                    #     c.lower, subproblem_master_vars
-                    # )
-                    # rhs = body_split.in_plus_cons - lower_split.in_plus_cons
-                    # lhs = -body_split.out + lower_split.out
-
+                    # transform case 2
                     # rhs = body_split.in_plus_cons - c.lower
                     # lhs = -body_split.out
 
-                    rhs = body_split.constant - c.lower
-                    lhs = -body_split.out - body_split.in_set
                     b.aux_cons_rhs_exprs.append(rhs)
                     b.aux_cons.add(lhs <= rhs)
-                    # print(f"LEQ Lower Case: {str(lhs)=} <= {str(rhs)=}")
-                    # last_added_cons = b.aux_cons[len(b.aux_cons)]
-                    # print("Added constraint:")
-                    # last_added_cons.pprint()
+                    if display_transform_info:
+                        print("GEQ Constraint case")
+                        print(f"Sides now: {str(lhs)=} <= {str(rhs)=}")
+                        last_added_cons = b.aux_cons[len(b.aux_cons)]
+                        print("Newly Added Constraint is:")
+                        last_added_cons.pprint()
+
+                # delete old version of constraint
                 Benders_Abstract._del_con(c)
         print("Done standard lp transform")
-        # b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
 
 
 """
