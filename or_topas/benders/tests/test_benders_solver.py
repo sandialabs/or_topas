@@ -145,8 +145,8 @@ class TestBendersSolver(unittest.TestCase):
             "AverageScenario": -118_600,
             "AboveAverageScenario": -167_667,
         }
-        # scenarios = {"AverageScenario": 1.0}
-        scenarios = {"BelowAverageScenario": 1.0}
+        scenarios = {"AverageScenario": 1.0}
+        # scenarios = {"BelowAverageScenario": 1.0}
         for scen, prob in scenarios.items():
             local_farmer = tc.Farmer()
             local_farmer.scenario_probabilities = {scen: 1.0}

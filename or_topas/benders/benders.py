@@ -497,14 +497,23 @@ class Benders_Abstract(BlockData):
                 pyo.Constraint, descend_into=True, active=True, sort=True
             )
         ):
-            if not relax_subproblem_cons:
-                # TODO: MPV figure out what this code actually does
-                # should this be root_vars here or subproblem_master_vars?
-                # why would there be root versions in the subproblems?
-                c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
-                if not Benders_Abstract._any_common_elements(root_vars, c_vars):
-                    continue
-            # print("\n Next Constraint")
+            print("\n Next Constraint")
+            c.pprint()
+
+            #
+            #
+            # Why is this here, it breaks, the farmers problem, for classical_lp_transform
+            # it causes some constraints to be skiped, looks like it is if no first_stage variables occur, skip it
+            # that may work for the feasibility transform but it doesn't in general
+            #
+
+            # if not relax_subproblem_cons:
+            #     # TODO: MPV figure out what this code actually does
+            #     # should this be root_vars here or subproblem_master_vars?
+            #     # why would there be root versions in the subproblems?
+            #     c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
+            #     if not Benders_Abstract._any_common_elements(root_vars, c_vars):
+            #         continue
             # c.pprint()
             body_split = pyomo_utils.split_expr(
                 c.body, subproblem_master_vars, allow_iterables=True
@@ -520,6 +529,11 @@ class Benders_Abstract(BlockData):
             # note that then the following evals to a scalar: sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
             # this is then the part dealing with master problem vars: sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value) for rv in root_vars)
             # we then have |root_vars| + 1 params to move around to form the multiple scenario cut when probablity weighted
+            
+            #TODO: since we are just moving constants to one side, we may not need split_expr anymore
+            #look at it
+            #there is the other way to handle it where fixing local_x makes it act like a parameter and then we need this
+
             if c.equality:
                 # in this case upper and lower eval to the same thing
                 # so use upper
@@ -534,8 +548,11 @@ class Benders_Abstract(BlockData):
                 # rhs = body_split.in_plus_cons - lower_split.in_plus_cons
                 # lhs = - body_split.out + lower_split.out
 
-                rhs = body_split.in_plus_cons - c.lower
-                lhs = -body_split.out
+                # rhs = body_split.in_plus_cons - c.lower
+                # lhs = -body_split.out
+
+                rhs = body_split.constant - c.lower
+                lhs = -body_split.out - body_split.in_set
                 # print(f"EQ CASE: {str(lhs)=} == {str(rhs)=}")
                 b.aux_cons_rhs_exprs.append(rhs)
                 b.aux_cons.add(lhs == rhs)
@@ -560,8 +577,12 @@ class Benders_Abstract(BlockData):
                     # rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
                     # lhs = body_split.out - upper_split.out
 
-                    rhs = -body_split.in_plus_cons + c.upper
-                    lhs = body_split.out
+                    # rhs = -body_split.in_plus_cons + c.upper
+                    # lhs = body_split.out
+
+
+                    rhs = body_split.constant + c.upper
+                    lhs = body_split.in_set + body_split.out
                     b.aux_cons_rhs_exprs.append(rhs)
                     b.aux_cons.add(lhs <= rhs)
                     # print(f"LEQ Upper Case: {str(lhs)=} <= {str(rhs)=}")
@@ -580,9 +601,14 @@ class Benders_Abstract(BlockData):
                     # )
                     # rhs = body_split.in_plus_cons - lower_split.in_plus_cons
                     # lhs = -body_split.out + lower_split.out
-                    rhs = body_split.in_plus_cons - c.lower
-                    lhs = -body_split.out
+                    
+                    
+                    # rhs = body_split.in_plus_cons - c.lower
+                    # lhs = -body_split.out
 
+
+                    rhs = body_split.constant - c.lower
+                    lhs = -body_split.out - body_split.in_set   
                     b.aux_cons_rhs_exprs.append(rhs)
                     b.aux_cons.add(lhs <= rhs)
                     # print(f"LEQ Lower Case: {str(lhs)=} <= {str(rhs)=}")

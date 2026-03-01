@@ -188,7 +188,7 @@ class Benders_Serial(Benders_Abstract):
             del subproblem.fix_complicating_vars
             del subproblem.fix_eta
 
-            print(subproblem.dual.display())
+            # print(subproblem.dual.display())
         total_num_subproblems = self.global_num_subproblems()
         # global_constants = np.zeros(total_num_subproblems, dtype="d")
         # global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
@@ -228,7 +228,7 @@ class Benders_Serial(Benders_Abstract):
         return cuts_added
 
     def generate_cut_standard_lp_transform(self):
-        print("Yes, using standard lp cut generation")
+        # print("Yes, using standard lp cut generation")
         coefficients = np.zeros(
             self.global_num_subproblems() * len(self.root_vars), dtype="d"
         )
@@ -315,7 +315,7 @@ class Benders_Serial(Benders_Abstract):
             # the constants are come from the sum of everything else for the subproblem as:
             # constants[global_subproblem_ndx] = sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
             # all terms need to include the subproblem solver sign convention
-            print(subproblem.dual.display())
+            # print(subproblem.dual.display())
             # print(f"{subproblem.aux_cons=}, {len(subproblem.aux_cons)=}")
             # print(subproblem.aux_cons.display())
             # print(f"{str(subproblem.aux_cons[1])=}")
@@ -346,8 +346,8 @@ class Benders_Serial(Benders_Abstract):
 
             # need the gap between root_eta and local_eta (subproblem obj value)
             # this is the 'is a cut needed' test value
-            print(f"{pyo.value(root_eta)=}")
-            print(f"{pyo.value(subproblem.orig_obj_expr)=}")
+            # print(f"{pyo.value(root_eta)=}")
+            # print(f"{pyo.value(subproblem.orig_obj_expr)=}")
             eta_gaps[global_subproblem_ndx] = abs(
                 pyo.value(root_eta) - pyo.value(subproblem.orig_obj_expr)
             )
@@ -396,8 +396,8 @@ class Benders_Serial(Benders_Abstract):
                 for root_var in self.root_vars:
                     coeff = global_coeffs[coeff_ndx]
                     # this enforces a signe assumption
-                    cut_expr -= coeff * (root_var - root_var.value)
-                    # cut_expr -= coeff * root_var
+                    # cut_expr -= coeff * (root_var - root_var.value)
+                    cut_expr -= coeff * root_var
                     coeff_ndx += 1
                 new_cut = self.cuts.add(cut_expr <= root_eta)
                 print(f"Cut expr at present point: {pyo.value(cut_expr)}")
