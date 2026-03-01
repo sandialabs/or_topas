@@ -39,6 +39,9 @@ Where X is again the number of processes.
 This standardizes error handling especially for unexpected and unhandled errors
 """
 
+default_transform = "standard_lp"
+# default_transform = "feasibility"
+
 
 class Farmer:
     def __init__(self):
@@ -170,7 +173,7 @@ def main():
     m = create_root(farmer=farmer)
     root_vars = list(m.devoted_acreage.values())
     m.benders = BendersCutGenerator()
-    m.benders.set_input(root_vars=root_vars, tol=1e-8)
+    m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=default_transform)
     for s in farmer.scenarios:
         subproblem_fn_kwargs = dict()
         subproblem_fn_kwargs["root"] = m
