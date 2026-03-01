@@ -145,14 +145,15 @@ class TestBendersSolver(unittest.TestCase):
             "AverageScenario": -118_600,
             "AboveAverageScenario": -167_667,
         }
-        scenarios = {"AverageScenario": 1.0}
+        # scenarios = {"AverageScenario": 1.0}
+        scenarios = {"BelowAverageScenario": 1.0}
         for scen, prob in scenarios.items():
             local_farmer = tc.Farmer()
             local_farmer.scenario_probabilities = {scen: 1.0}
             local_farmer.scenarios = [scen]
             t0 = time.time()
-            # opt, m = tc.Farmer.setup_farmer(local_farmer, solver_name=mip_solver, transform="standard_lp")
-            opt, m = tc.Farmer.setup_farmer(local_farmer, solver_name=mip_solver)
+            opt, m = tc.Farmer.setup_farmer(local_farmer, solver_name=mip_solver, transform="standard_lp")
+            # opt, m = tc.Farmer.setup_farmer(local_farmer, solver_name=mip_solver)
 
             print("\n")
             print(
@@ -315,7 +316,7 @@ class TestBendersSolver(unittest.TestCase):
         m = tc.absolute_value.create_root()
         root_vars = [m.x]
         m.benders = BendersCutGenerator()
-        m.benders.set_input(root_vars=root_vars, tol=1e-8)
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform="standard_lp")
         m.benders.add_subproblem(
             subproblem_fn=tc.absolute_value.create_subproblem,
             subproblem_fn_kwargs={"root": m},

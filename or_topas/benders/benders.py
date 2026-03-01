@@ -47,6 +47,7 @@ class Benders_Abstract(BlockData):
         self.transform_map = {
             Benders_Abstract.default_transform_name: Benders_Abstract._feasibility_subproblem_transform,
             "feasibility": Benders_Abstract._feasibility_subproblem_transform,
+            "standard_lp": Benders_Abstract._standard_lp_subproblem_transform,
         }
         self.default_subproblem_solver = "gurobi_persistent"
         self.default_transform_name = Benders_Abstract.default_transform_name
@@ -84,6 +85,8 @@ class Benders_Abstract(BlockData):
         self.root_vars = list(root_vars)
         self.root_vars_indices = pyo.ComponentMap()
         self.transform = kwargs.get("transform", self.default_transform_name)
+        if self.transform is None:
+            self.transform = self.default_transform_name
         for i, v in enumerate(self.root_vars):
             self.root_vars_indices[v] = i
         self.tol = kwargs.get("tol", 1e-6)
@@ -145,6 +148,7 @@ class Benders_Abstract(BlockData):
             b=b,
             root_vars=root_vars,
             relax_subproblem_cons=relax_subproblem_cons,
+            complicating_vars_map=complicating_vars_map,
         )
         # parallel specific code
         # this also does not impact the general code below
@@ -461,7 +465,14 @@ class Benders_Abstract(BlockData):
         root_vars = kwargs.get("root_vars")
         relax_subproblem_cons = kwargs.get("relax_subproblem_cons")
         complicating_vars_map = kwargs.get("complicating_vars_map")
-        subproblem_master_vars = complicating_vars_map.values()
+        print(f"The complicating vars map is of type {type(complicating_vars_map)}")
+        subproblem_master_vars = [
+            v for k, v in complicating_vars_map.items()
+        ]  # complicating_vars_map.values()
+        print(
+            f"The type inside subproblem_master_vars is {type(subproblem_master_vars[0])}"
+        )
+        subproblem_master_vars = ComponentSet(subproblem_master_vars)
         # check for all of these b, root_vars, relax_subproblem_cons
         root_vars = ComponentSet(root_vars)
 
@@ -470,13 +481,17 @@ class Benders_Abstract(BlockData):
         )
         if len(objs) != 1:
             raise ValueError("Subproblem must have exactly one objective")
+
         orig_obj = objs[0]
+        b.orig_obj_expr = orig_obj.expr
 
         # make sure dual vars are imported
         b.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
 
         b.aux_cons = pyo.ConstraintList()
         b.aux_cons_rhs_exprs = []
+        print("In standard lp transform")
+        print(f"The subproblem_master_vars are {type(subproblem_master_vars)}")
         for c in list(
             b.component_data_objects(
                 pyo.Constraint, descend_into=True, active=True, sort=True
@@ -489,8 +504,11 @@ class Benders_Abstract(BlockData):
                 c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
                 if not Benders_Abstract._any_common_elements(root_vars, c_vars):
                     continue
-
-            body_split = pyomo_utils.split_expr(c.body, subproblem_master_vars)
+            # print("\n Next Constraint")
+            # c.pprint()
+            body_split = pyomo_utils.split_expr(
+                c.body, subproblem_master_vars, allow_iterables=True
+            )
             # TODO: there is a version of this where we check c.upper.is_constant or c.lower
             # and if it is, we don't need to split the expr, skipping that for now as we work on correctness
 
@@ -507,15 +525,23 @@ class Benders_Abstract(BlockData):
                 # so use upper
                 # body.expr == upper.expr
 
-                #TODO: if we know the constraint is cannonical, will c.upper have anything in it?
+                # TODO: if we know the constraint is cannonical, will c.upper have anything in it?
 
-                #TODO: this needs to be lower now upper, need to fix
+                # TODO: this needs to be lower now upper, need to fix
 
-                upper_split = pyomo_utils.split_expr(c.upper, subproblem_master_vars)
-                rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
-                lhs = body_split.out - upper_split.out
+                # lower == body
+                # lower_split = pyomo_utils.split_expr(c.lower, subproblem_master_vars, allow_iterables=True)
+                # rhs = body_split.in_plus_cons - lower_split.in_plus_cons
+                # lhs = - body_split.out + lower_split.out
+
+                rhs = body_split.in_plus_cons - c.lower
+                lhs = -body_split.out
+                # print(f"EQ CASE: {str(lhs)=} == {str(rhs)=}")
                 b.aux_cons_rhs_exprs.append(rhs)
                 b.aux_cons.add(lhs == rhs)
+                # last_added_cons = b.aux_cons[len(b.aux_cons)]
+                # print("Added constraint:")
+                # last_added_cons.pprint()
                 Benders_Abstract._del_con(c)
             else:
                 lower = pyo.value(c.lower)
@@ -525,32 +551,46 @@ class Benders_Abstract(BlockData):
                     # case where upper has contents
                     # body.expr <= upper.expr
 
-                    #TODO: upper and lower should both be constants
-                    #don't need to split upper and lower, treat as constants
+                    # TODO: upper and lower should both be constants
+                    # don't need to split upper and lower, treat as constants
 
-                    upper_split = pyomo_utils.split_expr(
-                        c.upper, subproblem_master_vars
-                    )
-                    rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
-                    lhs = body_split.out - upper_split.out
+                    # upper_split = pyomo_utils.split_expr(
+                    #     c.upper, subproblem_master_vars, allow_iterables=True
+                    # )
+                    # rhs = -body_split.in_plus_cons + upper_split.in_plus_cons
+                    # lhs = body_split.out - upper_split.out
+
+                    rhs = -body_split.in_plus_cons + c.upper
+                    lhs = body_split.out
                     b.aux_cons_rhs_exprs.append(rhs)
                     b.aux_cons.add(lhs <= rhs)
+                    # print(f"LEQ Upper Case: {str(lhs)=} <= {str(rhs)=}")
+                    # last_added_cons = b.aux_cons[len(b.aux_cons)]
+                    # print("Added constraint:")
+                    # last_added_cons.pprint()
                 if lower is not None:
                     # case where lower has contents
                     # lower.expr <= body.expr
 
-                    #TODO: upper and lower should both be constants
-                    #don't need to split upper and lower, treat as constants
+                    # TODO: upper and lower should both be constants
+                    # don't need to split upper and lower, treat as constants
 
-                    lower_split = pyomo_utils.split_expr(
-                        c.upper, subproblem_master_vars
-                    )
-                    rhs = body_split.in_plus_cons - lower_split.in_plus_cons
-                    lhs = -body_split.out + lower_split.in_plus_cons
+                    # lower_split = pyomo_utils.split_expr(
+                    #     c.lower, subproblem_master_vars
+                    # )
+                    # rhs = body_split.in_plus_cons - lower_split.in_plus_cons
+                    # lhs = -body_split.out + lower_split.out
+                    rhs = body_split.in_plus_cons - c.lower
+                    lhs = -body_split.out
+
                     b.aux_cons_rhs_exprs.append(rhs)
                     b.aux_cons.add(lhs <= rhs)
+                    # print(f"LEQ Lower Case: {str(lhs)=} <= {str(rhs)=}")
+                    # last_added_cons = b.aux_cons[len(b.aux_cons)]
+                    # print("Added constraint:")
+                    # last_added_cons.pprint()
                 Benders_Abstract._del_con(c)
-
+        print("Done standard lp transform")
         # b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
 
 

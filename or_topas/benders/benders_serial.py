@@ -27,6 +27,7 @@ class Benders_Serial(Benders_Abstract):
         super().__init__(component)
         self.transform_to_cut_map = {
             "feasibility": Benders_Serial.generate_cut_feasibility_transform,
+            "standard_lp": Benders_Serial.generate_cut_standard_lp_transform,
         }
         self.default_transform_name = "feasibility"
         self.num_subproblems_by_rank = 0  # np.zeros(self.comm.Get_size())
@@ -187,6 +188,7 @@ class Benders_Serial(Benders_Abstract):
             del subproblem.fix_complicating_vars
             del subproblem.fix_eta
 
+            print(subproblem.dual.display())
         total_num_subproblems = self.global_num_subproblems()
         # global_constants = np.zeros(total_num_subproblems, dtype="d")
         # global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
@@ -221,6 +223,191 @@ class Benders_Serial(Benders_Abstract):
                 new_cut = self.cuts.add(cut_expr <= 0)
                 cuts_added.append(new_cut)
             else:
+                coeff_ndx += len(self.root_vars)
+
+        return cuts_added
+
+    def generate_cut_standard_lp_transform(self):
+        print("Yes, using standard lp cut generation")
+        coefficients = np.zeros(
+            self.global_num_subproblems() * len(self.root_vars), dtype="d"
+        )
+        constants = np.zeros(self.global_num_subproblems(), dtype="d")
+        eta_gaps = np.zeros(self.global_num_subproblems(), dtype="d")
+
+        for local_subproblem_ndx in range(len(self.subproblems)):
+            subproblem = self.subproblems[local_subproblem_ndx]
+            global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
+            complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
+            root_eta = self.root_etas[local_subproblem_ndx]
+            coeff_ndx = global_subproblem_ndx * len(self.root_vars)
+
+            var_to_con_map = Benders_Abstract._fix_first_stage_var_copies(
+                subproblem=subproblem,
+                root_vars=self.root_vars,
+                complicating_vars_map=complicating_vars_map,
+            )
+
+            subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
+            if (
+                subproblem_solver.name
+                not in Benders_Abstract.solver_dual_sign_convention
+            ):
+                raise NotImplementedError(
+                    "BendersCutGenerator is unaware of the dual sign convention of subproblem solver "
+                    + subproblem_solver.name
+                )
+            sign_convention = Benders_Abstract.solver_dual_sign_convention[
+                subproblem_solver.name
+            ]
+
+            # handle subproblem solve
+            if isinstance(subproblem_solver, PersistentSolver):
+                # persistent solver case, send new cuts to solver
+                for c in subproblem.fix_complicating_vars.values():
+                    subproblem_solver.add_constraint(c)
+                res = subproblem_solver.solve(
+                    tee=False, load_solutions=False, save_results=False
+                )
+                if res.solver.termination_condition != pyo.TerminationCondition.optimal:
+                    raise RuntimeError(
+                        "Unable to generate optimality cut because subproblem failed to converge."
+                    )
+                subproblem_solver.load_vars()
+                subproblem_solver.load_duals()
+            else:
+                # non-persistent solver case, send subproblem model to solver
+                res = subproblem_solver.solve(
+                    subproblem, tee=False, load_solutions=False
+                )
+                if res.solver.termination_condition != pyo.TerminationCondition.optimal:
+                    raise RuntimeError(
+                        "Unable to generate optimality cut because subproblem failed to converge."
+                    )
+                subproblem.solutions.load_from(res)
+
+            # TODO: this is the breakpoint for where to split the solve subproblem from collect subproblem data and compute cut
+
+            #
+            # Start of collect subproblem data for subproblem global_subproblem_ndx
+            #
+
+            # so we have the reformatted constraints in aux_con as Wy+Tx - h <= 0, and fix_cons as x - x_general = 0
+            # the single scenario cut then becomes dual_sign_conv*[sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con)) + sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value)) for rv in root_vars]
+            # note that then the following evals to a scalar: sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
+            # this is then the part dealing with master problem vars: sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value) for rv in root_vars)
+            # we then have |root_vars| + 2 params to move around to form cut and cut needed (obj val)
+
+            # so the coefficients come from the fixed first stage variables
+            # so coefficients[coeff_ndx] = fix_cons.dual[root_var_to_fix_con[rv]], where coeff_ndx = global_subproblem_ndx * len(self.root_vars) + (i for i, v in enumerate(root_var_to_fix_con.keys() if v == rv)
+
+            # TODO: we could just sub this out for rv, con in var_to_con_map.items()
+            constant_2 = 0
+            for root_var in self.root_vars:
+                if root_var in complicating_vars_map:
+                    c = var_to_con_map[root_var]
+                    coefficients[coeff_ndx] = sign_convention * pyo.value(
+                        subproblem.dual[c]
+                    )
+                    constant_2 += sign_convention * pyo.value(subproblem.dual[c]) * pyo.value(root_var)
+                coeff_ndx += 1
+
+            # the constants are come from the sum of everything else for the subproblem as:
+            # constants[global_subproblem_ndx] = sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
+            # all terms need to include the subproblem solver sign convention
+            print(subproblem.dual.display())
+            # print(f"{subproblem.aux_cons=}, {len(subproblem.aux_cons)=}")
+            # print(subproblem.aux_cons.display())
+            # print(f"{str(subproblem.aux_cons[1])=}")
+            # subproblem.aux_cons[1].pprint()
+            # print(f"{str(subproblem.aux_cons_rhs_exprs[1])=}")
+
+            # constant_1 = -sign_convention * sum(
+            #     subproblem.dual[subproblem.aux_cons[c]]
+            #     * pyo.value(subproblem.aux_cons_rhs_exprs[i])
+            #     for i, c in enumerate(subproblem.aux_cons)
+            # )
+
+            # constant_2 = 0
+
+            # constants[global_subproblem_ndx] = constant_1 + constant_2
+
+            constants[global_subproblem_ndx] = -sign_convention * sum(
+                subproblem.dual[subproblem.aux_cons[c]]
+                * pyo.value(subproblem.aux_cons_rhs_exprs[i])
+                for i, c in enumerate(subproblem.aux_cons)
+            )
+            # print(f"{constants[global_subproblem_ndx]=}")
+            # constant = 0
+            # for index, cons in enumerate(subproblem.aux_cons):
+            #     print(f"{type(subproblem.dual[subproblem.aux_cons[cons]])=}, {type(index)=}")
+            #     constant += subproblem.dual[cons]*pyo.value(subproblem.aux_cons_rhs_exprs[index])
+            # constants[global_subproblem_ndx] = sign_convention*constant
+
+            # need the gap between root_eta and local_eta (subproblem obj value)
+            # this is the 'is a cut needed' test value
+            print(f"{pyo.value(root_eta)=}")
+            print(f"{pyo.value(subproblem.orig_obj_expr)=}")
+            eta_gaps[global_subproblem_ndx] = abs(
+                pyo.value(root_eta) - pyo.value(subproblem.orig_obj_expr)
+            )
+
+            # remove the added fixing constraints for fix_complicating vars
+            if isinstance(subproblem_solver, PersistentSolver):
+                for c in subproblem.fix_complicating_vars.values():
+                    subproblem_solver.remove_constraint(c)
+            del subproblem.fix_complicating_vars
+
+            # end of compute,
+            # this is where to return for solve subproblem, collect data, but don't generate cuts yet
+
+        total_num_subproblems = self.global_num_subproblems()
+        # global_constants = np.zeros(total_num_subproblems, dtype="d")
+        # global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
+        # global_eta_gaps = np.zeros(total_num_subproblems, dtype="d")
+
+        # comm = self.comm
+        # comm.Allreduce([constants, MPI.DOUBLE], [global_constants, MPI.DOUBLE])
+        # comm.Allreduce([coefficients, MPI.DOUBLE], [global_coeffs, MPI.DOUBLE])
+        # comm.Allreduce([eta_gaps, MPI.DOUBLE], [global_eta_gaps, MPI.DOUBLE])
+
+        global_constants = constants
+        global_coeffs = coefficients
+        global_eta_gaps = eta_gaps
+        # global_eta_coeffs = eta_coeffs
+
+        global_constants = [float(i) for i in global_constants]
+        global_coeffs = [float(i) for i in global_coeffs]
+        global_eta_gaps = [float(i) for i in global_eta_gaps]
+        # global_eta_coeffs = [float(i) for i in global_eta_coeffs]
+
+        # TODO: why do we need all threads computing the same cuts?
+        # shouldn't this be blocked behind a rank check?
+        # This is a point for parallel, not serial
+
+        coeff_ndx = 0
+        cuts_added = list()
+        for global_subproblem_ndx in range(total_num_subproblems):
+            cut_expr = global_constants[global_subproblem_ndx]
+            eta_gap = global_eta_gaps[global_subproblem_ndx]
+            if eta_gap > self.tol:
+                # difference above tolerance, add cut
+                root_eta = self.all_root_etas[global_subproblem_ndx]
+                for root_var in self.root_vars:
+                    coeff = global_coeffs[coeff_ndx]
+                    # this enforces a signe assumption
+                    cut_expr -= coeff * (root_var - root_var.value)
+                    # cut_expr -= coeff * root_var
+                    coeff_ndx += 1
+                new_cut = self.cuts.add(cut_expr <= root_eta)
+                print(f"Cut expr at present point: {pyo.value(cut_expr)}")
+                # print(f"Present master eta value: {pyo.value(root_eta)}")
+                # print(f"Present subproblem eta value: {pyo.value()}")
+                new_cut.pprint()
+                # see that this is single cut
+                cuts_added.append(new_cut)
+            else:
+                # skip cut, update ndx counter
                 coeff_ndx += len(self.root_vars)
 
         return cuts_added
