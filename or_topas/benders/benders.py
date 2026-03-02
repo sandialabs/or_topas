@@ -19,6 +19,7 @@ from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 
 import pyomo.environ as pyo
 from or_topas.util import pyomo_utils
+from or_topas.util.mymunch import MyMunch
 
 # TODO: do we have a topas logger?
 logger = logging.getLogger(__name__)
@@ -656,6 +657,119 @@ class Benders_Abstract(BlockData):
                 # delete old version of constraint
                 Benders_Abstract._del_con(c)
         print("Done standard lp transform")
+
+    @staticmethod
+    def _update_and_solve_model(subproblem, subproblem_solver, added_constraints):
+        if isinstance(subproblem_solver, PersistentSolver):
+            for c in added_constraints:
+                subproblem_solver.add_constraint(c)
+            # for c in subproblem.fix_complicating_vars.values():
+            #     subproblem_solver.add_constraint(c)
+            # subproblem_solver.add_constraint(subproblem.fix_eta)
+            res = subproblem_solver.solve(
+                tee=False, load_solutions=False, save_results=False
+            )
+            if res.solver.termination_condition != pyo.TerminationCondition.optimal:
+                raise RuntimeError(
+                    "Unable to generate cut because subproblem failed to converge."
+                )
+            subproblem_solver.load_vars()
+            subproblem_solver.load_duals()
+        else:
+            res = subproblem_solver.solve(subproblem, tee=False, load_solutions=False)
+            if res.solver.termination_condition != pyo.TerminationCondition.optimal:
+                raise RuntimeError(
+                    "Unable to generate cut because subproblem failed to converge."
+                )
+            subproblem.solutions.load_from(res)
+
+        return res
+
+    @staticmethod
+    def _get_solver_sign_convention(solver_name):
+        if solver_name not in Benders_Abstract.solver_dual_sign_convention:
+            raise NotImplementedError(
+                "BendersCutGenerator is unaware of the dual sign convention of subproblem solver "
+                + solver_name
+            )
+        sign_convention = Benders_Abstract.solver_dual_sign_convention[solver_name]
+        return sign_convention
+
+    def _solve_feasibility_subproblem(
+        self, subproblem, local_subproblem_ndx,
+    ):
+        #set up subproblem data
+        # subproblem = self.subproblems[local_subproblem_ndx]
+        subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
+        # global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
+        complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
+        root_eta = self.root_etas[local_subproblem_ndx]
+        # coeff_ndx = global_subproblem_ndx * len(self.root_vars)
+
+        #
+        # get dual sign convention, error if not supported
+        #
+        sign_convention = Benders_Abstract._get_solver_sign_convention(
+            solver_name=subproblem_solver.name
+        )
+
+        var_to_con_map = Benders_Abstract._fix_first_stage_var_copies(
+            subproblem=subproblem,
+            root_vars=self.root_vars,
+            complicating_vars_map=complicating_vars_map,
+        )
+
+        Benders_Abstract._fix_eta_copies(subproblem=subproblem, root_eta=root_eta)
+
+        # subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
+        sign_convention = Benders_Abstract._get_solver_sign_convention(
+            solver_name=subproblem_solver.name
+        )
+
+        #
+        # update and solve subproblem
+        #
+
+        # added_constraints = ComponentSet(fix_complicating_vars.values(), fix_eta)
+        added_constraints = ComponentSet()
+        added_constraints.add(subproblem.fix_eta)
+        added_constraints.update(subproblem.fix_complicating_vars.values())
+        res = Benders_Abstract._update_and_solve_model(
+            subproblem=subproblem,
+            subproblem_solver=subproblem_solver,
+            added_constraints=added_constraints,
+        )
+
+        #
+        # Subproblem data collection
+        #
+        subproblem_constant = pyo.value(subproblem._z)
+        subproblem_eta = sign_convention * pyo.value(
+            subproblem.dual[subproblem.obj_con]
+        )
+        subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
+        temp_ndx = 0
+        for root_var, c in var_to_con_map.items():
+            subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
+                subproblem.dual[c]
+            )
+            temp_ndx += 1
+        #
+        # Reset subproblem to state before this solve
+        #
+        if isinstance(subproblem_solver, PersistentSolver):
+            for c in subproblem.fix_complicating_vars.values():
+                subproblem_solver.remove_constraint(c)
+            subproblem_solver.remove_constraint(subproblem.fix_eta)
+        del subproblem.fix_complicating_vars
+        del subproblem.fix_eta
+
+        return MyMunch(
+            subproblem_constant=subproblem_constant,
+            subproblem_eta=subproblem_eta,
+            subproblem_coeff=subproblem_coeff,
+            var_to_con_map = var_to_con_map,
+        )
 
 
 """

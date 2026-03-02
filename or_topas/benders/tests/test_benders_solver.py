@@ -50,7 +50,9 @@ ipopt_available = pyo.SolverFactory("ipopt").available(exception_flag=False)
 gurobi_available = pyo.SolverFactory("gurobi_persistent").available(
     exception_flag=False
 )
-default_transform = "standard_lp"
+
+# default_transform = "standard_lp"
+default_transform = "feasibility"
 
 
 class TestBendersSolver(unittest.TestCase):

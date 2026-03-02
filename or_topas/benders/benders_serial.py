@@ -94,101 +94,65 @@ class Benders_Serial(Benders_Abstract):
         for local_subproblem_ndx in range(len(self.subproblems)):
             subproblem = self.subproblems[local_subproblem_ndx]
             global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
-            complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
-            root_eta = self.root_etas[local_subproblem_ndx]
             coeff_ndx = global_subproblem_ndx * len(self.root_vars)
+            # #set up subproblem data
+            # subproblem = self.subproblems[local_subproblem_ndx]
+            # subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
+            # global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
+            # complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
+            # root_eta = self.root_etas[local_subproblem_ndx]
+            # coeff_ndx = global_subproblem_ndx * len(self.root_vars)
 
-            # subproblem.fix_complicating_vars = pyo.ConstraintList()
-            # var_to_con_map = pyo.ComponentMap()
-            # for root_var in self.root_vars:
-            #     if root_var in complicating_vars_map:
-            #         sub_var = complicating_vars_map[root_var]
-            #         sub_var.set_value(root_var.value, skip_validation=True)
-            #         new_con = subproblem.fix_complicating_vars.add(
-            #             sub_var - root_var.value == 0
-            #         )
-            #         var_to_con_map[root_var] = new_con
-            var_to_con_map = Benders_Abstract._fix_first_stage_var_copies(
+            # #
+            # # get dual sign convention, error if not supported
+            # #
+            # sign_convention = Benders_Abstract._get_solver_sign_convention(
+            #     solver_name=subproblem_solver.name
+            # )
+
+            #
+            # solve the feasibility subproblem
+            #
+            results_munch = self._solve_feasibility_subproblem(
                 subproblem=subproblem,
-                root_vars=self.root_vars,
-                complicating_vars_map=complicating_vars_map,
+                local_subproblem_ndx = local_subproblem_ndx,
             )
 
-            # subproblem.fix_eta = pyo.Constraint(
-            #     expr=subproblem._eta - root_eta.value == 0
-            # )
-            # subproblem._eta.set_value(root_eta.value, skip_validation=True)
-            Benders_Abstract._fix_eta_copies(subproblem=subproblem, root_eta=root_eta)
+            #
+            # Pull out data from results munch
+            #
+            
+            subproblem_constant= results_munch.subproblem_constant
+            subproblem_eta = results_munch.subproblem_eta
+            subproblem_coeff= results_munch.subproblem_coeff
+            var_to_con_map = results_munch.var_to_con_map
 
-            subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
-            if (
-                subproblem_solver.name
-                not in Benders_Abstract.solver_dual_sign_convention
-            ):
-                raise NotImplementedError(
-                    "BendersCutGenerator is unaware of the dual sign convention of subproblem solver "
-                    + subproblem_solver.name
-                )
-            sign_convention = Benders_Abstract.solver_dual_sign_convention[
-                subproblem_solver.name
-            ]
+            #
+            # Put data in data sharing resources
+            #
 
-            if isinstance(subproblem_solver, PersistentSolver):
-                for c in subproblem.fix_complicating_vars.values():
-                    subproblem_solver.add_constraint(c)
-                subproblem_solver.add_constraint(subproblem.fix_eta)
-                res = subproblem_solver.solve(
-                    tee=False, load_solutions=False, save_results=False
-                )
-                if res.solver.termination_condition != pyo.TerminationCondition.optimal:
-                    raise RuntimeError(
-                        "Unable to generate cut because subproblem failed to converge."
-                    )
-                subproblem_solver.load_vars()
-                subproblem_solver.load_duals()
-            else:
-                res = subproblem_solver.solve(
-                    subproblem, tee=False, load_solutions=False
-                )
-                if res.solver.termination_condition != pyo.TerminationCondition.optimal:
-                    raise RuntimeError(
-                        "Unable to generate cut because subproblem failed to converge."
-                    )
-                subproblem.solutions.load_from(res)
+            # temp_ndx = 0
+            # for root_var, c in var_to_con_map.items():
+            #     subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
+            #         subproblem.dual[c]
+            #     )
+            #     temp_ndx += 1
+            constants[global_subproblem_ndx] = subproblem_constant
 
-            constants[global_subproblem_ndx] = pyo.value(subproblem._z)
-
-            # if self.check_dual_info:
-            #     # Question
-            #     # why is the dual information from SCIP empty
-            #     print("\nAll dual information via .display():")
-            #     print(f"Subproblem number: {local_subproblem_ndx}")
-            #     subproblem.dual.display()
-
-            for root_var in self.root_vars:
-                if root_var in complicating_vars_map:
-                    c = var_to_con_map[root_var]
-                    # if self.check_dual_info:
-                    #     assert (
-                    #         c in subproblem.dual
-                    #     ), "Constraint information missing in dual, can't form cut"
-                    coefficients[coeff_ndx] = sign_convention * pyo.value(
-                        subproblem.dual[c]
-                    )
+            for coeff in subproblem_coeff:
+                coefficients[coeff_ndx] = coeff
                 coeff_ndx += 1
 
-            eta_coeffs[global_subproblem_ndx] = sign_convention * pyo.value(
-                subproblem.dual[subproblem.obj_con]
-            )
+            eta_coeffs[global_subproblem_ndx] = subproblem_eta
 
-            if isinstance(subproblem_solver, PersistentSolver):
-                for c in subproblem.fix_complicating_vars.values():
-                    subproblem_solver.remove_constraint(c)
-                subproblem_solver.remove_constraint(subproblem.fix_eta)
-            del subproblem.fix_complicating_vars
-            del subproblem.fix_eta
+        #
+        # Cut formation logic
+        #
+        #
+        # N.B. the inclusion of the global vars and Allreduce commands under comments are intetional
+        # this is meant to show the connection to the parallel version
+        #
 
-            # print(subproblem.dual.display())
         total_num_subproblems = self.global_num_subproblems()
         # global_constants = np.zeros(total_num_subproblems, dtype="d")
         # global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
@@ -209,9 +173,16 @@ class Benders_Serial(Benders_Abstract):
 
         coeff_ndx = 0
         cuts_added = list()
+        #
+        # Form cuts
+        #
         for global_subproblem_ndx in range(total_num_subproblems):
             cut_expr = global_constants[global_subproblem_ndx]
+            #check if cut needed for this subproblem
             if cut_expr > self.tol:
+                #
+                #
+                #
                 root_eta = self.all_root_etas[global_subproblem_ndx]
                 cut_expr -= global_eta_coeffs[global_subproblem_ndx] * (
                     root_eta - root_eta.value
@@ -228,6 +199,7 @@ class Benders_Serial(Benders_Abstract):
         return cuts_added
 
     def generate_cut_standard_lp_transform(self):
+        #setup global data
         coefficients = np.zeros(
             self.global_num_subproblems() * len(self.root_vars), dtype="d"
         )
@@ -235,7 +207,9 @@ class Benders_Serial(Benders_Abstract):
         subproblem_etas = np.zeros(self.global_num_subproblems(), dtype="d")
 
         for local_subproblem_ndx in range(len(self.subproblems)):
+            #set up subproblem data
             subproblem = self.subproblems[local_subproblem_ndx]
+            subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
             global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
             complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
             root_eta = self.root_etas[local_subproblem_ndx]
@@ -247,43 +221,18 @@ class Benders_Serial(Benders_Abstract):
                 complicating_vars_map=complicating_vars_map,
             )
 
-            subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
-            if (
-                subproblem_solver.name
-                not in Benders_Abstract.solver_dual_sign_convention
-            ):
-                raise NotImplementedError(
-                    "BendersCutGenerator is unaware of the dual sign convention of subproblem solver "
-                    + subproblem_solver.name
-                )
-            sign_convention = Benders_Abstract.solver_dual_sign_convention[
-                subproblem_solver.name
-            ]
+            sign_convention = Benders_Abstract._get_solver_sign_convention(
+                solver_name=subproblem_solver.name
+            )
 
             # handle subproblem solve
-            if isinstance(subproblem_solver, PersistentSolver):
-                # persistent solver case, send new cuts to solver
-                for c in subproblem.fix_complicating_vars.values():
-                    subproblem_solver.add_constraint(c)
-                res = subproblem_solver.solve(
-                    tee=False, load_solutions=False, save_results=False
-                )
-                if res.solver.termination_condition != pyo.TerminationCondition.optimal:
-                    raise RuntimeError(
-                        "Unable to generate optimality cut because subproblem failed to converge."
-                    )
-                subproblem_solver.load_vars()
-                subproblem_solver.load_duals()
-            else:
-                # non-persistent solver case, send subproblem model to solver
-                res = subproblem_solver.solve(
-                    subproblem, tee=False, load_solutions=False
-                )
-                if res.solver.termination_condition != pyo.TerminationCondition.optimal:
-                    raise RuntimeError(
-                        "Unable to generate optimality cut because subproblem failed to converge."
-                    )
-                subproblem.solutions.load_from(res)
+
+            # added_constraints = fix_complicating_vars.values()
+            res = Benders_Abstract._update_and_solve_model(
+                subproblem=subproblem,
+                subproblem_solver=subproblem_solver,
+                added_constraints=subproblem.fix_complicating_vars.values(),
+            )
 
             # TODO: this is the breakpoint for where to split the solve subproblem from collect subproblem data and compute cut
 
@@ -367,7 +316,6 @@ class Benders_Serial(Benders_Abstract):
                 root_eta = self.all_root_etas[global_subproblem_ndx]
                 for root_var in self.root_vars:
                     coeff = global_coeffs[coeff_ndx]
-                    # this enforces a signe assumption
 
                     # transform case 1 for cut building, see transform details in Benders_Abstract
                     cut_expr -= coeff * root_var
@@ -377,11 +325,6 @@ class Benders_Serial(Benders_Abstract):
 
                     coeff_ndx += 1
                 new_cut = self.cuts.add(cut_expr <= root_eta)
-                # print(f"Cut expr at present point: {pyo.value(cut_expr)}")
-                # print(f"Present master eta value: {pyo.value(root_eta)}")
-                # print(f"Present subproblem eta value: {pyo.value()}")
-                # new_cut.pprint()
-                # see that this is single cut
                 cuts_added.append(new_cut)
             else:
                 # skip cut, update ndx counter
