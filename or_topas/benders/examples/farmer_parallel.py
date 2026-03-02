@@ -39,8 +39,8 @@ Where X is again the number of processes.
 This standardizes error handling especially for unexpected and unhandled errors
 """
 
-default_transform = "standard_lp"
-# default_transform = "feasibility"
+# default_transform = "standard_lp"
+default_transform = "feasibility"
 
 
 class Farmer:
