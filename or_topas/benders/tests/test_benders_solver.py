@@ -51,8 +51,8 @@ gurobi_available = pyo.SolverFactory("gurobi_persistent").available(
     exception_flag=False
 )
 
-# default_transform = "standard_lp"
-default_transform = "feasibility"
+default_transform = "standard_lp"
+# default_transform = "feasibility"
 
 
 class TestBendersSolver(unittest.TestCase):

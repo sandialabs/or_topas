@@ -699,12 +699,9 @@ class Benders_Abstract(BlockData):
         self, subproblem, local_subproblem_ndx,
     ):
         #set up subproblem data
-        # subproblem = self.subproblems[local_subproblem_ndx]
         subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
-        # global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
         complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
         root_eta = self.root_etas[local_subproblem_ndx]
-        # coeff_ndx = global_subproblem_ndx * len(self.root_vars)
 
         #
         # get dual sign convention, error if not supported
