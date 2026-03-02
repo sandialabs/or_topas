@@ -696,9 +696,11 @@ class Benders_Abstract(BlockData):
         return sign_convention
 
     def _solve_feasibility_subproblem(
-        self, subproblem, local_subproblem_ndx,
+        self,
+        subproblem,
+        local_subproblem_ndx,
     ):
-        #set up subproblem data
+        # set up subproblem data
         subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
         complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
         root_eta = self.root_etas[local_subproblem_ndx]
@@ -747,9 +749,7 @@ class Benders_Abstract(BlockData):
         subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
         temp_ndx = 0
         for root_var, c in var_to_con_map.items():
-            subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
-                subproblem.dual[c]
-            )
+            subproblem_coeff[temp_ndx] = sign_convention * pyo.value(subproblem.dual[c])
             temp_ndx += 1
         #
         # Reset subproblem to state before this solve
@@ -765,7 +765,77 @@ class Benders_Abstract(BlockData):
             subproblem_constant=subproblem_constant,
             subproblem_eta=subproblem_eta,
             subproblem_coeff=subproblem_coeff,
-            var_to_con_map = var_to_con_map,
+            var_to_con_map=var_to_con_map,
+        )
+
+    def _solve_lp_subproblem(self, subproblem, local_subproblem_ndx):
+        subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
+        complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
+        root_eta = self.root_etas[local_subproblem_ndx]
+
+        var_to_con_map = Benders_Abstract._fix_first_stage_var_copies(
+            subproblem=subproblem,
+            root_vars=self.root_vars,
+            complicating_vars_map=complicating_vars_map,
+        )
+
+        sign_convention = Benders_Abstract._get_solver_sign_convention(
+            solver_name=subproblem_solver.name
+        )
+
+        # handle subproblem solve
+
+        # added_constraints = fix_complicating_vars.values()
+        res = Benders_Abstract._update_and_solve_model(
+            subproblem=subproblem,
+            subproblem_solver=subproblem_solver,
+            added_constraints=subproblem.fix_complicating_vars.values(),
+        )
+
+        #
+        # Start of collect subproblem data for subproblem global_subproblem_ndx
+        #
+
+        # so we have the reformatted constraints in aux_con as Wy+Tx - h <= 0, and fix_cons as x - x_general = 0
+        # the single scenario cut then becomes dual_sign_conv*[sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con)) + sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value)) for rv in root_vars]
+        # note that then the following evals to a scalar: sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
+        # this is then the part dealing with master problem vars: sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value) for rv in root_vars)
+        # we then have |root_vars| + 2 params to move around to form cut and cut needed (obj val)
+
+        # so the coefficients come from the fixed first stage variables
+        # so coefficients[coeff_ndx] = fix_cons.dual[root_var_to_fix_con[rv]], where coeff_ndx = global_subproblem_ndx * len(self.root_vars) + (i for i, v in enumerate(root_var_to_fix_con.keys() if v == rv)
+
+        #
+        # Subproblem data collection
+        #
+
+        # the constants are come from the sum of everything else for the subproblem as:
+        # constants[global_subproblem_ndx] = sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
+        # all terms need to include the subproblem solver sign convention
+
+        subproblem_constant = -sign_convention * sum(
+            subproblem.dual[subproblem.aux_cons[c]]
+            * pyo.value(subproblem.aux_cons_rhs_exprs[i])
+            for i, c in enumerate(subproblem.aux_cons)
+        )
+
+        subproblem_eta = pyo.value(subproblem.orig_obj_expr)
+
+        subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
+        temp_ndx = 0
+        for root_var, c in var_to_con_map.items():
+            subproblem_coeff[temp_ndx] = sign_convention * pyo.value(subproblem.dual[c])
+            temp_ndx += 1
+
+        if isinstance(subproblem_solver, PersistentSolver):
+            for c in subproblem.fix_complicating_vars.values():
+                subproblem_solver.remove_constraint(c)
+        del subproblem.fix_complicating_vars
+
+        return MyMunch(
+            subproblem_constant=subproblem_constant,
+            subproblem_eta=subproblem_eta,
+            subproblem_coeff=subproblem_coeff,
         )
 
 
