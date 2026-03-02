@@ -656,7 +656,8 @@ class Benders_Abstract(BlockData):
 
                 # delete old version of constraint
                 Benders_Abstract._del_con(c)
-        print("Done standard lp transform")
+        if display_transform_info:
+            print("Done standard lp transform")
 
     @staticmethod
     def _update_and_solve_model(subproblem, subproblem_solver, added_constraints):
@@ -820,7 +821,9 @@ class Benders_Abstract(BlockData):
         )
 
         subproblem_eta = pyo.value(subproblem.orig_obj_expr)
-
+        subproblem_eta_gap = abs(
+            pyo.value(root_eta) - pyo.value(subproblem.orig_obj_expr)
+        )
         subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
         temp_ndx = 0
         for root_var, c in var_to_con_map.items():
@@ -836,6 +839,7 @@ class Benders_Abstract(BlockData):
             subproblem_constant=subproblem_constant,
             subproblem_eta=subproblem_eta,
             subproblem_coeff=subproblem_coeff,
+            subproblem_eta_gap=subproblem_eta_gap,
         )
 
 

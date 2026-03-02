@@ -184,6 +184,7 @@ class Benders_Serial(Benders_Abstract):
         )
         constants = np.zeros(self.global_num_subproblems(), dtype="d")
         subproblem_etas = np.zeros(self.global_num_subproblems(), dtype="d")
+        subproblem_eta_gaps = np.zeros(self.global_num_subproblems(), dtype="d")
 
         for local_subproblem_ndx in range(len(self.subproblems)):
             # set up subproblem data
@@ -198,6 +199,7 @@ class Benders_Serial(Benders_Abstract):
             subproblem_constant = results_munch.subproblem_constant
             subproblem_eta = results_munch.subproblem_eta
             subproblem_coeff = results_munch.subproblem_coeff
+            subproblem_eta_gap = results_munch.subproblem_eta_gap
 
             #
             # Put data in data sharing resources
@@ -209,6 +211,7 @@ class Benders_Serial(Benders_Abstract):
 
             constants[global_subproblem_ndx] = subproblem_constant
             subproblem_etas[global_subproblem_ndx] = subproblem_eta
+            subproblem_eta_gaps[global_subproblem_ndx] = subproblem_eta_gap
 
         #
         # Cut formation logic
@@ -219,37 +222,33 @@ class Benders_Serial(Benders_Abstract):
         #
 
         total_num_subproblems = self.global_num_subproblems()
-        # global_constants = np.zeros(total_num_subproblems, dtype="d")
-        # global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
-        # global_subproblem_etas = np.zeros(total_num_subproblems, dtype="d")
+        global_constants = np.zeros(total_num_subproblems, dtype="d")
+        global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
+        global_subproblem_etas = np.zeros(total_num_subproblems, dtype="d")
+        global_subproblem_eta_gaps = np.zeros(total_num_subproblems, dtype="d")
 
         # comm = self.comm
         # comm.Allreduce([constants, MPI.DOUBLE], [global_constants, MPI.DOUBLE])
         # comm.Allreduce([coefficients, MPI.DOUBLE], [global_coeffs, MPI.DOUBLE])
         # comm.Allreduce([subproblem_etas, MPI.DOUBLE], [global_subproblem_etas, MPI.DOUBLE])
+        # comm.Allreduce([subproblem_eta_gaps, MPI.DOUBLE], [global_subproblem_eta_gaps, MPI.DOUBLE])
 
+        # serial version in place of all reduce
         global_constants = constants
         global_coeffs = coefficients
         global_subproblem_etas = subproblem_etas
+        global_subproblem_eta_gaps = subproblem_eta_gaps
 
         global_constants = [float(i) for i in global_constants]
         global_coeffs = [float(i) for i in global_coeffs]
         global_subproblem_etas = [float(i) for i in global_subproblem_etas]
-
-        global_eta_gaps = [
-            abs(pyo.value(self.root_etas[i]) - v)
-            for i, v in enumerate(global_subproblem_etas)
-        ]
-
-        # TODO: why do we need all threads computing the same cuts?
-        # shouldn't this be blocked behind a rank check?
-        # This is a point for parallel, not serial
+        global_subproblem_eta_gaps = [float(i) for i in global_subproblem_eta_gaps]
 
         coeff_ndx = 0
         cuts_added = list()
         for global_subproblem_ndx in range(total_num_subproblems):
             cut_expr = global_constants[global_subproblem_ndx]
-            eta_gap = global_eta_gaps[global_subproblem_ndx]
+            eta_gap = global_subproblem_eta_gaps[global_subproblem_ndx]
             if eta_gap > self.tol:
                 # difference above tolerance, add cut
                 root_eta = self.all_root_etas[global_subproblem_ndx]
