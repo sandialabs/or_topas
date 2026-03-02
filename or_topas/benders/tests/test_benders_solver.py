@@ -38,7 +38,7 @@ if not param_available:
     raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
 
-non_persistnet_mip_solvers = list(
+non_persistent_mip_solvers = list(
     pyomo.opt.check_available_solvers("glpk", "highs", "gurobi_direct")
 )
 
@@ -53,6 +53,7 @@ gurobi_available = pyo.SolverFactory("gurobi_persistent").available(
 
 default_transform = "standard_lp"
 # default_transform = "feasibility"
+transforms = ["standard_lp", "feasibility"]
 
 
 class TestBendersSolver(unittest.TestCase):
@@ -61,11 +62,13 @@ class TestBendersSolver(unittest.TestCase):
     # Farmer Tests
     #
 
-    # TODO: add single scenario farmer test
-
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
-    def test_farmer_single_scenarios(self, mip_solver):
+    @parameterized.expand(
+        input=iter_product(non_persistent_mip_solvers, transforms),
+        name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
+        skip_on_empty=True,
+    )
+    def test_farmer_single_scenarios(self, mip_solver, transform):
 
         outer_farmer = tc.Farmer()
         expected_crop_answers = {
@@ -88,7 +91,7 @@ class TestBendersSolver(unittest.TestCase):
             local_farmer.scenarios = [scen]
             t0 = time.time()
             opt, m = tc.Farmer.setup_farmer(
-                local_farmer, solver_name=mip_solver, transform=default_transform
+                local_farmer, solver_name=mip_solver, transform=transform
             )
 
             print("\n")
@@ -129,8 +132,12 @@ class TestBendersSolver(unittest.TestCase):
             self.assertAlmostEqual(pyo.value(m.obj), expected_obj_answers[scen], 0)
 
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
-    def test_farmer_single_scenario_average_yield(self, mip_solver):
+    @parameterized.expand(
+        input=iter_product(non_persistent_mip_solvers, transforms),
+        name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
+        skip_on_empty=True,
+    )
+    def test_farmer_single_scenario_average_yield(self, mip_solver, transform):
 
         outer_farmer = tc.Farmer()
         expected_crop_answers = {
@@ -155,7 +162,9 @@ class TestBendersSolver(unittest.TestCase):
             local_farmer.scenarios = [scen]
             t0 = time.time()
             # opt, m = tc.Farmer.setup_farmer(local_farmer, solver_name=mip_solver, transform="standard_lp")
-            opt, m = tc.Farmer.setup_farmer(local_farmer, solver_name=mip_solver)
+            opt, m = tc.Farmer.setup_farmer(
+                local_farmer, solver_name=mip_solver, transform=transform
+            )
 
             print("\n")
             print(
@@ -196,12 +205,16 @@ class TestBendersSolver(unittest.TestCase):
 
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     @unittest.skipIf(not gurobi_available, "Gurobi is not available.")
-    def test_farmer_gurobi_persistent(self):
+    @parameterized.expand(
+        transforms,
+        skip_on_empty=True,
+    )
+    def test_farmer_gurobi_persistent(self, transform):
         solver_name = "gurobi_persistent"
         t0 = time.time()
         opt, m = tc.Farmer.setup_farmer_gurobi_persistent(
             tc.Farmer(),
-            transform=default_transform,
+            transform=transform,
         )
         print(
             "{0:<15}{1:<15}{2:<15}{3:<15}{4:<15}".format(
@@ -231,14 +244,19 @@ class TestBendersSolver(unittest.TestCase):
         self.assertAlmostEqual(pyo.value(m.obj), -108390, 0)
 
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
-    def test_farmer(self, mip_solver):
+    @parameterized.expand(
+        input=iter_product(non_persistent_mip_solvers, transforms),
+        name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
+        skip_on_empty=True,
+    )
+    def test_farmer(self, mip_solver, transform):
 
         t0 = time.time()
         opt, m = tc.Farmer.setup_farmer(
             tc.Farmer(),
             solver_name=mip_solver,
-            transform=default_transform,
+            # transform=default_transform,
+            transform=transform,
         )
 
         print(
@@ -312,7 +330,7 @@ class TestBendersSolver(unittest.TestCase):
 
     # @unittest.skipIf(True, "Temporary")
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
     def test_abs(self, solver):
 
         m = tc.absolute_value.create_root()
