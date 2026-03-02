@@ -61,13 +61,12 @@ class TestBendersSolver(unittest.TestCase):
     #
     # Farmer Tests
     #
-
-    @unittest.skipIf(not numpy_available, "numpy is not available.")
     @parameterized.expand(
         input=iter_product(non_persistent_mip_solvers, transforms),
         name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
         skip_on_empty=True,
     )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
     def test_farmer_single_scenarios(self, mip_solver, transform):
 
         outer_farmer = tc.Farmer()
@@ -131,12 +130,12 @@ class TestBendersSolver(unittest.TestCase):
             )
             self.assertAlmostEqual(pyo.value(m.obj), expected_obj_answers[scen], 0)
 
-    @unittest.skipIf(not numpy_available, "numpy is not available.")
     @parameterized.expand(
         input=iter_product(non_persistent_mip_solvers, transforms),
         name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
         skip_on_empty=True,
     )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
     def test_farmer_single_scenario_average_yield(self, mip_solver, transform):
 
         outer_farmer = tc.Farmer()
@@ -203,12 +202,12 @@ class TestBendersSolver(unittest.TestCase):
             )
             self.assertAlmostEqual(pyo.value(m.obj), expected_obj_answers[scen], 0)
 
-    @unittest.skipIf(not numpy_available, "numpy is not available.")
-    @unittest.skipIf(not gurobi_available, "Gurobi is not available.")
     @parameterized.expand(
         transforms,
         skip_on_empty=True,
     )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    @unittest.skipIf(not gurobi_available, "Gurobi is not available.")
     def test_farmer_gurobi_persistent(self, transform):
         solver_name = "gurobi_persistent"
         t0 = time.time()
@@ -243,12 +242,12 @@ class TestBendersSolver(unittest.TestCase):
         self.assertAlmostEqual(m.devoted_acreage["WHEAT"].value, 170, 7)
         self.assertAlmostEqual(pyo.value(m.obj), -108390, 0)
 
-    @unittest.skipIf(not numpy_available, "numpy is not available.")
     @parameterized.expand(
         input=iter_product(non_persistent_mip_solvers, transforms),
         name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
         skip_on_empty=True,
     )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
     def test_farmer(self, mip_solver, transform):
 
         t0 = time.time()
@@ -289,16 +288,16 @@ class TestBendersSolver(unittest.TestCase):
     # Grothey Tests
     #
 
+    @parameterized.expand(
+        input=iter_product(qp_solvers, non_linear_solvers),
+        name_func=lambda func, num, params: f"{func.__name__}_master_sol_{params.args[0]}_sub_sol_{params.args[1]}",
+        skip_on_empty=True,
+    )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     @unittest.skipIf(len(qp_solvers) == 0, "No Solver with Quadratic Support Available")
     @unittest.skipIf(
         len(non_linear_solvers) == 0,
         "No Solver with general Non-linear Support Available",
-    )
-    @parameterized.expand(
-        input=iter_product(qp_solvers, non_linear_solvers),
-        name_func=lambda func, num, params: f"{func.__name__}_master_sol_{params.args[0]}_sub_sol_{params.args[1]}",
-        skip_on_empty=True,
     )
     def test_grothey(self, qp_solver, nl_solver):
         print(f"Master solver {qp_solvers=}, Subproblem Solver {nl_solver=}")
@@ -328,9 +327,8 @@ class TestBendersSolver(unittest.TestCase):
     # abs Tests
     #
 
-    # @unittest.skipIf(True, "Temporary")
-    @unittest.skipIf(not numpy_available, "numpy is not available.")
     @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
     def test_abs(self, solver):
 
         m = tc.absolute_value.create_root()
