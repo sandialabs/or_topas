@@ -769,7 +769,23 @@ class Benders_Abstract(BlockData):
             var_to_con_map=var_to_con_map,
         )
 
-    def _solve_lp_subproblem(self, subproblem, local_subproblem_ndx):
+    def _create_feasibility_cut(self, constant, coeffs, eta_coeff, root_eta):
+        if constant > self.tol:
+            #
+            # add needed cut
+            #
+            cut_lhs = constant - sum(
+                coeffs[i] * (root_var - root_var.value)
+                for i, root_var in enumerate(self.root_vars)
+            )
+            cut_rhs = eta_coeff * (root_eta - root_eta.value)
+            new_cut = self.cuts.add(cut_lhs <= cut_rhs)
+        else:
+            # no cut needed
+            new_cut = None
+        return new_cut
+
+    def _solve_standard_lp_subproblem(self, subproblem, local_subproblem_ndx):
         subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
         complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
         root_eta = self.root_etas[local_subproblem_ndx]
@@ -841,6 +857,19 @@ class Benders_Abstract(BlockData):
             subproblem_coeff=subproblem_coeff,
             subproblem_eta_gap=subproblem_eta_gap,
         )
+
+    def _create_standard_lp_cut(self, constant, coeffs, eta_gap, root_eta):
+        if eta_gap > self.tol:
+            cut_lhs = constant - sum(
+                coeffs[i] * root_var for i, root_var in enumerate(self.root_vars)
+            )
+            # difference above tolerance, add cut
+            cut_rhs = root_eta
+
+            new_cut = self.cuts.add(cut_lhs <= cut_rhs)
+        else:
+            new_cut = None
+        return new_cut
 
 
 """
