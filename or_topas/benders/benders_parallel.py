@@ -167,24 +167,16 @@ class Benders_Parallel(Benders_Abstract):
         # Form cuts
         #
         for global_subproblem_ndx in range(total_num_subproblems):
-            cut_expr = global_constants[global_subproblem_ndx]
-            # check if cut needed for this subproblem
-            if cut_expr > self.tol:
-                #
-                # add needed cut
-                #
-                root_eta = self.all_root_etas[global_subproblem_ndx]
-                cut_expr -= global_eta_coeffs[global_subproblem_ndx] * (
-                    root_eta - root_eta.value
-                )
-                for root_var in self.root_vars:
-                    coeff = global_coeffs[coeff_ndx]
-                    cut_expr -= coeff * (root_var - root_var.value)
-                    coeff_ndx += 1
-                new_cut = self.cuts.add(cut_expr <= 0)
+            constant = global_constants[global_subproblem_ndx]
+            root_eta = self.all_root_etas[global_subproblem_ndx]
+            eta_coeff = global_eta_coeffs[global_subproblem_ndx]
+            offset = global_subproblem_ndx * len(self.root_vars)
+            coeffs = [global_coeffs[offset + i] for i in range(len(self.root_vars))]
+            new_cut = self._create_feasibility_cut(
+                constant=constant, coeffs=coeffs, eta_coeff=eta_coeff, root_eta=root_eta
+            )
+            if new_cut is not None:
                 cuts_added.append(new_cut)
-            else:
-                coeff_ndx += len(self.root_vars)
 
         return cuts_added
 
@@ -203,7 +195,7 @@ class Benders_Parallel(Benders_Abstract):
             global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
             coeff_ndx = global_subproblem_ndx * len(self.root_vars)
 
-            results_munch = self._solve_lp_subproblem(
+            results_munch = self._solve_standard_lp_subproblem(
                 subproblem=subproblem, local_subproblem_ndx=local_subproblem_ndx
             )
 
@@ -260,29 +252,18 @@ class Benders_Parallel(Benders_Abstract):
         # shouldn't this be blocked behind a rank check?
         # This is a point for parallel, not serial
 
-        coeff_ndx = 0
         cuts_added = list()
         for global_subproblem_ndx in range(total_num_subproblems):
-            cut_expr = global_constants[global_subproblem_ndx]
+            constant = global_constants[global_subproblem_ndx]
+            root_eta = self.all_root_etas[global_subproblem_ndx]
             eta_gap = global_subproblem_eta_gaps[global_subproblem_ndx]
-            if eta_gap > self.tol:
-                # difference above tolerance, add cut
-                root_eta = self.all_root_etas[global_subproblem_ndx]
-                for root_var in self.root_vars:
-                    coeff = global_coeffs[coeff_ndx]
-
-                    # transform case 1 for cut building, see transform details in Benders_Abstract
-                    cut_expr -= coeff * root_var
-
-                    # transform case 2 for cut building
-                    # cut_expr -= coeff * (root_var - root_var.value)
-
-                    coeff_ndx += 1
-                new_cut = self.cuts.add(cut_expr <= root_eta)
+            offset = global_subproblem_ndx * len(self.root_vars)
+            coeffs = [global_coeffs[offset + i] for i in range(len(self.root_vars))]
+            new_cut = self._create_standard_lp_cut(
+                constant=constant, coeffs=coeffs, eta_gap=eta_gap, root_eta=root_eta
+            )
+            if new_cut is not None:
                 cuts_added.append(new_cut)
-            else:
-                # skip cut, update ndx counter
-                coeff_ndx += len(self.root_vars)
 
         return cuts_added
 
