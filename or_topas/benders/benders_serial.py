@@ -29,6 +29,10 @@ class Benders_Serial(Benders_Abstract):
             "feasibility": Benders_Serial.generate_cut_feasibility_transform,
             "standard_lp": Benders_Serial.generate_cut_standard_lp_transform,
         }
+        self.transform_to_solve_map = {
+            "feasibility": Benders_Serial._solve_feasibility_subproblem,
+            "standard_lp": Benders_Serial._solve_standard_lp_subproblem,
+        }
         self.default_transform_name = "feasibility"
         self.num_subproblems_by_rank = 0  # np.zeros(self.comm.Get_size())
         self.all_root_etas = list()
@@ -94,7 +98,7 @@ class Benders_Serial(Benders_Abstract):
         for local_subproblem_ndx in range(len(self.subproblems)):
             subproblem = self.subproblems[local_subproblem_ndx]
             global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
-            coeff_ndx = global_subproblem_ndx * len(self.root_vars)
+            global_offset = global_subproblem_ndx * len(self.root_vars)
 
             #
             # solve the feasibility subproblem
@@ -115,14 +119,11 @@ class Benders_Serial(Benders_Abstract):
             #
             # Put data in data sharing resources
             #
-
-            constants[global_subproblem_ndx] = subproblem_constant
-
-            for coeff in subproblem_coeff:
-                coefficients[coeff_ndx] = coeff
-                coeff_ndx += 1
+            for i, coeff in enumerate(subproblem_coeff):
+                coefficients[global_offset+i] = coeff
 
             eta_coeffs[global_subproblem_ndx] = subproblem_eta
+            constants[global_subproblem_ndx] = subproblem_constant
 
         #
         # Cut formation logic
@@ -181,7 +182,7 @@ class Benders_Serial(Benders_Abstract):
             # set up subproblem data
             subproblem = self.subproblems[local_subproblem_ndx]
             global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
-            coeff_ndx = global_subproblem_ndx * len(self.root_vars)
+            global_offset = global_subproblem_ndx * len(self.root_vars)
 
             results_munch = self._solve_standard_lp_subproblem(
                 subproblem=subproblem, local_subproblem_ndx=local_subproblem_ndx
@@ -196,9 +197,8 @@ class Benders_Serial(Benders_Abstract):
             # Put data in data sharing resources
             #
 
-            for coeff in subproblem_coeff:
-                coefficients[coeff_ndx] = coeff
-                coeff_ndx += 1
+            for i, coeff in enumerate(subproblem_coeff):
+                coefficients[global_offset+i] = coeff
 
             constants[global_subproblem_ndx] = subproblem_constant
             subproblem_etas[global_subproblem_ndx] = subproblem_eta
@@ -252,14 +252,36 @@ class Benders_Serial(Benders_Abstract):
 
     def evaluate_all_subproblems(self):
         # take the x information from root problem in parent block
-        raise NotImplementedError(
-            "Benders_Serial does not have evaluate_all_subproblems"
-        )
+        if self.transform not in self.transform_to_cut_map:
+            raise NotImplementedError(
+                f"Benders_Serial does not have {self.transform=} implemented"
+            )
+        else:         
+            results_list = list()
+            for local_subproblem_ndx in range(len(self.subproblems)):
+                # set up subproblem data
+                subproblem = self.subproblems[local_subproblem_ndx]
+                results_munch = self.transform_to_solve_map[self.transform](self)(
+                    subproblem=subproblem, local_subproblem_ndx=local_subproblem_ndx
+                )
+                results_list.append(results_munch)
+            return results_list
 
     def evaluate_single_subproblem(self, index):
-        raise NotImplementedError(
-            "Benders_Serial does not have evaluate_single_subproblem"
-        )
+        if self.transform not in self.transform_to_cut_map:
+            raise NotImplementedError(
+                f"Benders_Serial does not have {self.transform=} implemented"
+            )
+        else:
+            if index not in range(len(self.subproblems)):
+                raise RuntimeError(f"Tried to evaluate subproblem {index}, can only evaluate subproblems {range(len(self.subproblems))}")
+            else:         
+                subproblem = self.subproblems[index]
+                results = self.transform_to_solve_map[self.transform](self)(
+                    subproblem=subproblem, local_subproblem_ndx=index
+                )
+                return results
+
 
     # need a create cut
     def generate_single_subproblem_cut(self, index):
