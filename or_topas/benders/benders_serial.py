@@ -120,7 +120,7 @@ class Benders_Serial(Benders_Abstract):
             # Put data in data sharing resources
             #
             for i, coeff in enumerate(subproblem_coeff):
-                coefficients[global_offset+i] = coeff
+                coefficients[global_offset + i] = coeff
 
             eta_coeffs[global_subproblem_ndx] = subproblem_eta
             constants[global_subproblem_ndx] = subproblem_constant
@@ -198,7 +198,7 @@ class Benders_Serial(Benders_Abstract):
             #
 
             for i, coeff in enumerate(subproblem_coeff):
-                coefficients[global_offset+i] = coeff
+                coefficients[global_offset + i] = coeff
 
             constants[global_subproblem_ndx] = subproblem_constant
             subproblem_etas[global_subproblem_ndx] = subproblem_eta
@@ -256,7 +256,7 @@ class Benders_Serial(Benders_Abstract):
             raise NotImplementedError(
                 f"Benders_Serial does not have {self.transform=} implemented"
             )
-        else:         
+        else:
             results_list = list()
             for local_subproblem_ndx in range(len(self.subproblems)):
                 # set up subproblem data
@@ -274,14 +274,15 @@ class Benders_Serial(Benders_Abstract):
             )
         else:
             if index not in range(len(self.subproblems)):
-                raise RuntimeError(f"Tried to evaluate subproblem {index}, can only evaluate subproblems {range(len(self.subproblems))}")
-            else:         
+                raise RuntimeError(
+                    f"Tried to evaluate subproblem {index}, can only evaluate subproblems {range(len(self.subproblems))}"
+                )
+            else:
                 subproblem = self.subproblems[index]
                 results = self.transform_to_solve_map[self.transform](self)(
                     subproblem=subproblem, local_subproblem_ndx=index
                 )
                 return results
-
 
     # need a create cut
     def generate_single_subproblem_cut(self, index):

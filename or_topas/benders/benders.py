@@ -767,7 +767,7 @@ class Benders_Abstract(BlockData):
             subproblem_eta=subproblem_eta,
             subproblem_coeff=subproblem_coeff,
             var_to_con_map=var_to_con_map,
-            subproblem_needs_cut=(subproblem_constant > self.tol)
+            subproblem_needs_cut=(subproblem_constant > self.tol),
         )
 
     def _create_feasibility_cut(self, constant, coeffs, eta_coeff, root_eta):
@@ -857,7 +857,7 @@ class Benders_Abstract(BlockData):
             subproblem_eta=subproblem_eta,
             subproblem_coeff=subproblem_coeff,
             subproblem_eta_gap=subproblem_eta_gap,
-            subproblem_needs_cut=(subproblem_eta_gap > self.tol)
+            subproblem_needs_cut=(subproblem_eta_gap > self.tol),
         )
 
     def _create_standard_lp_cut(self, constant, coeffs, eta_gap, root_eta):
