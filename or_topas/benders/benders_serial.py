@@ -261,8 +261,10 @@ class Benders_Serial(Benders_Abstract):
             for local_subproblem_ndx in range(len(self.subproblems)):
                 # set up subproblem data
                 subproblem = self.subproblems[local_subproblem_ndx]
-                results_munch = self.transform_to_solve_map[self.transform](self)(
-                    subproblem=subproblem, local_subproblem_ndx=local_subproblem_ndx
+                results_munch = self.transform_to_solve_map[self.transform](
+                    self,
+                    subproblem=subproblem,
+                    local_subproblem_ndx=local_subproblem_ndx,
                 )
                 results_list.append(results_munch)
             return results_list
@@ -279,8 +281,8 @@ class Benders_Serial(Benders_Abstract):
                 )
             else:
                 subproblem = self.subproblems[index]
-                results = self.transform_to_solve_map[self.transform](self)(
-                    subproblem=subproblem, local_subproblem_ndx=index
+                results = self.transform_to_solve_map[self.transform](
+                    self, subproblem=subproblem, local_subproblem_ndx=index
                 )
                 return results
 

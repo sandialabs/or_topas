@@ -120,6 +120,7 @@ def enumerate_linear_solutions(
             name="enumerate_linear_solutions", policy=PoolPolicy.keep_all
         )
 
+    # N.B. this is use later to control what variables get saved in solution
     all_variables = pyomo_utils.get_model_variables(model, include_fixed=False)
     # else:
     #     binary_variables = ComponentSet()
