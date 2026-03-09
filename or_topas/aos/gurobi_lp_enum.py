@@ -73,9 +73,15 @@ class NoGoodCutGenerator:
             for idx in range(len(self.variable_groups)):
                 continuous_var, binary_var = self.variable_groups[idx]
                 for var in continuous_var:
+                    #this is also where we should be able to add the only some variables are enumerated over
                     if continuous_var[var].value > self.zero_threshold:
                         num_non_zero += 1
                         non_zero_basic_expr += binary_var[var]
+            
+            # TODO: MPV - Actually think binary variables can be handled in the same ways as continuous ones
+            # Their upper bound for 0<= z_i<=Uw_i is just 1, and they meet the same 'active' means non-zero idea
+            # if z = [cont_vars, binary_var], its like adding dimension in cannonical form LP that is either 0 or at upper bound
+
             # TODO: JLG - If we want to add the mixed binary case, I think we
             # need to do it here. Essentially we would want to continue to
             # build up the num_non_zero as follows
