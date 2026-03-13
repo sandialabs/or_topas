@@ -22,7 +22,7 @@ if not param_available:
     raise unittest.SkipTest("Parameterized is not available.")
 parameterized = parameterized.parameterized
 
-non_persistnet_mip_solvers = list(
+non_persistent_mip_solvers = list(
     pyomo.opt.check_available_solvers("glpk", "highs", "gurobi_direct")
 )
 
@@ -37,13 +37,66 @@ gurobi_available = pyo.SolverFactory("gurobi_persistent").available(
 
 
 class TestBendersUtils(unittest.TestCase):
-    @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
     def test_farmer(self, mip_solver):
 
         t = True
         assert t, "Trivial Test"
 
-    @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_abs(self, solver):
+        transform = "standard_lp"
+        m = tc.absolute_value.create_root()
+        root_vars = [m.x]
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
+        m.benders.add_subproblem(
+            subproblem_fn=tc.absolute_value.create_subproblem,
+            subproblem_fn_kwargs={"root": m},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        opt = pyo.SolverFactory(solver)
+
+        for i in range(30):
+            res = opt.solve(m, tee=False)
+            cuts_added = m.benders.generate_cut()
+            if len(cuts_added) == 0:
+                break
+        self.assertAlmostEqual(m.x.value, 0.0, 4)
+        self.assertAlmostEqual(pyo.value(m.obj), 0.0, 4)
+        self.assertAlmostEqual(m.eta.value, 0.0, 4)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_modified_absolute_value(self, solver):
+        transform = "standard_lp"
+        a_set = [-1, 3, -2.2, 4.99]
+        for a in a_set:
+            m = tc.modified_absolute_value.create_root()
+            root_vars = [m.x]
+            data = data = MyMunch(a=a, L=1, R=1, LB=None, UB=None)
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
+            m.benders.add_subproblem(
+                subproblem_fn=tc.modified_absolute_value.create_subproblem,
+                subproblem_fn_kwargs={"root_x": m.x, "data": data},
+                root_eta=m.eta,
+                subproblem_solver=solver,
+            )
+            opt = pyo.SolverFactory(solver)
+
+            for i in range(30):
+                res = opt.solve(m, tee=False)
+                cuts_added = m.benders.generate_cut()
+                if len(cuts_added) == 0:
+                    break
+            self.assertAlmostEqual(m.x.value, a, 4)
+            self.assertAlmostEqual(pyo.value(m.obj), 0.0, 4)
+            self.assertAlmostEqual(m.eta.value, 0.0, 4)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     def test_farmer_multiple_scenario_evaluate_single_scen_model(self, mip_solver):
 
@@ -101,7 +154,7 @@ class TestBendersUtils(unittest.TestCase):
                 m.eta[s] = results_list[i].subproblem_eta
             self.assertAlmostEqual(pyo.value(m.obj), expected_obj_answers[scen], 3)
 
-    @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     def test_farmer_single_scenario_evaluate_single_scen_model(self, mip_solver):
 
@@ -159,7 +212,7 @@ class TestBendersUtils(unittest.TestCase):
                 m.eta[s] = results_munch.subproblem_eta
             self.assertAlmostEqual(pyo.value(m.obj), expected_obj_answers[scen], 3)
 
-    @parameterized.expand(input=non_persistnet_mip_solvers, skip_on_empty=True)
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     def test_farmer_multiple_scenario_evaluate_multiple_scen_model(self, mip_solver):
 

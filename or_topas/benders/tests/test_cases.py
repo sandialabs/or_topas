@@ -3,6 +3,86 @@ import pyomo.environ as pyo
 from or_topas.benders import (
     BendersGenerator_Serial,
 )
+from or_topas.util.mymunch import MyMunch
+
+
+class modified_absolute_value:
+    @staticmethod
+    def create_root():
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(bounds=(None, None), initialize=0)
+        m.eta = pyo.Var(bounds=(-10, None))
+        m.obj = pyo.Objective(expr=m.eta)
+        return m
+
+    @staticmethod
+    def create_subproblem(root_x, data):
+        """
+        This subproblem implements the following function
+
+        Q(x) =  max{R(x-a), -L(x-a)} if x \in [LB, UB]
+                +\infty              if x \not \in [LB,UB]
+
+        The subproblem that implements this is:
+        Q(x) = min_{y >= 0} R*y[R] + L*y[L]
+                s.t.    -y[R] + y[L] == a - x
+                        y[UB_Slack] == UB - x
+                        y[LB_Slack] == -LB + x
+
+        Note that this is only LP representable when -L <= R
+        This subproblem should result in the following cuts:
+        Opt Cuts:
+        \theta >= R(x-a)
+        \theta >= -L(x-a)
+        Corresponding to dual vertices [R, 0, 0]' and [-L, 0, 0]'
+
+        Feas Cuts:
+        0 >= x - UB
+        0 >= -x + LB
+        Corresponding to extreme rays [0, -1, 0]' and [0, 0, -1]
+        """
+
+        if data == None:
+            data = MyMunch(a=0, L=1, R=1, LB=-5, UB=5)
+        else:
+            assert isinstance(data, MyMunch), "Need data argument to be a MyMunch"
+            # these variables need default values
+            data.a = 0 if ("a" not in data or data.a is None) else data.a
+            data.L = 1 if ("L" not in data or data.L is None) else data.L
+            data.R = 1 if ("R" not in data or data.R is None) else data.R
+
+            # optional arguments
+            data.LB = -5 if "LB" not in data else data.LB
+            data.UB = 5 if "UB" not in data else data.UB
+
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+
+        y_indices = {"Right", "Left"}
+        if data.LB is not None:
+            y_indices.add("LB_Slack")
+        if data.UB is not None:
+            y_indices.add("UB_Slack")
+        m.y_indices = pyo.Set(initialize=y_indices)
+        m.y = pyo.Var(m.y_indices, bounds=(0, None))
+
+        # objective
+        m.obj = pyo.Objective(expr=data.R * m.y["Right"] + data.L * m.y["Left"])
+
+        # vertex constriant
+        m.vertex_cons = pyo.Constraint(expr=-m.y["Right"] + m.y["Left"] == data.a - m.x)
+
+        # optional lower bound constraint
+        if data.LB is not None:
+            m.lb_cons = pyo.Constraint(expr=m.y["LB_Slack"] - m.x == -data.LB)
+
+        if data.UB is not None:
+            m.ub_cons = pyo.Constraint(expr=m.y["UB_Slack"] + m.x == data.UB)
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root_x] = m.x
+
+        return m, complicating_vars_map
 
 
 class absolute_value:
