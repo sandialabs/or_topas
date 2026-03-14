@@ -58,11 +58,11 @@ class modified_absolute_value:
         m = pyo.ConcreteModel()
         m.x = pyo.Var()
 
-        y_indices = {"Right", "Left"}
+        y_indices = ["Right", "Left"]
         if data.LB is not None:
-            y_indices.add("LB_Slack")
+            y_indices.append("LB_Slack")
         if data.UB is not None:
-            y_indices.add("UB_Slack")
+            y_indices.append("UB_Slack")
         m.y_indices = pyo.Set(initialize=y_indices)
         m.y = pyo.Var(m.y_indices, bounds=(0, None))
 
