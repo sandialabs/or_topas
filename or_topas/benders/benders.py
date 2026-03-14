@@ -88,6 +88,7 @@ class Benders_Abstract(BlockData):
         self.transform = kwargs.get("transform", self.default_transform_name)
         if self.transform is None:
             self.transform = self.default_transform_name
+        self.allow_infeasible = kwargs.get("allow_infeasible", False)
         for i, v in enumerate(self.root_vars):
             self.root_vars_indices[v] = i
         self.tol = kwargs.get("tol", 1e-6)
@@ -660,27 +661,30 @@ class Benders_Abstract(BlockData):
             print("Done standard lp transform")
 
     @staticmethod
-    def _update_and_solve_model(subproblem, subproblem_solver, added_constraints):
+    def _update_and_solve_model(
+        subproblem, subproblem_solver, added_constraints, allow_infeasible=False
+    ):
+        allowed_conditions = {pyo.TerminationCondition.optimal}
+        if allow_infeasible:
+            # add ability to treat primal infeasible
+            allowed_conditions.add(pyo.TerminationCondition.infeasible)
         if isinstance(subproblem_solver, PersistentSolver):
             for c in added_constraints:
                 subproblem_solver.add_constraint(c)
-            # for c in subproblem.fix_complicating_vars.values():
-            #     subproblem_solver.add_constraint(c)
-            # subproblem_solver.add_constraint(subproblem.fix_eta)
             res = subproblem_solver.solve(
                 tee=False, load_solutions=False, save_results=False
             )
-            if res.solver.termination_condition != pyo.TerminationCondition.optimal:
+            if res.solver.termination_condition not in allowed_conditions:
                 raise RuntimeError(
-                    "Unable to generate cut because subproblem failed to converge."
+                    f"Issue in {id(subproblem)=}, got termination condition {res.solver.termination_condition} instead of expected conditions: {allowed_conditions}"
                 )
             subproblem_solver.load_vars()
             subproblem_solver.load_duals()
         else:
             res = subproblem_solver.solve(subproblem, tee=False, load_solutions=False)
-            if res.solver.termination_condition != pyo.TerminationCondition.optimal:
+            if res.solver.termination_condition not in allowed_conditions:
                 raise RuntimeError(
-                    "Unable to generate cut because subproblem failed to converge."
+                    f"Issue in {id(subproblem)=}, got termination condition {res.solver.termination_condition} instead of expected conditions: {allowed_conditions}"
                 )
             subproblem.solutions.load_from(res)
 
@@ -738,6 +742,7 @@ class Benders_Abstract(BlockData):
             subproblem=subproblem,
             subproblem_solver=subproblem_solver,
             added_constraints=added_constraints,
+            allow_infeasible=False,
         )
 
         #
@@ -786,7 +791,9 @@ class Benders_Abstract(BlockData):
             new_cut = None
         return new_cut
 
-    def _solve_standard_lp_subproblem(self, subproblem, local_subproblem_ndx):
+    def _solve_standard_lp_subproblem(
+        self, subproblem, local_subproblem_ndx, allow_infeasible=False, build_cut=True
+    ):
         subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
         complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
         root_eta = self.root_etas[local_subproblem_ndx]
@@ -808,44 +815,67 @@ class Benders_Abstract(BlockData):
             subproblem=subproblem,
             subproblem_solver=subproblem_solver,
             added_constraints=subproblem.fix_complicating_vars.values(),
+            allow_infeasible=allow_infeasible,
         )
 
-        #
-        # Start of collect subproblem data for subproblem global_subproblem_ndx
-        #
-
-        # so we have the reformatted constraints in aux_con as Wy+Tx - h <= 0, and fix_cons as x - x_general = 0
-        # the single scenario cut then becomes dual_sign_conv*[sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con)) + sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value)) for rv in root_vars]
-        # note that then the following evals to a scalar: sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
-        # this is then the part dealing with master problem vars: sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value) for rv in root_vars)
-        # we then have |root_vars| + 2 params to move around to form cut and cut needed (obj val)
-
-        # so the coefficients come from the fixed first stage variables
-        # so coefficients[coeff_ndx] = fix_cons.dual[root_var_to_fix_con[rv]], where coeff_ndx = global_subproblem_ndx * len(self.root_vars) + (i for i, v in enumerate(root_var_to_fix_con.keys() if v == rv)
-
-        #
-        # Subproblem data collection
-        #
-
-        # the constants are come from the sum of everything else for the subproblem as:
-        # constants[global_subproblem_ndx] = sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
-        # all terms need to include the subproblem solver sign convention
-
-        subproblem_constant = -sign_convention * sum(
-            subproblem.dual[subproblem.aux_cons[c]]
-            * pyo.value(subproblem.aux_cons_rhs_exprs[i])
-            for i, c in enumerate(subproblem.aux_cons)
+        optimal_solution = (
+            res.solver.termination_condition == pyo.TerminationCondition.optimal
         )
-
-        subproblem_eta = pyo.value(subproblem.orig_obj_expr)
-        subproblem_eta_gap = abs(
-            pyo.value(root_eta) - pyo.value(subproblem.orig_obj_expr)
+        infeasible_model = (
+            res.solver.termination_condition == pyo.TerminationCondition.infeasible
         )
-        subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
-        temp_ndx = 0
-        for root_var, c in var_to_con_map.items():
-            subproblem_coeff[temp_ndx] = sign_convention * pyo.value(subproblem.dual[c])
-            temp_ndx += 1
+        assert optimal_solution or (
+            allow_infeasible and infeasible_model
+        ), f"Have a solver termination condition in solve that was not expected: {res.solver.termination_condition}"
+        if build_cut:
+            #
+            # Start of collect subproblem data for subproblem global_subproblem_ndx
+            #
+
+            # so we have the reformatted constraints in aux_con as Wy+Tx - h <= 0, and fix_cons as x - x_general = 0
+            # the single scenario cut then becomes dual_sign_conv*[sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con)) + sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value)) for rv in root_vars]
+            # note that then the following evals to a scalar: sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
+            # this is then the part dealing with master problem vars: sum(fix_cons.dual[root_var_to_fix_con[rv]]*(rv-rv.value) for rv in root_vars)
+            # we then have |root_vars| + 2 params to move around to form cut and cut needed (obj val)
+
+            # so the coefficients come from the fixed first stage variables
+            # so coefficients[coeff_ndx] = fix_cons.dual[root_var_to_fix_con[rv]], where coeff_ndx = global_subproblem_ndx * len(self.root_vars) + (i for i, v in enumerate(root_var_to_fix_con.keys() if v == rv)
+
+            #
+            # Subproblem data collection
+            #
+
+            # the constants are come from the sum of everything else for the subproblem as:
+            # constants[global_subproblem_ndx] = sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
+            # all terms need to include the subproblem solver sign convention
+
+            subproblem_constant = -sign_convention * sum(
+                subproblem.dual[subproblem.aux_cons[c]]
+                * pyo.value(subproblem.aux_cons_rhs_exprs[i])
+                for i, c in enumerate(subproblem.aux_cons)
+            )
+            subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
+            temp_ndx = 0
+            for root_var, c in var_to_con_map.items():
+                subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
+                    subproblem.dual[c]
+                )
+                temp_ndx += 1
+        else:
+            subproblem_constant = None
+            subproblem_coeff = None
+
+        if optimal_solution:
+            subproblem_eta = pyo.value(subproblem.orig_obj_expr)
+            subproblem_eta_gap = abs(
+                pyo.value(root_eta) - pyo.value(subproblem.orig_obj_expr)
+            )
+
+            needs_cut = subproblem_eta_gap > self.tol
+        else:
+            subproblem_eta = None
+            subproblem_eta_gap = None
+            needs_cut = True
 
         if isinstance(subproblem_solver, PersistentSolver):
             for c in subproblem.fix_complicating_vars.values():
@@ -857,16 +887,29 @@ class Benders_Abstract(BlockData):
             subproblem_eta=subproblem_eta,
             subproblem_coeff=subproblem_coeff,
             subproblem_eta_gap=subproblem_eta_gap,
-            subproblem_needs_cut=(subproblem_eta_gap > self.tol),
+            subproblem_needs_cut=needs_cut,
+            subproblem_infeasible=infeasible_model,
         )
 
-    def _create_standard_lp_cut(self, constant, coeffs, eta_gap, root_eta):
-        if eta_gap > self.tol:
+    def _create_standard_lp_cut(
+        self,
+        *,
+        constant,
+        coeffs,
+        root_eta,
+        eta_gap=-1,
+        needs_cut=False,
+        infeasible=False,
+    ):
+
+        if needs_cut or (eta_gap > self.tol):
             cut_lhs = constant - sum(
                 coeffs[i] * root_var for i, root_var in enumerate(self.root_vars)
             )
             # difference above tolerance, add cut
-            cut_rhs = root_eta
+            cut_rhs = 0
+            if not infeasible:
+                cut_rhs = root_eta
 
             new_cut = self.cuts.add(cut_lhs <= cut_rhs)
         else:

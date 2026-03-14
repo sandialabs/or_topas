@@ -187,44 +187,57 @@ class Benders_Parallel(Benders_Abstract):
         )
         constants = np.zeros(self.global_num_subproblems(), dtype="d")
         subproblem_etas = np.zeros(self.global_num_subproblems(), dtype="d")
-        subproblem_eta_gaps = np.zeros(self.global_num_subproblems(), dtype="d")
-
+        subproblems_needs_cuts = np.zeros(self.global_num_subproblems(), dtype="d")
+        subproblems_infeasible = np.zeros(self.global_num_subproblems(), dtype="d")
         for local_subproblem_ndx in range(len(self.subproblems)):
             # set up subproblem data
             subproblem = self.subproblems[local_subproblem_ndx]
             global_subproblem_ndx = self._subproblem_ndx_map[local_subproblem_ndx]
-            coeff_ndx = global_subproblem_ndx * len(self.root_vars)
+            global_offset = global_subproblem_ndx * len(self.root_vars)
 
             results_munch = self._solve_standard_lp_subproblem(
-                subproblem=subproblem, local_subproblem_ndx=local_subproblem_ndx
+                subproblem=subproblem,
+                local_subproblem_ndx=local_subproblem_ndx,
+                allow_infeasible=self.allow_infeasible,
             )
 
             subproblem_constant = results_munch.subproblem_constant
             subproblem_eta = results_munch.subproblem_eta
             subproblem_coeff = results_munch.subproblem_coeff
             subproblem_eta_gap = results_munch.subproblem_eta_gap
+            subproblem_infeasible = results_munch.subproblem_infeasible
 
             #
             # Put data in data sharing resources
             #
 
-            for coeff in subproblem_coeff:
-                coefficients[coeff_ndx] = coeff
-                coeff_ndx += 1
+            for i, coeff in enumerate(subproblem_coeff):
+                coefficients[global_offset + i] = coeff
 
             constants[global_subproblem_ndx] = subproblem_constant
-            subproblem_etas[global_subproblem_ndx] = subproblem_eta
-            subproblem_eta_gaps[global_subproblem_ndx] = subproblem_eta_gap
 
+            # do not want to pass nones through the reduce logic
+            subproblem_etas[global_subproblem_ndx] = (
+                subproblem_eta if not subproblem_infeasible else 0
+            )
+            subproblems_needs_cuts[global_subproblem_ndx] = float(
+                (subproblem_eta_gap > self.tol) or subproblem_infeasible
+            )
+            subproblems_infeasible[global_subproblem_ndx] = float(subproblem_infeasible)
         #
         # Cut formation logic
+        #
+        #
+        # N.B. the inclusion of the global vars and Allreduce commands under comments are intetional
+        # this is meant to show the connection to the parallel version
         #
 
         total_num_subproblems = self.global_num_subproblems()
         global_constants = np.zeros(total_num_subproblems, dtype="d")
         global_coeffs = np.zeros(total_num_subproblems * len(self.root_vars), dtype="d")
         global_subproblem_etas = np.zeros(total_num_subproblems, dtype="d")
-        global_subproblem_eta_gaps = np.zeros(total_num_subproblems, dtype="d")
+        global_subproblem_needs_cut = np.zeros(total_num_subproblems, dtype="d")
+        global_subproblem_infeasible = np.zeros(total_num_subproblems, dtype="d")
 
         comm = self.comm
         comm.Allreduce([constants, MPI.DOUBLE], [global_constants, MPI.DOUBLE])
@@ -233,45 +246,46 @@ class Benders_Parallel(Benders_Abstract):
             [subproblem_etas, MPI.DOUBLE], [global_subproblem_etas, MPI.DOUBLE]
         )
         comm.Allreduce(
-            [subproblem_eta_gaps, MPI.DOUBLE], [global_subproblem_eta_gaps, MPI.DOUBLE]
+            [subproblems_needs_cuts, MPI.DOUBLE],
+            [global_subproblem_needs_cut, MPI.DOUBLE],
+        )
+        comm.Allreduce(
+            [subproblems_infeasible, MPI.DOUBLE],
+            [global_subproblem_infeasible, MPI.DOUBLE],
         )
 
         # serial version in place of all reduce
         # global_constants = constants
         # global_coeffs = coefficients
         # global_subproblem_etas = subproblem_etas
-        #
+        # global_subproblem_needs_cut = subproblems_needs_cuts
+        # global_subproblem_infeasible = subproblems_infeasible
 
         global_constants = [float(i) for i in global_constants]
         global_coeffs = [float(i) for i in global_coeffs]
         global_subproblem_etas = [float(i) for i in global_subproblem_etas]
-
-        global_subproblem_eta_gaps = [float(i) for i in global_subproblem_eta_gaps]
-
-        # TODO: why do we need all threads computing the same cuts?
-        # shouldn't this be blocked behind a rank check?
-        # This is a point for parallel, not serial
+        global_subproblem_needs_cut = [i > 0.5 for i in global_subproblem_needs_cut]
+        global_subproblem_infeasible = [i > 0.5 for i in global_subproblem_infeasible]
 
         cuts_added = list()
         for global_subproblem_ndx in range(total_num_subproblems):
             constant = global_constants[global_subproblem_ndx]
             root_eta = self.all_root_etas[global_subproblem_ndx]
-            eta_gap = global_subproblem_eta_gaps[global_subproblem_ndx]
+            infeasible = global_subproblem_infeasible[global_subproblem_ndx]
+            needs_cut = global_subproblem_needs_cut[global_subproblem_ndx]
             offset = global_subproblem_ndx * len(self.root_vars)
             coeffs = [global_coeffs[offset + i] for i in range(len(self.root_vars))]
             new_cut = self._create_standard_lp_cut(
-                constant=constant, coeffs=coeffs, eta_gap=eta_gap, root_eta=root_eta
+                constant=constant,
+                coeffs=coeffs,
+                root_eta=root_eta,
+                needs_cut=needs_cut,
+                infeasible=infeasible,
             )
             if new_cut is not None:
                 cuts_added.append(new_cut)
 
         return cuts_added
-
-    def evaluate_all_subproblems(self):
-        # take the x information from root problem in parent block
-        raise NotImplementedError(
-            "Benders_Parallel does not have evaluate_all_subproblems"
-        )
 
     def evaluate_single_subproblem(self, index):
         raise NotImplementedError(
