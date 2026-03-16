@@ -32,6 +32,7 @@ class Benders_Abstract(BlockData):
         gurobi=-1,
         gurobi_direct=-1,
         gurobi_persistent=-1,
+        appsi_gurobi=-1,
         cplex=-1,
         cplex_direct=-1,
         cplexdirect=-1,
@@ -40,6 +41,7 @@ class Benders_Abstract(BlockData):
         cbc=-1,
         xpress_direct=-1,
         highs=-1,
+        appsi_highs=-1,
     )
     default_transform_name = "default"
 
@@ -61,6 +63,7 @@ class Benders_Abstract(BlockData):
         self.root_etas = list()
         self.cuts = None
         self.subproblem_solvers = list()
+        self.subproblem_solver_names = list()
         self.tol = None
 
     # TODO: what methods do we want here
@@ -160,6 +163,7 @@ class Benders_Abstract(BlockData):
         # )
 
         # general code
+        subproblem_solver_name = None
         if isinstance(subproblem_solver, str):
             if "scip" in subproblem_solver:
                 raise NotImplementedError(
@@ -167,8 +171,21 @@ class Benders_Abstract(BlockData):
                 )
             else:
                 self.check_dual_info = False
+                subproblem_solver_name = subproblem_solver
                 subproblem_solver = pyo.SolverFactory(subproblem_solver)
+
         self.subproblem_solvers.append(subproblem_solver)
+        if hasattr(subproblem_solver, "name"):
+            subproblem_solver_name = subproblem_solver.name
+        elif hasattr(subproblem_solver, "solver_name"):
+            subproblem_solver_name = subproblem_solver.solver_name
+
+        if subproblem_solver_name is None:
+            raise RuntimeError(
+                f"Not able to determine the solver name for inputted subproblem solver"
+            )
+        self.subproblem_solver_names.append(subproblem_solver_name)
+
         if isinstance(subproblem_solver, PersistentSolver):
             subproblem_solver.set_instance(subproblem)
 
@@ -664,6 +681,7 @@ class Benders_Abstract(BlockData):
     def _update_and_solve_model(
         subproblem, subproblem_solver, added_constraints, allow_infeasible=False
     ):
+        optimal_conditions = {pyo.TerminationCondition.optimal}
         allowed_conditions = {pyo.TerminationCondition.optimal}
         if allow_infeasible:
             # add ability to treat primal infeasible
@@ -678,15 +696,17 @@ class Benders_Abstract(BlockData):
                 raise RuntimeError(
                     f"Issue in {id(subproblem)=}, got termination condition {res.solver.termination_condition} instead of expected conditions: {allowed_conditions}"
                 )
-            subproblem_solver.load_vars()
-            subproblem_solver.load_duals()
+            if res.solver.termination_condition in optimal_conditions:
+                subproblem_solver.load_vars()
+                subproblem_solver.load_duals()
         else:
             res = subproblem_solver.solve(subproblem, tee=False, load_solutions=False)
             if res.solver.termination_condition not in allowed_conditions:
                 raise RuntimeError(
                     f"Issue in {id(subproblem)=}, got termination condition {res.solver.termination_condition} instead of expected conditions: {allowed_conditions}"
                 )
-            subproblem.solutions.load_from(res)
+            if res.solver.termination_condition in optimal_conditions:
+                subproblem.solutions.load_from(res)
 
         return res
 
@@ -707,6 +727,7 @@ class Benders_Abstract(BlockData):
     ):
         # set up subproblem data
         subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
+        subproblem_solver_name = self.subproblem_solver_names[local_subproblem_ndx]
         complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
         root_eta = self.root_etas[local_subproblem_ndx]
 
@@ -714,7 +735,7 @@ class Benders_Abstract(BlockData):
         # get dual sign convention, error if not supported
         #
         sign_convention = Benders_Abstract._get_solver_sign_convention(
-            solver_name=subproblem_solver.name
+            solver_name=subproblem_solver_name
         )
 
         var_to_con_map = Benders_Abstract._fix_first_stage_var_copies(
@@ -724,11 +745,6 @@ class Benders_Abstract(BlockData):
         )
 
         Benders_Abstract._fix_eta_copies(subproblem=subproblem, root_eta=root_eta)
-
-        # subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
-        sign_convention = Benders_Abstract._get_solver_sign_convention(
-            solver_name=subproblem_solver.name
-        )
 
         #
         # update and solve subproblem
@@ -795,6 +811,7 @@ class Benders_Abstract(BlockData):
         self, subproblem, local_subproblem_ndx, allow_infeasible=False, build_cut=True
     ):
         subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
+        subproblem_solver_name = self.subproblem_solver_names[local_subproblem_ndx]
         complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
         root_eta = self.root_etas[local_subproblem_ndx]
 
@@ -805,7 +822,7 @@ class Benders_Abstract(BlockData):
         )
 
         sign_convention = Benders_Abstract._get_solver_sign_convention(
-            solver_name=subproblem_solver.name
+            solver_name=subproblem_solver_name
         )
 
         # handle subproblem solve
