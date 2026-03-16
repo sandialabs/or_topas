@@ -253,13 +253,13 @@ class Farmer:
         return m, complicating_vars_map
 
     @staticmethod
-    def setup_farmer_gurobi_persistent(
+    def setup_farmer_persistent(
         Farmer_Data,
         CutGenerator=BendersGenerator_Serial,
         **kwargs,
     ):
         # designed for gurobi_persistent
-        solver_name = "gurobi_persistent"
+        solver_name = kwargs.get("solver_name", "gurobi_persistent")
         farmer = Farmer_Data
         m = Farmer.create_root(farmer=farmer)
         root_vars = list(m.devoted_acreage.values())

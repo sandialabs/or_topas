@@ -42,6 +42,14 @@ non_persistent_mip_solvers = list(
     pyomo.opt.check_available_solvers("glpk", "highs", "gurobi_direct")
 )
 
+persistent_mip_solvers = list(
+    pyomo.opt.check_available_solvers(
+        "appsi_highs",
+        "appsi_gurobi",
+        "gurobi_persistent",
+    )
+)
+
 qp_solvers = list(pyomo.opt.check_available_solvers("ipopt", "gurobi_direct", "highs"))
 non_linear_solvers = list(pyomo.opt.check_available_solvers("ipopt"))
 
@@ -202,18 +210,24 @@ class TestBendersSolver(unittest.TestCase):
             )
             self.assertAlmostEqual(pyo.value(m.obj), expected_obj_answers[scen], 0)
 
+    # @parameterized.expand(
+    #     transforms,
+    #     skip_on_empty=True,
+    # )
     @parameterized.expand(
-        transforms,
+        input=iter_product(persistent_mip_solvers, transforms),
+        name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
         skip_on_empty=True,
     )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     @unittest.skipIf(not gurobi_available, "Gurobi is not available.")
-    def test_farmer_gurobi_persistent(self, transform):
-        solver_name = "gurobi_persistent"
+    def test_farmer_gurobi_persistent(self, solver, transform):
+        solver = "gurobi_persistent"
         t0 = time.time()
-        opt, m = tc.Farmer.setup_farmer_gurobi_persistent(
+        opt, m = tc.Farmer.setup_farmer_persistent(
             tc.Farmer(),
             transform=transform,
+            solver_name=solver,
         )
         print(
             "{0:<15}{1:<15}{2:<15}{3:<15}{4:<15}".format(
