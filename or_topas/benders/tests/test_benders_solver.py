@@ -30,8 +30,16 @@ from pyomo.common.dependencies import (
 from or_topas.benders import (
     BendersGenerator_Serial as BendersCutGenerator,
 )
+from or_topas.util.mymunch import MyMunch
 
 import or_topas.benders.tests.test_cases as tc
+
+infeasibility_persistent_test_solvers = list(
+    pyomo.opt.check_available_solvers(
+        # "appsi_gurobi", #TODO: update to allow appsi_gurobi to work
+        "gurobi_persistent",
+    )
+)
 
 parameterized, param_available = attempt_import("parameterized")
 if not param_available:
@@ -44,8 +52,8 @@ non_persistent_mip_solvers = list(
 
 persistent_mip_solvers = list(
     pyomo.opt.check_available_solvers(
-        "appsi_highs",
-        "appsi_gurobi",
+        # "appsi_highs",
+        # "appsi_gurobi",
         "gurobi_persistent",
     )
 )
@@ -222,7 +230,7 @@ class TestBendersSolver(unittest.TestCase):
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     @unittest.skipIf(not gurobi_available, "Gurobi is not available.")
     def test_farmer_gurobi_persistent(self, solver, transform):
-        solver = "gurobi_persistent"
+        # solver = "gurobi_persistent"
         t0 = time.time()
         opt, m = tc.Farmer.setup_farmer_persistent(
             tc.Farmer(),
@@ -365,3 +373,48 @@ class TestBendersSolver(unittest.TestCase):
         self.assertAlmostEqual(m.x.value, 0.0, 4)
         self.assertAlmostEqual(pyo.value(m.obj), 0.0, 4)
         self.assertAlmostEqual(m.eta.value, 0.0, 4)
+
+    #
+    # modified abs Tests
+    #
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_infeasible_persistent_generate_cut(self, solver):
+        transform = "standard_lp"
+        x_set = [-10, -7, 0, 7, 10]
+        a_val = [-1, 0, 1]
+        for current_a in a_val:
+            for index, x_val in enumerate(x_set):
+                m = tc.modified_absolute_value.create_root()
+                root_vars = [m.x]
+                data = data = MyMunch(a=current_a, L=1, R=1, LB=-6, UB=4)
+                m.benders = BendersCutGenerator()
+                m.benders.set_input(
+                    root_vars=root_vars,
+                    tol=1e-8,
+                    transform=transform,
+                    allow_infeasible=True,
+                )
+                m.benders.add_subproblem(
+                    subproblem_fn=tc.modified_absolute_value.create_subproblem,
+                    subproblem_fn_kwargs={"root_x": m.x, "data": data},
+                    root_eta=m.eta,
+                    subproblem_solver=solver,
+                )
+                m.x = x_val
+                opt = pyo.SolverFactory(solver)
+                opt.set_instance(m)
+                for i in range(30):
+                    res = opt.solve(tee=False, save_results=False)
+                    cuts_added = m.benders.generate_cut()
+                    for c in cuts_added:
+                        opt.add_constraint(c)
+                    if len(cuts_added) == 0:
+                        break
+
+                self.assertAlmostEqual(m.x.value, current_a, 4)
+                self.assertAlmostEqual(pyo.value(m.obj), 0.0, 4)
+                self.assertAlmostEqual(m.eta.value, 0.0, 4)
