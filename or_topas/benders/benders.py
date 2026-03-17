@@ -914,6 +914,8 @@ class Benders_Abstract(BlockData):
             # constants[global_subproblem_ndx] = sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
             # all terms need to include the subproblem solver sign convention
             if infeasible_model:
+                #N.B. the sign convention for Farkas information can be different from duals
+                #this needs to be checked
                 throw_availability_error = False
                 if "gurobi" in subproblem_solver_name.lower():
                     if "appsi" in subproblem_solver_name.lower():
@@ -923,7 +925,7 @@ class Benders_Abstract(BlockData):
                         # farkas_dual = gurobi_con.getAttr('FarkasDual')
                         # or as a one liner:
                         # subproblem_solver._pyomo_con_to_solver_con_map[cons].getAttr('FarkasDual')
-                        subproblem_constant = -sign_convention * sum(
+                        subproblem_constant = sign_convention * sum(
                             subproblem_solver._pyomo_con_to_solver_con_map[
                                 subproblem.aux_cons[c]
                             ].getAttr(
@@ -935,7 +937,7 @@ class Benders_Abstract(BlockData):
                         subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
                         temp_ndx = 0
                         for root_var, c in var_to_con_map.items():
-                            subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
+                            subproblem_coeff[temp_ndx] = -sign_convention * pyo.value(
                                 subproblem_solver._pyomo_con_to_solver_con_map[
                                     c
                                 ].getAttr(
@@ -949,7 +951,8 @@ class Benders_Abstract(BlockData):
                         # farkas_dual = subproblem_solver.get_linear_constraint_attr(cons, 'FarkasDual')
                         # print(f"{type(subproblem.aux_cons)=}")
                         # print(f"{subproblem.aux_cons=}")
-                        subproblem_constant = -sign_convention * sum(
+                        # subproblem_constant = -sign_convention * sum(
+                        subproblem_constant = sign_convention * sum(
                             subproblem_solver.get_linear_constraint_attr(
                                 subproblem.aux_cons[c], "FarkasDual"
                             )  # subproblem.dual[subproblem.aux_cons[c]]
@@ -959,7 +962,8 @@ class Benders_Abstract(BlockData):
                         subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
                         temp_ndx = 0
                         for root_var, c in var_to_con_map.items():
-                            subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
+                            # subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
+                            subproblem_coeff[temp_ndx] = -sign_convention * pyo.value(
                                 subproblem_solver.get_linear_constraint_attr(
                                     c, "FarkasDual"
                                 )  # subproblem.dual[c]
