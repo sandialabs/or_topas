@@ -728,6 +728,7 @@ class Benders_Abstract(BlockData):
                 subproblem_solver.load_duals()
         elif isinstance(subproblem_solver, APPSI_PERSISTENT):
             # this branch is having issues
+            raise NotImplementedError(f"Not Presently Supporting APPSI Solvers")
             res = subproblem_solver.solve(
                 subproblem,
                 tee=False,

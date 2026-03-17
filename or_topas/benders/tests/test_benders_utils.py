@@ -39,8 +39,8 @@ infeasibility_persistent_test_solvers = list(
 
 persistent_mip_solvers = list(
     pyomo.opt.check_available_solvers(
-        "appsi_highs",
-        "appsi_gurobi",
+        # "appsi_highs",
+        # "appsi_gurobi",
         "gurobi_persistent",
     )
 )
@@ -642,7 +642,6 @@ class TestBendersUtils(unittest.TestCase):
         for index, x_val in enumerate(x_set):
             m = tc.modified_absolute_value.create_root()
             root_vars = [m.x]
-            cut_expr = constants[index] - coeffs[index][0] * m.x <= 0
             data = data = MyMunch(a=0, L=1, R=1, LB=-6, UB=4)
             m.benders = BendersCutGenerator()
             m.benders.set_input(
@@ -659,7 +658,6 @@ class TestBendersUtils(unittest.TestCase):
             )
             m.x = x_val
 
-            # results_list = m.benders.evaluate_all_subproblems(build_cut=True)
             cuts_list = m.benders.generate_all_subproblem_cut()
             assert len(cuts_list) == 1
             repn = generate_standard_repn(cuts_list[0].body, compute_values=False)
