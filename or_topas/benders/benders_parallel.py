@@ -221,7 +221,7 @@ class Benders_Parallel(Benders_Abstract):
                 subproblem_eta if not subproblem_infeasible else 0
             )
             subproblems_needs_cuts[global_subproblem_ndx] = float(
-                (subproblem_eta_gap > self.tol) or subproblem_infeasible
+                subproblem_infeasible or (subproblem_eta_gap > self.tol)
             )
             subproblems_infeasible[global_subproblem_ndx] = float(subproblem_infeasible)
         #
