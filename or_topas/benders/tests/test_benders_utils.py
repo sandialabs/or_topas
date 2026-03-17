@@ -16,6 +16,7 @@ from or_topas.benders.benders_serial import (
 )
 import or_topas.benders.tests.test_cases as tc
 from or_topas.util.mymunch import MyMunch
+from pyomo.repn.standard_repn import generate_standard_repn
 
 parameterized, param_available = attempt_import("parameterized")
 if not param_available:
@@ -635,10 +636,13 @@ class TestBendersUtils(unittest.TestCase):
         transform = "standard_lp"
         x_set = [-10, 10]
         constants = [-6, -4]
-        coeffs = [[1], [-1]]
+        # note the flipped sign here from the evaluate above
+        # this is a detail of how the cuts are formed
+        coeffs = [[-1], [1]]
         for index, x_val in enumerate(x_set):
             m = tc.modified_absolute_value.create_root()
             root_vars = [m.x]
+            cut_expr = constants[index] - coeffs[index][0] * m.x <= 0
             data = data = MyMunch(a=0, L=1, R=1, LB=-6, UB=4)
             m.benders = BendersCutGenerator()
             m.benders.set_input(
@@ -655,27 +659,15 @@ class TestBendersUtils(unittest.TestCase):
             )
             m.x = x_val
 
-            results_list = m.benders.evaluate_all_subproblems(build_cut=True)
+            # results_list = m.benders.evaluate_all_subproblems(build_cut=True)
             cuts_list = m.benders.generate_all_subproblem_cut()
-            for c in cuts_list:
-                print(c.expr)
-            # results_munch = results_list[0]
-            # assert isinstance(results_munch, MyMunch), "Expect only one MyMunch object"
-            # assert results_munch.subproblem_needs_cut == True, "Should need a cut"
-            # assert results_munch.subproblem_infeasible == True, "Should be infeasible"
-            # assert (
-            #     results_munch.subproblem_eta is None
-            # ), "Should be None as problem is infeasible"
-            # assert (
-            #     results_munch.subproblem_eta_gap is None
-            # ), "Should be None as problem is infeasible"
-            # self.assertAlmostEqual(
-            #     results_munch.subproblem_constant, constants[index], 7
-            # )
-            # numpy.testing.assert_allclose(
-            #     results_munch.subproblem_coeff,
-            #     coeffs[index],
-            #     rtol=1e-7,
-            #     atol=1e-8,
-            #     equal_nan=True,
-            # )
+            assert len(cuts_list) == 1
+            repn = generate_standard_repn(cuts_list[0].body, compute_values=False)
+            self.assertAlmostEqual(repn.constant, constants[index], 7)
+            numpy.testing.assert_allclose(
+                repn.linear_coefs,
+                coeffs[index],
+                rtol=1e-7,
+                atol=1e-8,
+                equal_nan=True,
+            )
