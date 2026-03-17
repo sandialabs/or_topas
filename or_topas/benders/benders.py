@@ -16,6 +16,7 @@ from pyomo.common.dependencies import (
 from pyomo.core.base.block import BlockData, declare_custom_block
 from pyomo.core.expr.visitor import identify_variables
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
+from pyomo.contrib.appsi.base import PersistentSolver as APPSI_PERSISTENT
 
 import pyomo.environ as pyo
 from or_topas.util import pyomo_utils
@@ -186,7 +187,9 @@ class Benders_Abstract(BlockData):
             )
         self.subproblem_solver_names.append(subproblem_solver_name)
 
-        if isinstance(subproblem_solver, PersistentSolver):
+        if isinstance(subproblem_solver, PersistentSolver) or isinstance(
+            subproblem_solver, APPSI_PERSISTENT
+        ):
             subproblem_solver.set_instance(subproblem)
 
     # need transform
@@ -679,22 +682,37 @@ class Benders_Abstract(BlockData):
 
     @staticmethod
     def _update_and_solve_model(
-        subproblem, subproblem_solver, added_constraints, allow_infeasible=False, subproblem_solver_name=None, allow_dual_reductions=True,
+        subproblem,
+        subproblem_solver,
+        added_constraints,
+        allow_infeasible=False,
+        subproblem_solver_name=None,
+        allow_dual_reductions=False,
     ):
         optimal_conditions = {pyo.TerminationCondition.optimal}
         allowed_conditions = {pyo.TerminationCondition.optimal}
         if allow_infeasible:
             # add ability to treat primal infeasible
             allowed_conditions.add(pyo.TerminationCondition.infeasible)
-            # if subproblem_solver_name is not None and "gurobi" in subproblem_solver_name.lower():
-            #     if "appsi" in subproblem_solver_name.lower():
-            #         #appsi_gurobi solver, use dictionary access to track dual unbounded info
-            #         subproblem_solver.gurobi_options['InfUnbdInfo'] = 1
-            #         subproblem_solver.gurobi_options['DualReductions'] = 1 if allow_dual_reductions else 0
-            #     elif "persistent" in subproblem_solver_name.lower():
-            #         #gurobi_persistent solver, use dictionary access to track dual unbounded info
-            #         subproblem_solver.set_gurobi_param('InfUnbdInfo', 1)
-            #         subproblem_solver.set_gurobi_param('DualReductions', 1 if allow_dual_reductions else 0)
+            if (
+                subproblem_solver_name is not None
+                and "gurobi" in subproblem_solver_name.lower()
+            ):
+                if "appsi" in subproblem_solver_name.lower():
+                    # appsi_gurobi solver, use dictionary access to track dual unbounded info
+                    raise NotImplementedError(
+                        f"Infeasibility Support Not yet supported for APPSI gurobi, only supported for Gurobi_Persistent for now"
+                    )
+                    subproblem_solver.gurobi_options["InfUnbdInfo"] = 1
+                    subproblem_solver.gurobi_options["DualReductions"] = (
+                        1 if allow_dual_reductions else 0
+                    )
+                elif "persistent" in subproblem_solver_name.lower():
+                    # gurobi_persistent solver, use dictionary access to track dual unbounded info
+                    subproblem_solver.set_gurobi_param("InfUnbdInfo", 1)
+                    subproblem_solver.set_gurobi_param(
+                        "DualReductions", 1 if allow_dual_reductions else 0
+                    )
         if isinstance(subproblem_solver, PersistentSolver):
             for c in added_constraints:
                 subproblem_solver.add_constraint(c)
@@ -708,7 +726,21 @@ class Benders_Abstract(BlockData):
             if res.solver.termination_condition in optimal_conditions:
                 subproblem_solver.load_vars()
                 subproblem_solver.load_duals()
+        elif isinstance(subproblem_solver, APPSI_PERSISTENT):
+            # this branch is having issues
+            res = subproblem_solver.solve(
+                subproblem,
+                tee=False,
+                load_solutions=False,
+            )
+            if res.solver.termination_condition not in allowed_conditions:
+                raise RuntimeError(
+                    f"Issue in {id(subproblem)=}, got termination condition {res.solver.termination_condition} instead of expected conditions: {allowed_conditions}"
+                )
+            if res.solver.termination_condition in optimal_conditions:
+                subproblem.solutions.load_from(res)
         else:
+            print(f"{subproblem_solver_name=} in non_persistent solver branch")
             res = subproblem_solver.solve(subproblem, tee=False, load_solutions=False)
             if res.solver.termination_condition not in allowed_conditions:
                 raise RuntimeError(
@@ -817,7 +849,12 @@ class Benders_Abstract(BlockData):
         return new_cut
 
     def _solve_standard_lp_subproblem(
-        self, subproblem, local_subproblem_ndx, allow_infeasible=False, build_cut=True, allow_dual_reductions=True
+        self,
+        subproblem,
+        local_subproblem_ndx,
+        allow_infeasible=False,
+        build_cut=True,
+        allow_dual_reductions=True,
     ):
         subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
         subproblem_solver_name = self.subproblem_solver_names[local_subproblem_ndx]
@@ -887,7 +924,9 @@ class Benders_Abstract(BlockData):
                         # or as a one liner:
                         # subproblem_solver._pyomo_con_to_solver_con_map[cons].getAttr('FarkasDual')
                         subproblem_constant = -sign_convention * sum(
-                            subproblem_solver._pyomo_con_to_solver_con_map[c].getAttr('FarkasDual') #subproblem.dual[subproblem.aux_cons[c]]
+                            subproblem_solver._pyomo_con_to_solver_con_map[c].getAttr(
+                                "FarkasDual"
+                            )  # subproblem.dual[subproblem.aux_cons[c]]
                             * pyo.value(subproblem.aux_cons_rhs_exprs[i])
                             for i, c in enumerate(subproblem.aux_cons)
                         )
@@ -895,7 +934,11 @@ class Benders_Abstract(BlockData):
                         temp_ndx = 0
                         for root_var, c in var_to_con_map.items():
                             subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
-                                subproblem_solver._pyomo_con_to_solver_con_map[c].getAttr('FarkasDual') # subproblem.dual[c]
+                                subproblem_solver._pyomo_con_to_solver_con_map[
+                                    c
+                                ].getAttr(
+                                    "FarkasDual"
+                                )  # subproblem.dual[c]
                             )
                             temp_ndx += 1
                     elif "persistent" in subproblem_solver_name.lower():
@@ -903,7 +946,9 @@ class Benders_Abstract(BlockData):
                         # equivalent of dual here of subproblem.dual[cons] is
                         # farkas_dual = subproblem_solver.get_linear_constraint_attr(cons, 'FarkasDual')
                         subproblem_constant = -sign_convention * sum(
-                            subproblem_solver.get_linear_constraint_attr(c, 'FarkasDual') #subproblem.dual[subproblem.aux_cons[c]]
+                            subproblem_solver.get_linear_constraint_attr(
+                                c, "FarkasDual"
+                            )  # subproblem.dual[subproblem.aux_cons[c]]
                             * pyo.value(subproblem.aux_cons_rhs_exprs[i])
                             for i, c in enumerate(subproblem.aux_cons)
                         )
@@ -911,7 +956,9 @@ class Benders_Abstract(BlockData):
                         temp_ndx = 0
                         for root_var, c in var_to_con_map.items():
                             subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
-                                subproblem_solver.get_linear_constraint_attr(c, 'FarkasDual') #subproblem.dual[c]
+                                subproblem_solver.get_linear_constraint_attr(
+                                    c, "FarkasDual"
+                                )  # subproblem.dual[c]
                             )
                             temp_ndx += 1
                     else:
@@ -919,9 +966,11 @@ class Benders_Abstract(BlockData):
                 else:
                     throw_availability_error = True
                 if throw_availability_error:
-                    raise RuntimeError(f"Attempted to form infeasibility cut without solver support for dual rays, {subproblem_solver_name=}, {local_subproblem_ndx=}")
+                    raise RuntimeError(
+                        f"Attempted to form infeasibility cut without solver support for dual rays, {subproblem_solver_name=}, {local_subproblem_ndx=}"
+                    )
             else:
-                #optimal solution case:
+                # optimal solution case:
                 subproblem_constant = -sign_convention * sum(
                     subproblem.dual[subproblem.aux_cons[c]]
                     * pyo.value(subproblem.aux_cons_rhs_exprs[i])

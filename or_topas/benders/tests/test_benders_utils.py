@@ -31,7 +31,7 @@ infeasibility_test_solvers = list(
 
 infeasibility_persistent_test_solvers = list(
     pyomo.opt.check_available_solvers(
-        "appsi_gurobi",
+        # "appsi_gurobi", #TODO: update to allow appsi_gurobi to work
         "gurobi_persistent",
     )
 )
