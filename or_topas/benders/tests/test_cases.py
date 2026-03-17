@@ -4,6 +4,8 @@ from or_topas.benders import (
     BendersGenerator_Serial,
 )
 from or_topas.util.mymunch import MyMunch
+import itertools
+from math import pi as pi_value
 
 
 class modified_absolute_value:
@@ -332,4 +334,224 @@ class Grothey:
         complicating_vars_map = pyo.ComponentMap()
         complicating_vars_map[root.y] = m.y
 
+        return m, complicating_vars_map
+
+
+class EnergyGrid:
+    def __init__(self):
+        # model data
+
+        # we can change these three parameters to get a unique value
+        # originally not designed to be unique
+
+        # original values
+        self.load_dict = {"bus1": 0, "bus2": 0, "bus3": 100}
+        self.gen_max_dict = {"bus1": 100, "bus2": 100, "bus3": 0}
+        self.cost_dict = {"bus1": 50, "bus2": 50, "bus3": 0}
+        self.flow_bounds_dict = {
+            ("bus1", "bus2"): 100,
+            ("bus1", "bus3"): 100,
+            ("bus2", "bus3"): 100,
+        }
+
+        self.susceptance_dict = {
+            ("bus1", "bus2"): 100,
+            ("bus1", "bus3"): 100,
+            ("bus2", "bus3"): 100,
+        }
+
+        self.flow_bounds_dict = {
+            ("bus1", "bus2"): 100,
+            ("bus1", "bus2"): 0,
+            ("bus1", "bus3"): 100,
+            ("bus1", "bus3"): 0,
+            ("bus2", "bus3"): 100,
+        }
+        self.theta_bounds_dict = {"bus1": pi_value, "bus2": pi_value, "bus3": pi_value}
+        self.buses = ["bus1", "bus2", "bus3"]
+        self.lines = itertools.combinations(self.buses, 2)
+        # {('bus1', 'bus2'), ('bus1', 'bus3'), ('bus2', 'bus3')}
+
+    # DC-Optimal Power Flow Example
+    # Adapted from TPEC paper example model
+    # mode 0 is Copper Plate
+    # mode 1 is Network Flow
+    # mode 2 is DC-OPF with flow variables
+    @staticmethod
+    def create_tiny_opf(grid, mode=2):
+        assert mode in [0, 1, 2], "Needs to be mode 0, 1, or 2"
+        if mode == 0:
+            print("Model in Copper Plate Mode")
+        elif mode == 1:
+            print("Model in Network Flow Mode")
+        elif mode == 2:
+            print("Model in DC-OPF")
+        # model creation
+        model = pyo.ConcreteModel()
+        model.buses = pyo.Set(initialize=grid.buses)
+
+        # always on components
+        model.loads = pyo.Param(model.buses, initialize=grid.load_dict)
+        model.capacity = pyo.Param(model.buses, initialize=grid.gen_max_dict)
+        model.costs = pyo.Param(model.buses, initialize=grid.cost_dict)
+
+        def gen_max_rule(m, bus):
+            return (-1, m.capacity[bus] + 1)
+
+        model.generation = pyo.Var(
+            model.buses, domain=pyo.PositiveReals, bounds=gen_max_rule
+        )
+
+        # Explicit lower bound constraint so dual accessed in with dual not reduced cost attribute
+        def gen_lower_rule(m, bus):
+            return m.generation[bus] >= 0
+
+        model.gen_lower = pyo.Constraint(model.buses, rule=gen_lower_rule)
+
+        # Explicit upper bound constraint so dual accessed in with dual not reduced cost attribute
+        def gen_upper_rule(m, bus):
+            return m.generation[bus] <= m.capacity[bus]
+
+        model.gen_upper = pyo.Constraint(model.buses, rule=gen_upper_rule)
+
+        def obj_rule(m):
+            return pyo.summation(m.costs, m.generation)
+
+        model.obj = pyo.Objective(rule=obj_rule)
+
+        # copper plate mode
+        if mode == 0:
+            model.copper_plate_balance = pyo.Constraint(
+                expr=sum(model.generation[i] for i in model.buses)
+                - sum(model.loads[i] for i in model.buses)
+                == 0
+            )
+        else:
+            # Network flow or DC OPF Mode
+            model.lines = pyo.Set(initialize=grid.lines)
+            model.flow_max = pyo.Param(model.lines, initialize=grid.flow_bounds_dict)
+
+            def NodesOut_init(m, node):
+                for i, j in m.lines:
+                    if i == node:
+                        yield j
+
+            model.NodesOut = pyo.Set(model.buses, initialize=NodesOut_init)
+
+            def NodesIn_init(m, node):
+                for i, j in m.lines:
+                    if j == node:
+                        yield i
+
+            model.NodesIn = pyo.Set(model.buses, initialize=NodesIn_init)
+
+            def flow_max_rule(m, i, j):
+                return (-m.flow_max[i, j] - 1, m.flow_max[i, j] + 1)
+
+            model.flows = pyo.Var(model.lines, bounds=flow_max_rule)
+
+            # Explicit lower bound constraint so dual accessed in with dual not reduced cost attribute
+            def flow_lower_rule(m, i, j):
+                return m.flows[i, j] >= -m.flow_max[i, j]
+
+            model.flow_lower = pyo.Constraint(model.lines, rule=flow_lower_rule)
+
+            # Explicit upper bound constraint so dual accessed in with dual not reduced cost attribute
+            def flow_upper_rule(m, i, j):
+                return m.flows[i, j] <= m.flow_max[i, j]
+
+            model.flow_upper = pyo.Constraint(model.lines, rule=flow_upper_rule)
+
+            def FlowBalance_rule(m, node):
+                return (
+                    m.generation[node]
+                    + sum(m.flows[i, node] for i in m.NodesIn[node])
+                    - m.loads[node]
+                    - sum(m.flows[node, j] for j in m.NodesOut[node])
+                    == 0
+                )
+
+            model.FlowBalance = pyo.Constraint(model.buses, rule=FlowBalance_rule)
+
+            if mode == 2:
+                # DC-OPF Mode
+                model.theta_max = pyo.Param(
+                    model.buses, initialize=grid.theta_bounds_dict
+                )
+
+                def theta_max_rule(m, bus):
+                    return (-m.theta_max[bus] - 1, m.theta_max[bus] + 1)
+
+                model.angles = pyo.Var(model.buses, bounds=theta_max_rule)
+
+                # Explicit lower bound constraint so dual accessed in with dual not reduced cost attribute
+                def angles_lower_rule(m, bus):
+                    return m.angles[bus] >= -m.theta_max[bus]
+
+                model.angles_lower = pyo.Constraint(model.buses, rule=angles_lower_rule)
+
+                # Explicit upper bound constraint so dual accessed in with dual not reduced cost attribute
+                def angles_upper_rule(m, bus):
+                    return m.angles[bus] <= m.theta_max[bus]
+
+                model.angles_upper = pyo.Constraint(model.buses, rule=angles_upper_rule)
+                model.susceptance = pyo.Param(
+                    model.lines, initialize=grid.susceptance_dict
+                )
+
+                # what happens when flow on line is zero, this enforces a_i = a_j when f_{i,j} = 0
+                def power_rule(m, *line):
+                    return m.flows[line] == m.susceptance[line] * (
+                        m.angles[line[1]] - m.angles[line[0]]
+                    )
+
+                model.PowerBalance = pyo.Constraint(model.lines, rule=power_rule)
+        return model
+
+    @staticmethod
+    def create_root(grid):
+        model = pyo.ConcreteModel()
+        model.buses = pyo.Set(initialize=grid.buses)
+        model.costs = pyo.Param(model.buses, initialize=grid.cost_dict)
+        model.capacity = pyo.Param(model.buses, initialize=grid.gen_max_dict)
+
+        def gen_max_rule(m, bus):
+            return (-1, model.capacity[bus] + 1)
+
+        model.generation = pyo.Var(
+            model.buses, domain=pyo.PositiveReals, bounds=gen_max_rule
+        )
+
+        model.generation = pyo.Var(model.buses, domain=pyo.Reals)
+
+        # Explicit lower bound constraint so dual accessed in with dual not reduced cost attribute
+        def gen_lower_rule(m, bus):
+            return m.generation[bus] >= 0
+
+        model.gen_lower = pyo.Constraint(model.buses, rule=gen_lower_rule)
+
+        # Explicit upper bound constraint so dual accessed in with dual not reduced cost attribute
+        def gen_upper_rule(m, bus):
+            return m.generation[bus] <= m.capacity[bus]
+
+        model.gen_upper = pyo.Constraint(model.buses, rule=gen_upper_rule)
+
+        def obj_rule(m):
+            return pyo.summation(m.costs, m.generation)
+
+        model.obj = pyo.Objective(rule=obj_rule)
+
+        # add unbounded var as eta placeholder since this is feasibility only
+        # need to initialize to trivial value to avoid None issues
+        model.eta = pyo.Var(initialize=0.0)
+        return model
+
+    @staticmethod
+    def create_subproblem(root, grid, mode=2):
+        m = EnergyGrid.create_tiny_opf(grid=grid, mode=mode)
+
+        complicating_vars_map = pyo.ComponentMap()
+        for b in grid.buses:
+            complicating_vars_map[root.generation[b]] = m.generation[b]
+        # print('Done creating subproblem')
         return m, complicating_vars_map

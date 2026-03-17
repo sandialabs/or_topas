@@ -382,7 +382,7 @@ class TestBendersSolver(unittest.TestCase):
         input=infeasibility_persistent_test_solvers, skip_on_empty=True
     )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    def test_infeasible_persistent_generate_cut(self, solver):
+    def test_modified_abs_with_feas_cuts(self, solver):
         transform = "standard_lp"
         x_set = [-10, -7, 0, 7, 10]
         a_val = [-1, 0, 1]
@@ -390,7 +390,7 @@ class TestBendersSolver(unittest.TestCase):
             for index, x_val in enumerate(x_set):
                 m = tc.modified_absolute_value.create_root()
                 root_vars = [m.x]
-                data = data = MyMunch(a=current_a, L=1, R=1, LB=-6, UB=4)
+                data = MyMunch(a=current_a, L=1, R=1, LB=-6, UB=4)
                 m.benders = BendersCutGenerator()
                 m.benders.set_input(
                     root_vars=root_vars,
@@ -418,3 +418,95 @@ class TestBendersSolver(unittest.TestCase):
                 self.assertAlmostEqual(m.x.value, current_a, 4)
                 self.assertAlmostEqual(pyo.value(m.obj), 0.0, 4)
                 self.assertAlmostEqual(m.eta.value, 0.0, 4)
+
+        #
+
+    # modified abs Tests
+    #
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_dcopf_simple(self, solver):
+        transform = "standard_lp"
+        set_points = [0, 50, 100]
+        expected_obj = 5000
+        for index, gen_start in enumerate(set_points):
+            grid = tc.EnergyGrid()
+            m = tc.EnergyGrid.create_root(grid=grid)
+            root_vars = list(m.generation.values())
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars,
+                tol=1e-8,
+                transform=transform,
+                allow_infeasible=True,
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.EnergyGrid.create_subproblem,
+                subproblem_fn_kwargs={"root": m, "grid": grid},
+                root_eta=m.eta,
+                subproblem_solver=solver,
+            )
+            for b in grid.buses:
+                m.generation[b] = gen_start
+            opt = pyo.SolverFactory(solver)
+            opt.set_instance(m)
+            for i in range(30):
+                res = opt.solve(tee=False, save_results=False)
+                cuts_added = m.benders.generate_cut()
+                for c in cuts_added:
+                    opt.add_constraint(c)
+                if len(cuts_added) == 0:
+                    break
+
+            gen_list = [rv.value for rv in root_vars]
+            for gen in gen_list:
+                assert gen >= 0, "Generation Should Always Be Non-negative"
+            self.assertAlmostEqual(sum(gen_list), sum(grid.load_dict.values()), 4)
+            self.assertAlmostEqual(pyo.value(m.obj), expected_obj, 4)
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_dcopf_adjusted_gen_max(self, solver):
+        transform = "standard_lp"
+        set_points = [0, 50, 100]
+        expected_obj = 5000
+        for index, gen_start in enumerate(set_points):
+            grid = tc.EnergyGrid()
+            grid.gen_max_dict = {"bus1": 75, "bus2": 75, "bus3": 0}
+            m = tc.EnergyGrid.create_root(grid=grid)
+            root_vars = list(m.generation.values())
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars,
+                tol=1e-8,
+                transform=transform,
+                allow_infeasible=True,
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.EnergyGrid.create_subproblem,
+                subproblem_fn_kwargs={"root": m, "grid": grid},
+                root_eta=m.eta,
+                subproblem_solver=solver,
+            )
+            for b in grid.buses:
+                m.generation[b] = gen_start
+            opt = pyo.SolverFactory(solver)
+            opt.set_instance(m)
+            for i in range(30):
+                res = opt.solve(tee=False, save_results=False)
+                cuts_added = m.benders.generate_cut()
+                for c in cuts_added:
+                    opt.add_constraint(c)
+                if len(cuts_added) == 0:
+                    break
+
+            gen_list = [rv.value for rv in root_vars]
+            for gen in gen_list:
+                assert gen >= 0, "Generation Should Always Be Non-negative"
+            self.assertAlmostEqual(sum(gen_list), sum(grid.load_dict.values()), 4)
+            self.assertAlmostEqual(pyo.value(m.obj), expected_obj, 4)
