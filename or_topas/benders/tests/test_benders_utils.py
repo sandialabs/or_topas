@@ -631,9 +631,7 @@ class TestBendersUtils(unittest.TestCase):
         input=infeasibility_persistent_test_solvers, skip_on_empty=True
     )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    def test_infeasible_persistent_generate_cut(
-        self, solver
-    ):
+    def test_infeasible_persistent_generate_cut(self, solver):
         transform = "standard_lp"
         x_set = [-10, 10]
         constants = [-6, -4]

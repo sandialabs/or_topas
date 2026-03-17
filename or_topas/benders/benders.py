@@ -914,8 +914,8 @@ class Benders_Abstract(BlockData):
             # constants[global_subproblem_ndx] = sum(aux_con.dual[c]*pyo.value(aux_con_rhs[i]) for i,c in enumerate(aux_con))
             # all terms need to include the subproblem solver sign convention
             if infeasible_model:
-                #N.B. the sign convention for Farkas information can be different from duals
-                #this needs to be checked
+                # N.B. the sign convention for Farkas information can be different from duals
+                # this needs to be checked
                 throw_availability_error = False
                 if "gurobi" in subproblem_solver_name.lower():
                     if "appsi" in subproblem_solver_name.lower():
