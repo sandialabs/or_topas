@@ -854,7 +854,7 @@ class Benders_Abstract(BlockData):
         local_subproblem_ndx,
         allow_infeasible=False,
         build_cut=True,
-        allow_dual_reductions=True,
+        allow_dual_reductions=False,
     ):
         subproblem_solver = self.subproblem_solvers[local_subproblem_ndx]
         subproblem_solver_name = self.subproblem_solver_names[local_subproblem_ndx]
@@ -924,7 +924,9 @@ class Benders_Abstract(BlockData):
                         # or as a one liner:
                         # subproblem_solver._pyomo_con_to_solver_con_map[cons].getAttr('FarkasDual')
                         subproblem_constant = -sign_convention * sum(
-                            subproblem_solver._pyomo_con_to_solver_con_map[c].getAttr(
+                            subproblem_solver._pyomo_con_to_solver_con_map[
+                                subproblem.aux_cons[c]
+                            ].getAttr(
                                 "FarkasDual"
                             )  # subproblem.dual[subproblem.aux_cons[c]]
                             * pyo.value(subproblem.aux_cons_rhs_exprs[i])
@@ -945,9 +947,11 @@ class Benders_Abstract(BlockData):
                         # appsi feasibility cut case
                         # equivalent of dual here of subproblem.dual[cons] is
                         # farkas_dual = subproblem_solver.get_linear_constraint_attr(cons, 'FarkasDual')
+                        # print(f"{type(subproblem.aux_cons)=}")
+                        # print(f"{subproblem.aux_cons=}")
                         subproblem_constant = -sign_convention * sum(
                             subproblem_solver.get_linear_constraint_attr(
-                                c, "FarkasDual"
+                                subproblem.aux_cons[c], "FarkasDual"
                             )  # subproblem.dual[subproblem.aux_cons[c]]
                             * pyo.value(subproblem.aux_cons_rhs_exprs[i])
                             for i, c in enumerate(subproblem.aux_cons)

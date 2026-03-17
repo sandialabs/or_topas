@@ -483,7 +483,9 @@ class TestBendersUtils(unittest.TestCase):
         input=infeasibility_persistent_test_solvers, skip_on_empty=True
     )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    def test_infeasible_persistent_problem_evaluate_all_subproblem(self, solver):
+    def test_infeasible_persistent_problem_evaluate_all_subproblem_skip_cut_build(
+        self, solver
+    ):
         transform = "standard_lp"
         x_set = [-10, 10]
         for x_val in x_set:
@@ -521,3 +523,106 @@ class TestBendersUtils(unittest.TestCase):
             assert (
                 results_munch.subproblem_eta_gap is None
             ), "Should be None as problem is infeasible"
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_infeasible_persistent_problem_evaluate_all_subproblem_cut_build(
+        self, solver
+    ):
+        transform = "standard_lp"
+        x_set = [-10, 10]
+        constants = [6, 4]
+        coeffs = [[-1], [1]]
+        for index, x_val in enumerate(x_set):
+            m = tc.modified_absolute_value.create_root()
+            root_vars = [m.x]
+            data = data = MyMunch(a=0, L=1, R=1, LB=-6, UB=4)
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars,
+                tol=1e-8,
+                transform=transform,
+                allow_infeasible=True,
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.modified_absolute_value.create_subproblem,
+                subproblem_fn_kwargs={"root_x": m.x, "data": data},
+                root_eta=m.eta,
+                subproblem_solver=solver,
+            )
+            m.x = x_val
+            results_list = m.benders.evaluate_all_subproblems(build_cut=True)
+            results_munch = results_list[0]
+            assert isinstance(results_munch, MyMunch), "Expect only one MyMunch object"
+            assert results_munch.subproblem_needs_cut == True, "Should need a cut"
+            assert results_munch.subproblem_infeasible == True, "Should be infeasible"
+            assert (
+                results_munch.subproblem_eta is None
+            ), "Should be None as problem is infeasible"
+            assert (
+                results_munch.subproblem_eta_gap is None
+            ), "Should be None as problem is infeasible"
+            self.assertAlmostEqual(
+                results_munch.subproblem_constant, constants[index], 7
+            )
+            numpy.testing.assert_allclose(
+                results_munch.subproblem_coeff,
+                coeffs[index],
+                rtol=1e-7,
+                atol=1e-8,
+                equal_nan=True,
+            )
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_infeasible_persistent_problem_evaluate_single_problem_subproblem_cut_build(
+        self, solver
+    ):
+        transform = "standard_lp"
+        x_set = [-10, 10]
+        constants = [6, 4]
+        coeffs = [[-1], [1]]
+        for index, x_val in enumerate(x_set):
+            m = tc.modified_absolute_value.create_root()
+            root_vars = [m.x]
+            data = data = MyMunch(a=0, L=1, R=1, LB=-6, UB=4)
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars,
+                tol=1e-8,
+                transform=transform,
+                allow_infeasible=True,
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.modified_absolute_value.create_subproblem,
+                subproblem_fn_kwargs={"root_x": m.x, "data": data},
+                root_eta=m.eta,
+                subproblem_solver=solver,
+            )
+            m.x = x_val
+            results_munch = m.benders.evaluate_single_subproblem(
+                index=0, build_cut=True
+            )
+            assert isinstance(results_munch, MyMunch), "Expect only one MyMunch object"
+            assert results_munch.subproblem_needs_cut == True, "Should need a cut"
+            assert results_munch.subproblem_infeasible == True, "Should be infeasible"
+            assert (
+                results_munch.subproblem_eta is None
+            ), "Should be None as problem is infeasible"
+            assert (
+                results_munch.subproblem_eta_gap is None
+            ), "Should be None as problem is infeasible"
+            self.assertAlmostEqual(
+                results_munch.subproblem_constant, constants[index], 7
+            )
+            numpy.testing.assert_allclose(
+                results_munch.subproblem_coeff,
+                coeffs[index],
+                rtol=1e-7,
+                atol=1e-8,
+                equal_nan=True,
+            )
