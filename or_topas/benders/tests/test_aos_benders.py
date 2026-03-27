@@ -15,6 +15,7 @@ from or_topas.benders.benders_serial import (
     BendersGenerator_Serial as BendersCutGenerator,
 )
 import or_topas.benders.tests.test_cases as tc
+from or_topas.benders.aos_benders import aos_farmer_test as aos_benders_farmer_test
 from or_topas.util.mymunch import MyMunch
 from pyomo.repn.standard_repn import generate_standard_repn
 
@@ -24,10 +25,10 @@ if not param_available:
 parameterized = parameterized.parameterized
 
 non_persistent_mip_solvers = list(
-    pyomo.opt.check_available_solvers("glpk", "highs", "gurobi_direct")
+    pyomo.opt.check_available_solvers("glpk", "highs", "gurobi")
 )
 infeasibility_test_solvers = list(
-    pyomo.opt.check_available_solvers("glpk", "gurobi_direct")
+    pyomo.opt.check_available_solvers("glpk", "gurobi")
 )
 
 infeasibility_persistent_test_solvers = list(
@@ -69,3 +70,16 @@ class TestAOS_Benders_Optimality(unittest.TestCase):
 
         t = True
         assert t, "Trivial Test"
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    def test_farmer(self, mip_solver):
+
+        aos_benders_farmer_test(
+            mip_solver=mip_solver,
+            num_solutions=10,
+            mode="s",
+            tee=False,
+            tee_final=False,
+            rel_gap=0.01,
+            use_skip_vars=False,
+        )
