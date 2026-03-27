@@ -18,6 +18,7 @@ import itertools
 from math import pi as pi_value
 import pprint
 import or_topas.benders.tests.test_cases as tc
+
 gurobi_available = pyo.SolverFactory("gurobi_persistent").available(
     exception_flag=False
 )
