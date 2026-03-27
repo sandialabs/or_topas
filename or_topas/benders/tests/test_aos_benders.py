@@ -27,9 +27,7 @@ parameterized = parameterized.parameterized
 non_persistent_mip_solvers = list(
     pyomo.opt.check_available_solvers("glpk", "highs", "gurobi")
 )
-infeasibility_test_solvers = list(
-    pyomo.opt.check_available_solvers("glpk", "gurobi")
-)
+infeasibility_test_solvers = list(pyomo.opt.check_available_solvers("glpk", "gurobi"))
 
 infeasibility_persistent_test_solvers = list(
     pyomo.opt.check_available_solvers(
