@@ -75,7 +75,8 @@ def aos_benders_generate_candidates(
     # benders_block.activate()
 
     # filter solutions step
-    upper_bound = objectives[0] + rel_gap * abs(objectives[0]) + 1e-7
+    lower_bound = pyo.value(objectives[0])
+    upper_bound = lower_bound + rel_gap * abs(lower_bound) + 1e-7
     other_data_munch = MyMunch(
         objective_expr=m.obj,
         model=m,
@@ -84,7 +85,7 @@ def aos_benders_generate_candidates(
         benders_block=benders_block,
         scenarios=m.scenarios,
         upper_bound=upper_bound,
-        lower_bound=pyo.value(objectives[0]),
+        lower_bound=lower_bound,
         objective=objectives[0],
     )
     return candidate_sol_pool, other_data_munch
@@ -203,9 +204,9 @@ def aos_benders_filter(
         present_obj_value = pyo.value(orig_objective)
 
         added_to_pool = False
-        if ((data.lower_bound - smoothing_tol) <= present_obj_value) and (
-            present_obj_value <= data.upper_bound + smoothing_tol
-        ):
+        lower_bound_check = (data.lower_bound - smoothing_tol) <= present_obj_value
+        upper_bound_check = present_obj_value <= data.upper_bound + smoothing_tol
+        if lower_bound_check and upper_bound_check:
             true_pool.add(variables=local_variables, objective=orig_objective)
             added_to_pool = True
 
@@ -235,6 +236,7 @@ def aos_benders_filter(
 
 
 # adapted from the tests in or_topas.benders for serial farmer
+# This is the non-persistent version
 def test_farmer(
     mip_solver,
     mode="s",
@@ -312,14 +314,14 @@ def aos_farmer_test(
         )
     else:
         skip_vars = None
-    candidate_pool, data = aos_generate_candidates_lp(
+    candidate_pool, data = aos_benders_generate_candidates(
         m=m,
         rel_gap=rel_gap,
         num_solutions=num_solutions,
         mip_solver=mip_solver,
         skip_vars=skip_vars,
     )
-    true_pool = aos_filter(candidate_pool, data, tee=tee, tee_final=tee_final)
+    true_pool = aos_benders_filter(candidate_pool, data, tee=tee, tee_final=tee_final)
     return true_pool
 
 
