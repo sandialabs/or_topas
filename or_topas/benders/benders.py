@@ -92,6 +92,7 @@ class Benders_Abstract(BlockData):
         self.transform = kwargs.get("transform", self.default_transform_name)
         if self.transform is None:
             self.transform = self.default_transform_name
+        # in LP this allow_infeasible = not(relatively_complete_recourse_satisfied)
         self.allow_infeasible = kwargs.get("allow_infeasible", False)
         for i, v in enumerate(self.root_vars):
             self.root_vars_indices[v] = i
@@ -741,7 +742,7 @@ class Benders_Abstract(BlockData):
             if res.solver.termination_condition in optimal_conditions:
                 subproblem.solutions.load_from(res)
         else:
-            print(f"{subproblem_solver_name=} in non_persistent solver branch")
+            # print(f"{subproblem_solver_name=} in non_persistent solver branch")
             res = subproblem_solver.solve(subproblem, tee=False, load_solutions=False)
             if res.solver.termination_condition not in allowed_conditions:
                 raise RuntimeError(

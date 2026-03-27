@@ -310,8 +310,9 @@ def enumerate_linear_solutions(
         # print("All the slack vars")
         # print(ComponentSet(v for v in cb.slack_vars))
 
-    print("Variables to skip")
-    print(f"{str(variables_to_skip)=}")
+    if tee:
+        print("Variables to skip")
+        print(f"{str(variables_to_skip)=}")
 
     solution_number = 1
     solutions = []
@@ -404,7 +405,8 @@ def enumerate_linear_solutions(
                             vars_in_basis.update([continuous_var[var]])
                     # else:
                     #     print(f"Skipping var: {str(continuous_var[var])}")
-            print(f"Vars in basis {solution_number-1}: {str(vars_in_basis)}")
+            if tee:
+                print(f"Vars in basis {solution_number-1}: {str(vars_in_basis)}")
             # Eqn (1): at least one of the non-zero basic variables in the
             #   previous solution is selected
             cb.force_out = pyo.Constraint(expr=force_out_expr >= 0)
