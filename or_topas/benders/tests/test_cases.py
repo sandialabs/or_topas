@@ -6,6 +6,7 @@ from or_topas.benders import (
 from or_topas.util.mymunch import MyMunch
 import itertools
 from math import pi as pi_value
+import time
 
 
 class modified_absolute_value:
@@ -308,6 +309,70 @@ class Farmer:
                 subproblem_solver=solver_name,
             )
         opt = pyo.SolverFactory(solver_name)
+        return opt, m
+
+    @staticmethod
+    def run_farmer(
+        mip_solver,
+        mode="s",
+        transform="standard_lp",
+        add_upper_bounds=False,
+        include_print=False,
+        is_persistent=False,
+        include_assert_checks=False,
+    ):
+
+        t0 = time.time()
+        local_farmer = Farmer()
+        if mode == "d":
+            # local_farmer = Farmer()
+            local_farmer.scenario_probabilities = {"AverageScenario": 1.0}
+            local_farmer.scenarios = ["AverageScenario"]
+
+        farmer_setup_handle = Farmer.setup_farmer
+        if is_persistent:
+            farmer_setup_handle = Farmer.setup_farmer_persistent
+
+        opt, m = Farmer.setup_farmer(
+            local_farmer,
+            solver_name=mip_solver,
+            transform=transform,
+        )
+
+        if add_upper_bounds:
+            for s in m.scenarios:
+                m.eta[s].setub(1_000_000)
+        if include_print:
+            print(
+                "{0:<15}{1:<15}{2:<15}{3:<15}{4:<15}".format(
+                    "# Cuts", "Corn", "Sugar Beets", "Wheat", "Total_Time"
+                )
+            )
+        for i in range(30):
+            res = opt.solve(m, tee=False)
+            cuts_added = m.benders.generate_cut()
+            if is_persistent:
+                for c in cuts_added:
+                    opt.add_constraint(c)
+            if include_print:
+                print(
+                    "{0:<15}{1:<15.2f}{2:<15.2f}{3:<15.2f}{4:<15.2f}".format(
+                        len(cuts_added),
+                        m.devoted_acreage["CORN"].value,
+                        m.devoted_acreage["SUGAR_BEETS"].value,
+                        m.devoted_acreage["WHEAT"].value,
+                        time.time() - t0,
+                    )
+                )
+            if len(cuts_added) == 0:
+                break
+
+        if include_assert_checks:
+            if mode == "s":
+                tol = 1e-7
+                assert abs(m.devoted_acreage["CORN"].value - 80) < tol
+                assert abs(m.devoted_acreage["SUGAR_BEETS"].value - 250) < tol
+                assert abs(m.devoted_acreage["WHEAT"].value - 170) < tol
         return opt, m
 
 

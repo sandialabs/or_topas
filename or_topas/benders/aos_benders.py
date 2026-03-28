@@ -4,7 +4,7 @@ from or_topas.benders import (
 )
 from or_topas.solnpool.solnpool import _as_pyomo_solution
 from or_topas.solnpool import PyomoPoolManager, PoolPolicy
-from or_topas.benders.tests import test_cases as tc
+from or_topas.benders.tests.test_cases import Farmer as TestCasesFarmer
 import time
 import or_topas
 from or_topas.util import pyomo_utils
@@ -235,64 +235,6 @@ def aos_benders_filter(
     return true_pool
 
 
-# adapted from the tests in or_topas.benders for serial farmer
-# This is the non-persistent version
-def test_farmer(
-    mip_solver,
-    mode="s",
-    transform="standard_lp",
-    add_upper_bounds=False,
-    include_print=False,
-):
-
-    t0 = time.time()
-    local_farmer = tc.Farmer()
-    if mode == "d":
-        local_farmer = tc.Farmer()
-        local_farmer.scenario_probabilities = {"AverageScenario": 1.0}
-        local_farmer.scenarios = ["AverageScenario"]
-    opt, m = tc.Farmer.setup_farmer(
-        local_farmer,
-        solver_name=mip_solver,
-        transform=transform,
-    )
-    if add_upper_bounds:
-        for s in m.scenarios:
-            m.eta[s].setub(1_000_000)
-    if include_print:
-        print(
-            "{0:<15}{1:<15}{2:<15}{3:<15}{4:<15}".format(
-                "# Cuts", "Corn", "Sugar Beets", "Wheat", "Total_Time"
-            )
-        )
-    for i in range(30):
-        res = opt.solve(m, tee=False)
-        cuts_added = m.benders.generate_cut()
-        # for c in cuts_added:
-        #     opt.add_constraint(c)
-        if include_print:
-            print(
-                "{0:<15}{1:<15.2f}{2:<15.2f}{3:<15.2f}{4:<15.2f}".format(
-                    len(cuts_added),
-                    m.devoted_acreage["CORN"].value,
-                    m.devoted_acreage["SUGAR_BEETS"].value,
-                    m.devoted_acreage["WHEAT"].value,
-                    time.time() - t0,
-                )
-            )
-        if len(cuts_added) == 0:
-            break
-
-    if mode == "s":
-        tol = 1e-7
-        assert abs(m.devoted_acreage["CORN"].value - 80) < tol
-        assert abs(m.devoted_acreage["SUGAR_BEETS"].value - 250) < tol
-        assert abs(m.devoted_acreage["WHEAT"].value - 170) < tol
-    return opt, m
-
-
-# TODO: update this to be an example with farmers
-# pull from benders.tests.tc for create farmer
 def aos_farmer_test(
     mip_solver="glpk",
     num_solutions=10,
@@ -302,7 +244,7 @@ def aos_farmer_test(
     rel_gap=0.01,
     use_skip_vars=False,
 ):
-    opt, m = test_farmer(
+    opt, m = TestCasesFarmer.run_farmer(
         mip_solver, mode=mode, transform="standard_lp", add_upper_bounds=True
     )
     if use_skip_vars:
