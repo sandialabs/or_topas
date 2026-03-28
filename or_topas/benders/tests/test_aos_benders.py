@@ -16,6 +16,10 @@ from or_topas.benders.benders_serial import (
 )
 import or_topas.benders.tests.test_cases as tc
 from or_topas.benders.aos_benders import aos_farmer_test as aos_benders_farmer_test
+from or_topas.benders.aos_benders import (
+    aos_benders_generate_candidates,
+    aos_benders_filter,
+)
 from or_topas.util.mymunch import MyMunch
 from pyomo.repn.standard_repn import generate_standard_repn
 
@@ -70,7 +74,7 @@ class TestAOS_Benders_Optimality(unittest.TestCase):
         assert t, "Trivial Test"
 
     @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
-    def test_farmer(self, mip_solver):
+    def test_farmer_end_to_end(self, mip_solver):
 
         aos_benders_farmer_test(
             mip_solver=mip_solver,
@@ -80,4 +84,26 @@ class TestAOS_Benders_Optimality(unittest.TestCase):
             tee_final=False,
             rel_gap=0.01,
             use_skip_vars=False,
+        )
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    def test_farmer_step_by_step(self, mip_solver):
+        num_solutions = 10
+        mode = "s"
+        tee = False
+        tee_final = False
+        rel_gap = 0.01
+        opt, m = tc.Farmer.run_farmer(
+            mip_solver, mode=mode, transform="standard_lp", add_upper_bounds=True
+        )
+        skip_vars = None
+        candidate_pool, data = aos_benders_generate_candidates(
+            m=m,
+            rel_gap=rel_gap,
+            num_solutions=num_solutions,
+            mip_solver=mip_solver,
+            skip_vars=skip_vars,
+        )
+        true_pool = aos_benders_filter(
+            candidate_pool, data, tee=tee, tee_final=tee_final
         )
