@@ -321,7 +321,6 @@ class Farmer:
         is_persistent=False,
         include_assert_checks=False,
     ):
-
         t0 = time.time()
         local_farmer = Farmer()
         if mode == "d":
@@ -333,7 +332,7 @@ class Farmer:
         if is_persistent:
             farmer_setup_handle = Farmer.setup_farmer_persistent
 
-        opt, m = Farmer.setup_farmer(
+        opt, m = farmer_setup_handle(
             local_farmer,
             solver_name=mip_solver,
             transform=transform,
@@ -349,11 +348,14 @@ class Farmer:
                 )
             )
         for i in range(30):
-            res = opt.solve(m, tee=False)
-            cuts_added = m.benders.generate_cut()
             if is_persistent:
+                res = opt.solve(tee=False, save_results=False)
+                cuts_added = m.benders.generate_cut()
                 for c in cuts_added:
                     opt.add_constraint(c)
+            else:
+                res = opt.solve(m, tee=False)
+                cuts_added = m.benders.generate_cut()
             if include_print:
                 print(
                     "{0:<15}{1:<15.2f}{2:<15.2f}{3:<15.2f}{4:<15.2f}".format(
