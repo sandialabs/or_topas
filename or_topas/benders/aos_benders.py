@@ -19,6 +19,7 @@ def aos_benders_generate_candidates(
     mip_solver="glpk",
     skip_vars=None,
     ignore_opt_tol_in_basis=False,
+    bound_smoothing_tol=1e-6,
 ):
     # At present, only LP AOS Supported
 
@@ -28,6 +29,9 @@ def aos_benders_generate_candidates(
         o for o in m.component_objects(pyo.Objective, descend_into=False, active=True)
     ]
     assert len(objectives) == 1, "Should only have one active objective"
+    # need to grap lower bound before objectives gets updated
+    lower_bound = pyo.value(objectives[0])
+    print(f"{lower_bound=}")
 
     # compute gap settings
 
@@ -75,8 +79,8 @@ def aos_benders_generate_candidates(
     # benders_block.activate()
 
     # filter solutions step
-    lower_bound = pyo.value(objectives[0])
-    upper_bound = lower_bound + rel_gap * abs(lower_bound) + 1e-7
+    upper_bound = lower_bound + rel_gap * abs(lower_bound) + bound_smoothing_tol
+    print(f"{upper_bound=}")
     other_data_munch = MyMunch(
         objective_expr=m.obj,
         model=m,
