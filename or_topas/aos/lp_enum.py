@@ -121,8 +121,9 @@ def enumerate_linear_solutions(
     # variables doesn't really matter since we only really care about diversity
     # in the original problem and not in the slack space (I think)
 
-    assert "persistent" not in solver, "Persistent Solvers not supported or needed here, use non-persistent or APPSI version"
-
+    assert (
+        "persistent" not in solver
+    ), "Persistent Solvers not supported or needed here, use non-persistent or APPSI version"
 
     if pool_manager is None:
         pool_manager = PyomoPoolManager()
