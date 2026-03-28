@@ -95,7 +95,7 @@ class TestBendersUtils(unittest.TestCase):
         for a in a_set:
             m = tc.modified_absolute_value.create_root()
             root_vars = [m.x]
-            data = data = MyMunch(a=a, L=1, R=1, LB=None, UB=None)
+            data = MyMunch(a=a, L=1, R=1, LB=None, UB=None)
             m.benders = BendersCutGenerator()
             m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
             m.benders.add_subproblem(

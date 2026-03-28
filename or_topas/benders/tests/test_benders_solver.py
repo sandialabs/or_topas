@@ -419,9 +419,8 @@ class TestBendersSolver(unittest.TestCase):
                 self.assertAlmostEqual(pyo.value(m.obj), 0.0, 4)
                 self.assertAlmostEqual(m.eta.value, 0.0, 4)
 
-        #
-
-    # modified abs Tests
+    #
+    # DCOPF Tests
     #
 
     @parameterized.expand(
