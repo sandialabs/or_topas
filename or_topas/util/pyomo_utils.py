@@ -54,6 +54,22 @@ def add_aos_block(model, name="_aos_block"):
     return aos_block
 
 
+def simplify_solution(sol):
+    """Gives a much sparser/simpler version of a solution object for ease of viewing"""
+    simply_dict = {"id": ("ID", sol.id), "objective": ("obj", sol._objectives[0].value)}
+    for var in sol._variables:
+        var_index = "var_" + str(var.index)
+        simply_dict[var_index] = (var.name, var.value)
+    return simply_dict
+
+
+def pprint_solution(sol):
+    """Pretty Print method for solutions"""
+    simplified_dict = simplify_solution(sol)
+    for v in simplified_dict.values():
+        print(v)
+
+
 def add_objective_constraint(
     target_block,
     objective,
