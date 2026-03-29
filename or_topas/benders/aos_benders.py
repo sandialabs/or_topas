@@ -9,6 +9,7 @@ import time
 import or_topas
 from or_topas.util import pyomo_utils
 from or_topas.util.mymunch import MyMunch
+from or_topas.util.pyomo_utils import pprint_solution
 from pyomo.common.collections import ComponentSet
 
 
@@ -21,11 +22,15 @@ def aos_benders_generate_candidates(
     ignore_opt_tol_in_basis=False,
     bound_smoothing_tol=1e-6,
     tee=False,
+    scenarios=None,
 ):
     # At present, only LP AOS Supported
 
     # assume that we have a solved model
     # objectives = [pyo.value(o) for o in m.component_objects(pyo.Objective, descend_into=False, active=True)]
+    if scenarios is None and hasattr(m, "scenarios"):
+        scenarios = m.scenarios
+
     objectives = [
         o for o in m.component_objects(pyo.Objective, descend_into=False, active=True)
     ]
@@ -90,7 +95,7 @@ def aos_benders_generate_candidates(
         # TODO: update this to use the benders_block found above
         # benders_block=m.benders,
         benders_block=benders_block,
-        scenarios=m.scenarios,
+        scenarios=scenarios,
         upper_bound=upper_bound,
         lower_bound=lower_bound,
         objective=objectives[0],
@@ -111,6 +116,7 @@ def aos_benders_filter(
         print(f"True Pool Inclusion Lower Bound: {data.lower_bound}")
         print(f"True Pool Inclusion Upper Bound: {data.upper_bound}")
 
+    root_vars = data.benders_block.root_vars
     aos_filtering_model = data.model
     for index, sol in enumerate(candidate_pool):
         # iterate through each solution in the candidate pool
@@ -120,13 +126,7 @@ def aos_benders_filter(
             print(f"Solution {index} check")
             # these are model specific print checks
             print(f"Before Loading Sol")
-            print(
-                f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
-            )
-            print(
-                f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
-            )
-            print(f"obj: {pyo.value(data.objective_expr)}")
+            pprint_solution(sol)
 
         # load the solution into model
         sol.load_into_model(
@@ -148,9 +148,10 @@ def aos_benders_filter(
         )
         if tee:
             print(f"After but before evaluate Loading Sol {index}")
-            print(
-                f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
-            )
+            # print(
+            #     f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
+            # )
+            print(f"x={str([(rv,pyo.value(rv)) for rv in root_vars])}")
             print(
                 f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
             )
@@ -178,9 +179,10 @@ def aos_benders_filter(
         if tee:
             print(f"After evaluate before eta load {index}")
             # Update to be root variables on line below, Benders block will track the root vars
-            print(
-                f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
-            )
+            # print(
+            #     f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
+            # )
+            print(f"x={str([(rv,pyo.value(rv)) for rv in root_vars])}")
             print(
                 f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
             )
@@ -189,14 +191,18 @@ def aos_benders_filter(
         # pull out the etas from this results list
         # this is tightly assuming an eta per scenario
         # will need to be changed for anything but multicut benders
-        for i, s in enumerate(data.scenarios):
-            aos_filtering_model.eta[s] = results_list[i].subproblem_eta
+        if data.scenarios is None:
+            aos_filtering_model.eta = results_list[0].subproblem_eta
+        else:
+            for i, s in enumerate(data.scenarios):
+                aos_filtering_model.eta[s] = results_list[i].subproblem_eta
         if tee:
             print(f"After eta load {index}")
             # Again update to be root vars
-            print(
-                f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
-            )
+            # print(
+            #     f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
+            # )
+            print(f"x={str([(rv,pyo.value(rv)) for rv in root_vars])}")
             print(
                 f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
             )
