@@ -180,6 +180,149 @@ class TestAOS_Benders_Persistent(unittest.TestCase):
                 len(candidate_pool) == expected_candidate_pool_size[index]
             ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
 
+    @parameterized.expand(input=persistent_mip_solvers, skip_on_empty=True)
+    def test_abs_aos_benders_generate_candidates_single_scenario(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.5]
+        solver_name = mip_solver
+        expected_candidate_pool_size = [1, 1, 1]
+        mip_solver_non_persistent_version = persistent_to_non_persistent_solver_map[
+            mip_solver
+        ]
+        for index, rel_gap in enumerate(rel_gaps):
+            opt, m = tc.absolute_value.run_absolute_value(
+                mip_solver,
+                mode="d",
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=False,
+                is_persistent=True,
+            )
+            m.x.setub(10)
+            m.x.setlb(-10)
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver_non_persistent_version,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=True,
+            )
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+
+    @parameterized.expand(input=persistent_mip_solvers, skip_on_empty=True)
+    def test_abs_aos_benders_generate_candidates_multiple_scenarios(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.5]
+        mip_solver_non_persistent_version = persistent_to_non_persistent_solver_map[
+            mip_solver
+        ]
+        expected_candidate_pool_size = [1, 1, 1]
+        for index, rel_gap in enumerate(rel_gaps):
+            opt, m = tc.absolute_value.run_absolute_value(
+                mip_solver,
+                mode="s",
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=False,
+                is_persistent=True,
+            )
+            m.x.setub(10)
+            m.x.setlb(-10)
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver_non_persistent_version,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=True,
+            )
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+
+    @parameterized.expand(input=persistent_mip_solvers, skip_on_empty=True)
+    def test_abs_aos_benders_filter_single_scenario(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.5]
+        mip_solver_non_persistent_version = persistent_to_non_persistent_solver_map[
+            mip_solver
+        ]
+        expected_candidate_pool_size = [1, 1, 1]
+        expected_true_pool_size = [1, 1, 1]
+        for index, rel_gap in enumerate(rel_gaps):
+            opt, m = tc.absolute_value.run_absolute_value(
+                mip_solver,
+                mode="d",
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=False,
+                is_persistent=True,
+            )
+            m.x.setub(10)
+            m.x.setlb(-10)
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver_non_persistent_version,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=True,
+            )
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+            true_pool = aos_benders_filter(
+                candidate_pool, data, tee=False, tee_final=False
+            )
+            assert (
+                len(true_pool) == expected_true_pool_size[index]
+            ), f"Expected {expected_true_pool_size[index]} true solutions, got {len(true_pool)}"
+
+    @parameterized.expand(input=persistent_mip_solvers, skip_on_empty=True)
+    def test_abs_aos_benders_filer_multiple_scenarios(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.5]
+        mip_solver_non_persistent_version = persistent_to_non_persistent_solver_map[
+            mip_solver
+        ]
+        expected_candidate_pool_size = [1, 1, 1]
+        expected_true_pool_size = [1, 1, 1]
+        for index, rel_gap in enumerate(rel_gaps):
+            opt, m = tc.absolute_value.run_absolute_value(
+                mip_solver,
+                mode="s",
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=False,
+                is_persistent=True,
+            )
+            m.x.setub(10)
+            m.x.setlb(-10)
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver_non_persistent_version,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=True,
+            )
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+            true_pool = aos_benders_filter(
+                candidate_pool, data, tee=False, tee_final=False
+            )
+            assert (
+                len(true_pool) == expected_true_pool_size[index]
+            ), f"Expected {expected_true_pool_size[index]} true solutions, got {len(true_pool)}"
+
 
 class TestAOS_Benders_Non_Persistent(unittest.TestCase):
 
@@ -346,6 +489,140 @@ class TestAOS_Benders_Non_Persistent(unittest.TestCase):
             ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
             true_pool = aos_benders_filter(
                 candidate_pool, data, tee=tee, tee_final=tee_final
+            )
+            assert (
+                len(true_pool) == expected_true_pool_size[index]
+            ), f"Expected {expected_true_pool_size[index]} true solutions, got {len(true_pool)}"
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    def test_abs_aos_benders_generate_candidates_single_scenario(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.5]
+        solver_name = mip_solver
+        expected_candidate_pool_size = [1, 1, 1]
+        for index, rel_gap in enumerate(rel_gaps):
+            opt, m = tc.absolute_value.run_absolute_value(
+                mip_solver,
+                mode="d",
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=False,
+                is_persistent=False,
+            )
+            m.x.setub(10)
+            m.x.setlb(-10)
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=True,
+            )
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    def test_abs_aos_benders_generate_candidates_multiple_scenarios(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.5]
+        solver_name = mip_solver
+        expected_candidate_pool_size = [1, 1, 1]
+        for index, rel_gap in enumerate(rel_gaps):
+            opt, m = tc.absolute_value.run_absolute_value(
+                mip_solver,
+                mode="s",
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=False,
+                is_persistent=False,
+            )
+            m.x.setub(10)
+            m.x.setlb(-10)
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=True,
+            )
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    def test_abs_aos_benders_filter_single_scenario(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.5]
+        solver_name = mip_solver
+        expected_candidate_pool_size = [1, 1, 1]
+        expected_true_pool_size = [1, 1, 1]
+        for index, rel_gap in enumerate(rel_gaps):
+            opt, m = tc.absolute_value.run_absolute_value(
+                mip_solver,
+                mode="d",
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=False,
+                is_persistent=False,
+            )
+            m.x.setub(10)
+            m.x.setlb(-10)
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=True,
+            )
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+            true_pool = aos_benders_filter(
+                candidate_pool, data, tee=False, tee_final=False
+            )
+            assert (
+                len(true_pool) == expected_true_pool_size[index]
+            ), f"Expected {expected_true_pool_size[index]} true solutions, got {len(true_pool)}"
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    def test_abs_aos_benders_filer_multiple_scenarios(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.5]
+        solver_name = mip_solver
+        expected_candidate_pool_size = [1, 1, 1]
+        expected_true_pool_size = [1, 1, 1]
+        for index, rel_gap in enumerate(rel_gaps):
+            opt, m = tc.absolute_value.run_absolute_value(
+                mip_solver,
+                mode="s",
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=False,
+                is_persistent=False,
+            )
+            m.x.setub(10)
+            m.x.setlb(-10)
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=True,
+            )
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+            true_pool = aos_benders_filter(
+                candidate_pool, data, tee=False, tee_final=False
             )
             assert (
                 len(true_pool) == expected_true_pool_size[index]
