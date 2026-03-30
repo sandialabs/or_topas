@@ -86,6 +86,7 @@ class Benders_Abstract(BlockData):
         self.cuts = pyo.ConstraintList()
         self.subproblems = list()
         self.root_etas = list()
+        self.feasibility_only = list()
         self.complicating_vars_maps = list()
         self.root_vars = list(root_vars)
         self.root_vars_indices = pyo.ComponentMap()
@@ -116,6 +117,7 @@ class Benders_Abstract(BlockData):
         subproblem_fn = kwargs.get("subproblem_fn")
         subproblem_fn_kwargs = kwargs.get("subproblem_fn_kwargs")
         root_eta = kwargs.get("root_eta")
+        feasibility_only = kwargs.get("feasibility_only", False)
         subproblem_solver = kwargs.get(
             "subproblem_solver", self.default_subproblem_solver
         )
@@ -136,6 +138,7 @@ class Benders_Abstract(BlockData):
         # in parallel code, everything else was indented
         # not parallel specific code
         self.root_etas.append(root_eta)
+        self.feasibility_only.append(feasibility_only)
         subproblem, complicating_vars_map = subproblem_fn(**subproblem_fn_kwargs)
         if relax_subproblem_complicating_vars:
             Benders_Abstract._relax_first_stage_var_copies(
@@ -862,6 +865,7 @@ class Benders_Abstract(BlockData):
         subproblem_solver_name = self.subproblem_solver_names[local_subproblem_ndx]
         complicating_vars_map = self.complicating_vars_maps[local_subproblem_ndx]
         root_eta = self.root_etas[local_subproblem_ndx]
+        subproblem_is_feasibility_only = self.feasibility_only[local_subproblem_ndx]
 
         var_to_con_map = Benders_Abstract._fix_first_stage_var_copies(
             subproblem=subproblem,
@@ -963,6 +967,8 @@ class Benders_Abstract(BlockData):
                         )
                         subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
                         temp_ndx = 0
+                        print(f"{len(var_to_con_map)=}, {len(subproblem_coeff)=}, {len(self.root_vars)=}")
+                        print(self.root_vars)
                         for root_var, c in var_to_con_map.items():
                             # subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
                             subproblem_coeff[temp_ndx] = -sign_convention * pyo.value(
@@ -999,9 +1005,12 @@ class Benders_Abstract(BlockData):
 
         if optimal_solution:
             subproblem_eta = pyo.value(subproblem.orig_obj_expr)
-            subproblem_eta_gap = abs(
-                pyo.value(root_eta) - pyo.value(subproblem.orig_obj_expr)
-            )
+            if subproblem_is_feasibility_only:
+                subproblem_eta_gap = 0
+            else:
+                subproblem_eta_gap = abs(
+                    pyo.value(root_eta) - pyo.value(subproblem.orig_obj_expr)
+                )
 
             needs_cut = subproblem_eta_gap > self.tol
         else:
