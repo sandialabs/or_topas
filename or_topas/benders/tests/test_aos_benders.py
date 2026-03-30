@@ -616,6 +616,119 @@ class TestAOS_Benders_Persistent(unittest.TestCase):
                 len(true_pool) == expected_true_pool_size[index]
             ), f"Expected {expected_true_pool_size[index]} true solutions, got {len(true_pool)}"
 
+    @parameterized.expand(input=persistent_mip_solvers, skip_on_empty=True)
+    def test_grid_aos_benders_filter(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.1]
+        solver_name = mip_solver
+        expected_candidate_pool_size = [2, 4, 4]
+        expected_true_pool_size = [2, 2, 2]
+        mip_solver_non_persistent_version = persistent_to_non_persistent_solver_map[
+            mip_solver
+        ]
+        for index, rel_gap in enumerate(rel_gaps):
+            print(f"{index=}, {rel_gap=}")
+            opt, m = tc.EnergyGrid.run_energy_grid(
+                mip_solver,
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=True,
+                is_persistent=True,
+                grid=None,
+            )
+            unbounded_vars = [
+                v.name
+                for v in m.component_data_objects(
+                    pyo.Var, descend_into=True, active=True
+                )
+                if (v.has_lb() == False or v.has_ub() == False)
+            ]
+            assert (
+                len(unbounded_vars) == 0
+            ), f"Needed all vars bounded, got unbounded {unbounded_vars=}"
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver_non_persistent_version,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=False,
+            )
+
+            # print("Candidates")
+            # for sol in candidate_pool:
+            #     pprint_solution(sol)
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+            true_pool = aos_benders_filter(
+                candidate_pool, data, tee=False, tee_final=False
+            )
+            # print("True")
+            # for sol in true_pool:
+            #     pprint_solution(sol)
+            assert (
+                len(true_pool) == expected_true_pool_size[index]
+            ), f"Expected {expected_true_pool_size[index]} true solutions, got {len(true_pool)}"
+
+    @parameterized.expand(input=persistent_mip_solvers, skip_on_empty=True)
+    def test_grid_aos_benders_filter_feasibility_only(self, mip_solver):
+        num_solutions = 50
+        rel_gaps = [0, 0.01, 0.1]
+        solver_name = mip_solver
+        expected_candidate_pool_size = [4, 8, 8]
+        expected_true_pool_size = [4, 4, 4]
+        mip_solver_non_persistent_version = persistent_to_non_persistent_solver_map[
+            mip_solver
+        ]
+        for index, rel_gap in enumerate(rel_gaps):
+            print(f"{index=}, {rel_gap=}")
+            opt, m = tc.EnergyGrid.run_energy_grid(
+                mip_solver,
+                transform="standard_lp",
+                add_upper_bounds=True,
+                include_print=True,
+                is_persistent=True,
+                grid=None,
+                feasibility_only=True,
+            )
+            unbounded_vars = [
+                v.name
+                for v in m.component_data_objects(
+                    pyo.Var, descend_into=True, active=True
+                )
+                if (v.has_lb() == False or v.has_ub() == False)
+            ]
+            assert (
+                len(unbounded_vars) == 0
+            ), f"Needed all vars bounded, got unbounded {unbounded_vars=}"
+            skip_vars = None
+            candidate_pool, data = aos_benders_generate_candidates(
+                m=m,
+                rel_gap=rel_gap,
+                num_solutions=num_solutions,
+                mip_solver=mip_solver_non_persistent_version,
+                skip_vars=skip_vars,
+                ignore_opt_tol_in_basis=False,
+            )
+
+            # print("Candidates")
+            # for sol in candidate_pool:
+            #     pprint_solution(sol)
+            assert (
+                len(candidate_pool) == expected_candidate_pool_size[index]
+            ), f"Expected {expected_candidate_pool_size[index]} candidate solutions, got {len(candidate_pool)}"
+            true_pool = aos_benders_filter(
+                candidate_pool, data, tee=False, tee_final=False
+            )
+            # print("True")
+            # for sol in true_pool:
+            #     pprint_solution(sol)
+            assert (
+                len(true_pool) == expected_true_pool_size[index]
+            ), f"Expected {expected_true_pool_size[index]} true solutions, got {len(true_pool)}"
+
 
 class TestAOS_Benders_Non_Persistent(unittest.TestCase):
 
