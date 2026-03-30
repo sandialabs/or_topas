@@ -922,6 +922,7 @@ class EnergyGrid:
         grid = kwargs.get("grid", EnergyGrid())
         m = EnergyGrid.create_root(grid=grid)
         transform = kwargs.get("transform", "standard_lp")
+        feasibility_only = kwargs.get("feasibility_only", False)
         root_vars = list(m.generation.values())
         m.benders = CutGenerator()
         m.benders.set_input(
@@ -935,6 +936,7 @@ class EnergyGrid:
             subproblem_fn_kwargs={
                 "root": m,
                 "grid": grid,
+                "feasibility_only": feasibility_only,
             },
             root_eta=m.eta,
             subproblem_solver=solver_name,
