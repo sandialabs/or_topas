@@ -968,10 +968,7 @@ class Benders_Abstract(BlockData):
                         )
                         subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
                         temp_ndx = 0
-                        print(
-                            f"{len(var_to_con_map)=}, {len(subproblem_coeff)=}, {len(self.root_vars)=}"
-                        )
-                        print(self.root_vars)
+                        # print(self.root_vars)
                         for root_var, c in var_to_con_map.items():
                             # subproblem_coeff[temp_ndx] = sign_convention * pyo.value(
                             subproblem_coeff[temp_ndx] = -sign_convention * pyo.value(

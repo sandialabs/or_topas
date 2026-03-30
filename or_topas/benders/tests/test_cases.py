@@ -952,6 +952,7 @@ class EnergyGrid:
         add_upper_bounds=False,
         include_print=False,
         is_persistent=False,
+        feasibility_only=False,
         grid=None,
     ):
         t0 = time.time()
@@ -967,11 +968,13 @@ class EnergyGrid:
             solver_name=mip_solver,
             transform=transform,
             grid=grid,
+            feasibility_only=feasibility_only,
         )
+        print(f"After setup")
 
         if add_upper_bounds:
-            m.eta.setub(100)
-            m.eta.setlb(-100)
+            m.eta.setub(100_000)
+            m.eta.setlb(-100_000)
 
         if include_print:
             # print("{0:<15}{1:<15}{2:<15}{3:<15}".format("# Cuts","Gen 1", "Gen 2" "Total_Time"))
@@ -985,7 +988,6 @@ class EnergyGrid:
                 res = opt.solve(tee=False, save_results=False)
                 cuts_added = m.benders.generate_cut()
                 for c in cuts_added:
-                    print(f"{c.name}, {c.expr}")
                     opt.add_constraint(c)
             else:
                 res = opt.solve(m, tee=False)
