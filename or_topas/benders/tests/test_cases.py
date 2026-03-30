@@ -703,9 +703,7 @@ class EnergyGrid:
 
         self.flow_bounds_dict = {
             ("bus1", "bus2"): 100,
-            ("bus1", "bus2"): 0,
             ("bus1", "bus3"): 100,
-            ("bus1", "bus3"): 0,
             ("bus2", "bus3"): 100,
         }
         self.theta_bounds_dict = {"bus1": pi_value, "bus2": pi_value, "bus3": pi_value}
@@ -740,8 +738,11 @@ class EnergyGrid:
             return (-1, m.capacity[bus] + 1)
 
         model.generation = pyo.Var(
-            model.buses, domain=pyo.PositiveReals, bounds=gen_max_rule
+            model.buses, domain=pyo.NonNegativeReals, bounds=gen_max_rule
         )
+        # model.generation = pyo.Var(
+        #     model.buses, domain=pyo.PositiveReals, bounds=gen_max_rule
+        # )
 
         # Explicit lower bound constraint so dual accessed in with dual not reduced cost attribute
         def gen_lower_rule(m, bus):
@@ -860,10 +861,13 @@ class EnergyGrid:
             return (-1, model.capacity[bus] + 1)
 
         model.generation = pyo.Var(
-            model.buses, domain=pyo.PositiveReals, bounds=gen_max_rule
+            model.buses, domain=pyo.NonNegativeReals, bounds=gen_max_rule
         )
 
-        model.generation = pyo.Var(model.buses, domain=pyo.Reals)
+        # model.generation = pyo.Var(
+        #     model.buses, domain=pyo.PositiveReals, bounds=gen_max_rule
+        # )
+
 
         # Explicit lower bound constraint so dual accessed in with dual not reduced cost attribute
         def gen_lower_rule(m, bus):
@@ -888,9 +892,12 @@ class EnergyGrid:
         return model
 
     @staticmethod
-    def create_subproblem(root, grid, mode=2):
+    def create_subproblem(root, grid, mode=2, feasibility_only = False):
         m = EnergyGrid.create_tiny_opf(grid=grid, mode=mode)
-
+        #can either zero the subproblem objective and treat as combo-optimality/feasibility
+        #or keep original objective and treat as feasibility only
+        if not feasibility_only:
+            m.obj = pyo.Objective(expr=0)
         complicating_vars_map = pyo.ComponentMap()
         for b in grid.buses:
             complicating_vars_map[root.generation[b]] = m.generation[b]
@@ -906,26 +913,27 @@ class EnergyGrid:
         raise NotImplementedError(
             "The Energy Grid problem requires a persistent solver at present to enable feasibility cuts"
         )
-
+    
     @staticmethod
     def setup_energy_grid_persistent(
-        solver_name,
+                solver_name,
         CutGenerator=BendersGenerator_Serial,
         **kwargs,
     ):
-        transform = kwargs.get("transform", None)
-        grid = kwargs.get("grid", EnergyGrid)
+        grid = kwargs.get("grid", EnergyGrid())
         m = EnergyGrid.create_root(grid=grid)
-        # TODO/N.B. using list(m.x) here breaks
-        root_vars = [m.generation.values()]
+        transform = kwargs.get("transform", "standard_lp")
+        root_vars = list(m.generation.values())
         m.benders = CutGenerator()
-        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
-        subproblem_fn_kwargs = dict()
-        subproblem_fn_kwargs["root"] = m.x
-        subproblem_fn_kwargs["grid"] = grid
+        m.benders.set_input(
+            root_vars=root_vars,
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=True,
+        )
         m.benders.add_subproblem(
             subproblem_fn=EnergyGrid.create_subproblem,
-            subproblem_fn_kwargs=subproblem_fn_kwargs,
+            subproblem_fn_kwargs={"root": m, "grid": grid,},
             root_eta=m.eta,
             subproblem_solver=solver_name,
         )
@@ -944,6 +952,9 @@ class EnergyGrid:
     ):
         t0 = time.time()
 
+        if grid is None:
+            grid = EnergyGrid()
+
         setup_handle = EnergyGrid.setup_energy_grid
         if is_persistent:
             setup_handle = EnergyGrid.setup_energy_grid_persistent
@@ -954,21 +965,33 @@ class EnergyGrid:
             grid=grid,
         )
 
+        if add_upper_bounds:
+            m.eta.setub(100)
+            m.eta.setlb(-100)
+
         if include_print:
-            print("{0:<15}{1:<15}".format("# Cuts", "Total_Time"))
+            # print("{0:<15}{1:<15}{2:<15}{3:<15}".format("# Cuts","Gen 1", "Gen 2" "Total_Time"))
+            print(
+                "{0:<15}{1:<15}{2:<15}{3:<15}".format(
+                    "# Cuts", "gen_bus1", "gen_bus2", "Total_Time"
+                )
+            )
         for i in range(30):
             if is_persistent:
                 res = opt.solve(tee=False, save_results=False)
                 cuts_added = m.benders.generate_cut()
                 for c in cuts_added:
+                    print(f"{c.name}, {c.expr}")
                     opt.add_constraint(c)
             else:
                 res = opt.solve(m, tee=False)
                 cuts_added = m.benders.generate_cut()
             if include_print:
                 print(
-                    "{0:<15}{1:<15.2f}".format(
+                    "{0:<15}{1:<15.2f}{2:<15}{3:<15}".format(
                         len(cuts_added),
+                        pyo.value(m.generation["bus1"]),
+                        pyo.value(m.generation["bus2"]),
                         time.time() - t0,
                     )
                 )
