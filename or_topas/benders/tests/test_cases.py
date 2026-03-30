@@ -11,11 +11,26 @@ import time
 
 class modified_absolute_value:
     @staticmethod
-    def create_root():
+    def create_root(
+        eta_count=None,
+        eta_lb=-10,
+        eta_ub=None,
+        x_lb=None,
+        x_ub=None,
+        obj_offset=0,
+    ):
         m = pyo.ConcreteModel()
-        m.x = pyo.Var(bounds=(None, None), initialize=0)
-        m.eta = pyo.Var(bounds=(-10, None))
-        m.obj = pyo.Objective(expr=m.eta)
+        # x is benders variable, saved for later
+        m.x = pyo.Var(bounds=(x_lb, x_ub), initialize=0)
+        if eta_count is None:
+            m.eta = pyo.Var(bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(expr=obj_offset + m.eta, sense=pyo.minimize)
+        else:
+            m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
+            m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(
+                expr=obj_offset + sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
+            )
         return m
 
     @staticmethod
@@ -87,21 +102,143 @@ class modified_absolute_value:
 
         return m, complicating_vars_map
 
+    @staticmethod
+    def setup_modified_absolute_value(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        raise NotImplementedError(
+            "The modified absolute value problem requires a persistent at present to enable feasibility cuts"
+        )
+
+    @staticmethod
+    def setup_modified_absolute_value_persistent(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        transform = kwargs.get("transform", None)
+        eta_count = kwargs.get("eta_count", None)
+        data = kwargs.get("data", None)
+        obj_offset = kwargs.get("obj_offset", 0)
+        m = modified_absolute_value.create_root(
+            eta_count=eta_count, obj_offset=obj_offset
+        )
+        # TODO/N.B. using list(m.x) here breaks
+        root_vars = [m.x]
+        m.benders = CutGenerator()
+        m.benders.set_input(
+            root_vars=root_vars,
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=True,
+        )
+        if eta_count is None:
+            subproblem_fn_kwargs = dict()
+            subproblem_fn_kwargs["root_x"] = m.x
+            subproblem_fn_kwargs["data"] = data
+            m.benders.add_subproblem(
+                subproblem_fn=modified_absolute_value.create_subproblem,
+                subproblem_fn_kwargs=subproblem_fn_kwargs,
+                root_eta=m.eta,
+                subproblem_solver=solver_name,
+            )
+        else:
+            for s in m.scenarios:
+                subproblem_fn_kwargs = dict()
+                subproblem_fn_kwargs["root_x"] = m.x
+                subproblem_fn_kwargs["data"] = data
+                m.benders.add_subproblem(
+                    subproblem_fn=modified_absolute_value.create_subproblem,
+                    subproblem_fn_kwargs=subproblem_fn_kwargs,
+                    root_eta=m.eta[s],
+                    subproblem_solver=solver_name,
+                )
+        opt = pyo.SolverFactory(solver_name)
+        opt.set_instance(m)
+        return opt, m
+
+    @staticmethod
+    def run_modified_absolute_value(
+        mip_solver,
+        mode="d",
+        transform="standard_lp",
+        add_upper_bounds=False,
+        include_print=False,
+        is_persistent=False,
+        data=None,
+        obj_offset=0,
+    ):
+        t0 = time.time()
+        if mode == "d":
+            eta_count = None
+        elif mode == "s":
+            eta_count = 2
+        else:
+            eta_count = mode
+
+        setup_handle = modified_absolute_value.setup_modified_absolute_value
+        if is_persistent:
+            setup_handle = (
+                modified_absolute_value.setup_modified_absolute_value_persistent
+            )
+
+        opt, m = setup_handle(
+            solver_name=mip_solver,
+            transform=transform,
+            eta_count=eta_count,
+            data=data,
+            obj_offset=obj_offset,
+        )
+
+        if add_upper_bounds:
+            if eta_count is None:
+                m.eta.setub(100)
+            else:
+                for s in m.scenarios:
+                    m.eta[s].setub(100)
+        if include_print:
+            print("{0:<15}{1:<15}{2:<15}".format("# Cuts", "X", "Total_Time"))
+        for i in range(30):
+            if is_persistent:
+                res = opt.solve(tee=False, save_results=False)
+                cuts_added = m.benders.generate_cut()
+                for c in cuts_added:
+                    opt.add_constraint(c)
+            else:
+                res = opt.solve(m, tee=False)
+                cuts_added = m.benders.generate_cut()
+            if include_print:
+                print(
+                    "{0:<15}{1:<15.2f}{2:<15.2f}".format(
+                        len(cuts_added),
+                        m.x.value,
+                        time.time() - t0,
+                    )
+                )
+            if len(cuts_added) == 0:
+                break
+
+        return opt, m
+
 
 class absolute_value:
     @staticmethod
-    def create_root(eta_count=None, eta_lb=-10, eta_ub=None, x_lb=None, x_ub=None):
+    def create_root(
+        eta_count=None, eta_lb=-10, eta_ub=None, x_lb=None, x_ub=None, obj_offset=0
+    ):
         m = pyo.ConcreteModel()
         # x is benders variable, saved for later
         m.x = pyo.Var(bounds=(x_lb, x_ub), initialize=0)
         if eta_count is None:
             m.eta = pyo.Var(bounds=(eta_lb, eta_ub))
-            m.obj = pyo.Objective(expr=m.eta, sense=pyo.minimize)
+            m.obj = pyo.Objective(expr=obj_offset + m.eta, sense=pyo.minimize)
         else:
             m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
             m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, eta_ub))
             m.obj = pyo.Objective(
-                expr=sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
+                expr=obj_offset + sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
             )
         return m
 
@@ -127,7 +264,8 @@ class absolute_value:
     ):
         transform = kwargs.get("transform", None)
         eta_count = kwargs.get("eta_count", None)
-        m = absolute_value.create_root(eta_count=eta_count)
+        obj_offset = kwargs.get("obj_offset", 0)
+        m = absolute_value.create_root(eta_count=eta_count, obj_offset=obj_offset)
         # TODO/N.B. using list(m.x) here breaks
         root_vars = [m.x]
         m.benders = CutGenerator()
@@ -162,7 +300,8 @@ class absolute_value:
     ):
         transform = kwargs.get("transform", None)
         eta_count = kwargs.get("eta_count", None)
-        m = absolute_value.create_root(eta_count=eta_count)
+        obj_offset = kwargs.get("obj_offset", 0)
+        m = absolute_value.create_root(eta_count=eta_count, obj_offset=obj_offset)
         root_vars = [m.x]
         m.benders = CutGenerator()
         m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
@@ -197,9 +336,9 @@ class absolute_value:
         add_upper_bounds=False,
         include_print=False,
         is_persistent=False,
+        obj_offset=0,
     ):
         t0 = time.time()
-        local_farmer = Farmer()
         if mode == "d":
             eta_count = None
         else:
@@ -213,6 +352,7 @@ class absolute_value:
             solver_name=mip_solver,
             transform=transform,
             eta_count=eta_count,
+            obj_offset=obj_offset,
         )
 
         if add_upper_bounds:
@@ -756,3 +896,83 @@ class EnergyGrid:
             complicating_vars_map[root.generation[b]] = m.generation[b]
         # print('Done creating subproblem')
         return m, complicating_vars_map
+
+    @staticmethod
+    def setup_energy_grid(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        raise NotImplementedError(
+            "The Energy Grid problem requires a persistent solver at present to enable feasibility cuts"
+        )
+
+    @staticmethod
+    def setup_energy_grid_persistent(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        transform = kwargs.get("transform", None)
+        grid = kwargs.get("grid", EnergyGrid)
+        m = EnergyGrid.create_root(grid=grid)
+        # TODO/N.B. using list(m.x) here breaks
+        root_vars = [m.generation.values()]
+        m.benders = CutGenerator()
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
+        subproblem_fn_kwargs = dict()
+        subproblem_fn_kwargs["root"] = m.x
+        subproblem_fn_kwargs["grid"] = grid
+        m.benders.add_subproblem(
+            subproblem_fn=EnergyGrid.create_subproblem,
+            subproblem_fn_kwargs=subproblem_fn_kwargs,
+            root_eta=m.eta,
+            subproblem_solver=solver_name,
+        )
+        opt = pyo.SolverFactory(solver_name)
+        opt.set_instance(m)
+        return opt, m
+
+    @staticmethod
+    def run_energy_grid(
+        mip_solver,
+        transform="standard_lp",
+        add_upper_bounds=False,
+        include_print=False,
+        is_persistent=False,
+        grid=None,
+    ):
+        t0 = time.time()
+
+        setup_handle = EnergyGrid.setup_energy_grid
+        if is_persistent:
+            setup_handle = EnergyGrid.setup_energy_grid_persistent
+
+        opt, m = setup_handle(
+            solver_name=mip_solver,
+            transform=transform,
+            grid=grid,
+        )
+
+        if include_print:
+            print("{0:<15}{1:<15}".format("# Cuts", "Total_Time"))
+        for i in range(30):
+            if is_persistent:
+                res = opt.solve(tee=False, save_results=False)
+                cuts_added = m.benders.generate_cut()
+                for c in cuts_added:
+                    opt.add_constraint(c)
+            else:
+                res = opt.solve(m, tee=False)
+                cuts_added = m.benders.generate_cut()
+            if include_print:
+                print(
+                    "{0:<15}{1:<15.2f}".format(
+                        len(cuts_added),
+                        time.time() - t0,
+                    )
+                )
+            if len(cuts_added) == 0:
+                break
+
+        return opt, m
