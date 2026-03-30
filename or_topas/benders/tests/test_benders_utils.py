@@ -14,6 +14,7 @@ from pyomo.common.dependencies import (
 from or_topas.benders.benders_serial import (
     BendersGenerator_Serial as BendersCutGenerator,
 )
+import logging
 import or_topas.benders.tests.test_cases as tc
 from or_topas.util.mymunch import MyMunch
 from pyomo.repn.standard_repn import generate_standard_repn
@@ -669,3 +670,171 @@ class TestBendersUtils(unittest.TestCase):
                 atol=1e-8,
                 equal_nan=True,
             )
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_dcopf_simple_evaluate_1(self, solver):
+        transform = "standard_lp"
+        set_points = [0, 50, 100]
+        expected_obj = 5000
+        # for index, gen_start in enumerate(set_points):
+        grid = tc.EnergyGrid()
+        m = tc.EnergyGrid.create_root(grid=grid)
+
+        # TODO: this is finicky, need to resolve down to a list, not a list with a single wrapper object inside it
+        # root_vars =  list(m.generation.values()) or [m.generation[s] for s in m.generation.index_set()] achieve this
+        # root_vars = [m.generation.values()] does not
+        root_vars = list(m.generation.values())
+        print(root_vars)
+        # root_vars = list(m.generation.values())
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(
+            root_vars=root_vars,
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=True,
+            feasibility_only=True,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=tc.EnergyGrid.create_subproblem,
+            subproblem_fn_kwargs={"root": m, "grid": grid},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        for b in grid.buses:
+            m.generation[b] = 0
+
+        results_munch = m.benders.evaluate_single_subproblem(index=0, build_cut=True)
+        assert isinstance(results_munch, MyMunch), "Expect only one MyMunch object"
+        assert results_munch.subproblem_needs_cut == True, "Should need a cut"
+        assert results_munch.subproblem_infeasible == True, "Should be infeasible"
+        assert (
+            results_munch.subproblem_eta is None
+        ), "Should be None as problem is infeasible"
+        assert (
+            results_munch.subproblem_eta_gap is None
+        ), "Should be None as problem is infeasible"
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_dcopf_simple_evaluate_2(self, solver):
+        transform = "standard_lp"
+        set_points = [0, 50, 100]
+        expected_obj = 5000
+        # for index, gen_start in enumerate(set_points):
+        grid = tc.EnergyGrid()
+        m = tc.EnergyGrid.create_root(grid=grid)
+
+        # TODO: this is finicky, need to resolve down to a list, not a list with a single wrapper object inside it
+        # root_vars =  list(m.generation.values()) or [m.generation[s] for s in m.generation.index_set()] achieve this
+        # root_vars = [m.generation.values()] does not
+        root_vars = list(m.generation.values())
+        print(root_vars)
+        # root_vars = list(m.generation.values())
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(
+            root_vars=root_vars,
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=True,
+            feasibility_only=False,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=tc.EnergyGrid.create_subproblem,
+            subproblem_fn_kwargs={"root": m, "grid": grid},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        # m.eta.fix(0)
+        print(f"{m.benders.feasibility_only=}")
+        for b in grid.buses:
+            m.generation[b] = 0
+        m.generation["bus1"] = 50.0
+        m.generation["bus2"] = 50.0
+
+        results_munch = m.benders.evaluate_single_subproblem(index=0, build_cut=True)
+        assert isinstance(results_munch, MyMunch), "Expect only one MyMunch object"
+        assert results_munch.subproblem_infeasible == False, "Should be feasible"
+        assert results_munch.subproblem_needs_cut == False, "Should not need a cut"
+        assert (
+            results_munch.subproblem_eta is not None
+        ), "Should be not None as problem is feasible"
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_dcopf_simple_evaluate_3(self, solver):
+        transform = "standard_lp"
+        grid = tc.EnergyGrid()
+        m = tc.EnergyGrid.create_root(grid=grid)
+
+        root_vars = list(m.generation.values())
+        print(root_vars)
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(
+            root_vars=root_vars,
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=True,
+            feasibility_only=False,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=tc.EnergyGrid.create_subproblem,
+            subproblem_fn_kwargs={"root": m, "grid": grid},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        print(f"{m.benders.feasibility_only=}")
+        for b in grid.buses:
+            m.generation[b] = 0
+        m.generation["bus1"] = 100
+        m.generation["bus2"] = 0
+
+        results_munch = m.benders.evaluate_single_subproblem(index=0, build_cut=True)
+        assert isinstance(results_munch, MyMunch), "Expect only one MyMunch object"
+        assert results_munch.subproblem_infeasible == False
+        assert results_munch.subproblem_needs_cut == False
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_dcopf_simple_evaluate_4(self, solver):
+        transform = "standard_lp"
+        # for index, gen_start in enumerate(set_points):
+        grid = tc.EnergyGrid()
+        m = tc.EnergyGrid.create_root(grid=grid)
+
+        root_vars = list(m.generation.values())
+        print(root_vars)
+        # root_vars = list(m.generation.values())
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(
+            root_vars=root_vars,
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=True,
+            feasibility_only=True,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=tc.EnergyGrid.create_subproblem,
+            subproblem_fn_kwargs={"root": m, "grid": grid, "feasibility_only": True},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        # m.eta.fix(0)
+        print(f"{m.benders.feasibility_only=}")
+        for b in grid.buses:
+            m.generation[b] = 0
+        m.generation["bus1"] = 100
+        m.generation["bus2"] = 0
+
+        results_munch = m.benders.evaluate_single_subproblem(index=0, build_cut=True)
+        assert isinstance(results_munch, MyMunch), "Expect only one MyMunch object"
+        assert results_munch.subproblem_infeasible == False
+        assert results_munch.subproblem_needs_cut == False
