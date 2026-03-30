@@ -87,6 +87,7 @@ class Benders_Abstract(BlockData):
         self.subproblems = list()
         self.root_etas = list()
         self.feasibility_only = list()
+        self.default_feasibility_only = kwargs.get("feasibility_only", False)
         self.complicating_vars_maps = list()
         self.root_vars = list(root_vars)
         self.root_vars_indices = pyo.ComponentMap()
@@ -117,7 +118,7 @@ class Benders_Abstract(BlockData):
         subproblem_fn = kwargs.get("subproblem_fn")
         subproblem_fn_kwargs = kwargs.get("subproblem_fn_kwargs")
         root_eta = kwargs.get("root_eta")
-        feasibility_only = kwargs.get("feasibility_only", False)
+        feasibility_only = kwargs.get("feasibility_only", self.default_feasibility_only)
         subproblem_solver = kwargs.get(
             "subproblem_solver", self.default_subproblem_solver
         )
@@ -967,7 +968,9 @@ class Benders_Abstract(BlockData):
                         )
                         subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
                         temp_ndx = 0
-                        print(f"{len(var_to_con_map)=}, {len(subproblem_coeff)=}, {len(self.root_vars)=}")
+                        print(
+                            f"{len(var_to_con_map)=}, {len(subproblem_coeff)=}, {len(self.root_vars)=}"
+                        )
                         print(self.root_vars)
                         for root_var, c in var_to_con_map.items():
                             # subproblem_coeff[temp_ndx] = sign_convention * pyo.value(

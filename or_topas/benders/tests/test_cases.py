@@ -868,7 +868,6 @@ class EnergyGrid:
         #     model.buses, domain=pyo.PositiveReals, bounds=gen_max_rule
         # )
 
-
         # Explicit lower bound constraint so dual accessed in with dual not reduced cost attribute
         def gen_lower_rule(m, bus):
             return m.generation[bus] >= 0
@@ -892,10 +891,10 @@ class EnergyGrid:
         return model
 
     @staticmethod
-    def create_subproblem(root, grid, mode=2, feasibility_only = False):
+    def create_subproblem(root, grid, mode=2, feasibility_only=False):
         m = EnergyGrid.create_tiny_opf(grid=grid, mode=mode)
-        #can either zero the subproblem objective and treat as combo-optimality/feasibility
-        #or keep original objective and treat as feasibility only
+        # can either zero the subproblem objective and treat as combo-optimality/feasibility
+        # or keep original objective and treat as feasibility only
         if not feasibility_only:
             m.obj = pyo.Objective(expr=0)
         complicating_vars_map = pyo.ComponentMap()
@@ -913,10 +912,10 @@ class EnergyGrid:
         raise NotImplementedError(
             "The Energy Grid problem requires a persistent solver at present to enable feasibility cuts"
         )
-    
+
     @staticmethod
     def setup_energy_grid_persistent(
-                solver_name,
+        solver_name,
         CutGenerator=BendersGenerator_Serial,
         **kwargs,
     ):
@@ -933,7 +932,10 @@ class EnergyGrid:
         )
         m.benders.add_subproblem(
             subproblem_fn=EnergyGrid.create_subproblem,
-            subproblem_fn_kwargs={"root": m, "grid": grid,},
+            subproblem_fn_kwargs={
+                "root": m,
+                "grid": grid,
+            },
             root_eta=m.eta,
             subproblem_solver=solver_name,
         )
