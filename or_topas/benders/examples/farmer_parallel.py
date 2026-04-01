@@ -14,14 +14,33 @@ import sys
 import time
 
 from pyomo.common.dependencies import mpi4py
-from or_topas.benders.benders_cuts import BendersCutGenerator
+
+# from or_topas.benders.benders_cuts import BendersCutGenerator
+from or_topas.benders.benders_parallel import (
+    BendersGenerator_Parallel as BendersCutGenerator,
+)
+
+# from or_topas.benders.benders_serial import (
+#     BendersGenerator_Serial as BendersCutGenerator,
+# )
 import pyomo.environ as pyo
 
 """
+This example presently is designed to work with gurobi_persistent
+Adapted from the Pyomo.contrib.Benders Farmer problem to work with new parallel solver.
+
 To run this example:
 
-mpirun -np 3 python farmer.py
+mpirun -np 3 python farmer_parallel.py
+
+If altering this script, note the more robust error handling available by using:
+mpirun -np X python -m mpi4py farmer_parallel.py
+Where X is again the number of processes.
+This standardizes error handling especially for unexpected and unhandled errors
 """
+
+default_transform = "standard_lp"
+# default_transform = "feasibility"
 
 
 class Farmer:
@@ -154,7 +173,7 @@ def main():
     m = create_root(farmer=farmer)
     root_vars = list(m.devoted_acreage.values())
     m.benders = BendersCutGenerator()
-    m.benders.set_input(root_vars=root_vars, tol=1e-8)
+    m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=default_transform)
     for s in farmer.scenarios:
         subproblem_fn_kwargs = dict()
         subproblem_fn_kwargs["root"] = m

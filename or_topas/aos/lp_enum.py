@@ -18,12 +18,15 @@ from or_topas.util import pyomo_utils
 from or_topas.solnpool import PyomoPoolManager, PoolPolicy
 from or_topas.aos import shifted_lp
 from pyomo.contrib import appsi
+from pyomo.common.collections import ComponentSet
 
 
 def enumerate_linear_solutions(
     model,
     *,
     num_solutions=10,
+    variables_to_skip=None,
+    ignore_opt_tol_in_basis=False,
     rel_opt_gap=None,
     abs_opt_gap=None,
     lower_objective_threshold=None,
@@ -53,6 +56,10 @@ def enumerate_linear_solutions(
         A concrete Pyomo model
     num_solutions : int
         The maximum number of solutions to generate. Must be positive
+    variables_to_skip: None or a collection of Pyomo _GeneralVarData variables
+        The variables for which will be ignored in basis changes. None indicates
+        that all variables will be considered in basis changes. Alternatively, a collection of
+        _GeneralVarData variables can be provided.
     rel_opt_gap : float or None
         The relative optimality gap for the original objective for which
         variable bounds will be found. None indicates that a relative gap
@@ -114,12 +121,17 @@ def enumerate_linear_solutions(
     # variables doesn't really matter since we only really care about diversity
     # in the original problem and not in the slack space (I think)
 
+    assert (
+        "persistent" not in solver
+    ), "Persistent Solvers not supported or needed here, use non-persistent or APPSI version"
+
     if pool_manager is None:
         pool_manager = PyomoPoolManager()
         pool_manager.add_pool(
             name="enumerate_linear_solutions", policy=PoolPolicy.keep_all
         )
 
+    # N.B. this is use later to control what variables get saved in solution
     all_variables = pyomo_utils.get_model_variables(model, include_fixed=False)
     # else:
     #     binary_variables = ComponentSet()
@@ -252,6 +264,60 @@ def enumerate_linear_solutions(
         (cb.slack_vars, cb.basic_slack, cb.bound_slack),
     ]
 
+    if variables_to_skip is None and ignore_opt_tol_in_basis is False:
+        cb_variables_to_skip_basis_check = ComponentSet()
+    else:
+        # cb_variables_lb = ComponentSet(cb.var_lower[index] for var, index in cb.var_map.items() if var in variables_to_skip)
+        # cb_variable_ub = ComponentSet(cb.var_upper[index] for var, index in cb.var_map.items() if var in variables_to_skip)
+        if ignore_opt_tol_in_basis:
+            cb_variables_to_skip_basis_check = ComponentSet(
+                [
+                    cb.slack_vars[index]
+                    for var, index in cb.constraint_map.items()
+                    if "optimality_tol_rel" in var.name
+                ]
+            )
+        else:
+            cb_variables_to_skip_basis_check = ComponentSet()
+
+        if variables_to_skip is not None:
+            cb_variables_to_skip_basis_check.update(
+                cb.var_lower[index]
+                for var, index in cb.var_map.items()
+                if var in variables_to_skip
+            )
+            cb_variables_to_skip_basis_check.update(
+                [
+                    cb.var_upper[index]
+                    for var, index in cb.var_map.items()
+                    if var in variables_to_skip
+                ]
+            )
+            cb_variables_to_skip_basis_check.update(
+                [
+                    cb.slack_vars[index]
+                    for var, index in cb.constraint_map.items()
+                    if var in variables_to_skip
+                ]
+            )
+
+        # print("Equivalents after map")
+        # print(cb_variables_to_skip_basis_check)
+        # # print("Constraint Map")
+        # # print(cb.constraint_map)
+        # print("Slack vars")
+        # print(ComponentSet(v for v in cb.slack_vars))
+        # print("All the var lowers")
+        # print(ComponentSet(v for v in cb.var_lower))
+        # print("All the var upper")
+        # print(ComponentSet(v for v in cb.var_upper))
+        # print("All the slack vars")
+        # print(ComponentSet(v for v in cb.slack_vars))
+
+    if tee:
+        print("Variables to skip")
+        print(f"{str(variables_to_skip)=}")
+
     solution_number = 1
     solutions = []
     while solution_number <= num_solutions:
@@ -316,24 +382,35 @@ def enumerate_linear_solutions(
             # This expression is used to ensure that at most (# non-zero basic variables)-1
             # binary choice variables can be selected.
             non_zero_basic_expr = 1
+            # This loop is implicitly computing NZ, which amounts to the indices of the basis variables
+            vars_in_basis = ComponentSet()
             for idx in range(len(variable_groups)):
                 continuous_var, binary_var, constraint = variable_groups[idx]
-                for var in continuous_var:
-                    if continuous_var[var].value > zero_threshold:
-                        num_non_zero += 1
 
-                        # Eqn (3): if binary choice variable is not selected, then
-                        # continuous variable is zero.
-                        constraint[var] = (
-                            continuous_var[var]
-                            <= continuous_var[var].ub * binary_var[var]
-                        )
-                        non_zero_basic_expr += binary_var[var]
-                        basic_var = basic_last_list[idx][var]
-                        force_out_expr += basic_var
-                        # Eqn (4): if binary choice variable is selected, then
-                        #           basic variable is zero
-                        cb.link_in_out[var] = basic_var + binary_var[var] <= 1
+                for var in continuous_var:
+                    # I think we can add an 'if not in var set we care about' skip here
+                    # and it will implement focus on variable subsets for lp_enum
+                    if continuous_var[var] not in cb_variables_to_skip_basis_check:
+                        if continuous_var[var].value > zero_threshold:
+                            num_non_zero += 1
+
+                            # Eqn (3): if binary choice variable is not selected, then
+                            # continuous variable is zero.
+                            constraint[var] = (
+                                continuous_var[var]
+                                <= continuous_var[var].ub * binary_var[var]
+                            )
+                            non_zero_basic_expr += binary_var[var]
+                            basic_var = basic_last_list[idx][var]
+                            force_out_expr += basic_var
+                            # Eqn (4): if binary choice variable is selected, then
+                            #           basic variable is zero
+                            cb.link_in_out[var] = basic_var + binary_var[var] <= 1
+                            vars_in_basis.update([continuous_var[var]])
+                    # else:
+                    #     print(f"Skipping var: {str(continuous_var[var])}")
+            if tee:
+                print(f"Vars in basis {solution_number-1}: {str(vars_in_basis)}")
             # Eqn (1): at least one of the non-zero basic variables in the
             #   previous solution is selected
             cb.force_out = pyo.Constraint(expr=force_out_expr >= 0)

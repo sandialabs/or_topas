@@ -12,10 +12,13 @@
 from pyomo.common import unittest
 
 from pyomo.common.dependencies import numpy as numpy, numpy_available
-
+from pyomo.core.expr.compare import compare_expressions as pyomo_compare_expressions
+import pyomo.core.expr as pyo_expr
 import pyomo.environ as pyo
 import pyomo.common.unittest as unittest
 from pyomo.common.collections import ComponentSet
+
+from pyomo.repn.standard_repn import generate_standard_repn
 
 from or_topas.util import pyomo_utils, numpy_utils
 from pyomo.opt import check_available_solvers
@@ -48,6 +51,23 @@ class TestPyomoUtilsUnit(unittest.TestCase):
         m.b2.o = pyo.Objective([0, 1])
         m.b2.o[0] = pyo.Objective(expr=m.y)
         m.b2.o[1] = pyo.Objective(expr=m.x + m.y)
+        return m
+
+    def get_simple_model(self, sense=pyo.minimize):
+        """Create a simple 2d linear program with an objective."""
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        m.y = pyo.Var()
+        m.o = pyo.Objective(expr=m.x + m.y, sense=sense)
+        return m
+
+    def get_simple_model_2(self):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var([1, 2], domain=pyo.NonNegativeReals)
+        m.y = pyo.Var(domain=pyo.Binary)
+        m.obj = pyo.Objective(expr=2 * m.x[1] + 3 * m.x[2] + m.y)
+
+        m.Constraint1 = pyo.Constraint(expr=3 * m.x[1] + 4 * m.x[2] >= 1 + m.y)
         return m
 
     def test_multiple_objectives(self):
@@ -87,14 +107,6 @@ class TestPyomoUtilsUnit(unittest.TestCase):
         b = pyomo_utils.add_aos_block(m, block_name)
         self.assertEqual(b.name, block_name)
         self.assertEqual(b.ctype, pyo.Block)
-
-    def get_simple_model(self, sense=pyo.minimize):
-        """Create a simple 2d linear program with an objective."""
-        m = pyo.ConcreteModel()
-        m.x = pyo.Var()
-        m.y = pyo.Var()
-        m.o = pyo.Objective(expr=m.x + m.y, sense=sense)
-        return m
 
     def test_no_obj_constraint(self):
         """Ensure that no objective constraints are added."""
@@ -889,6 +901,71 @@ class TestPyomoUtilsUnit(unittest.TestCase):
         test_names = pyomo_utils._get_testing_solver_names()
         for name in test_names:
             pyomo_utils.create_solver(name)
+
+    def test_split_expr_failure_modes(self):
+        pass
+
+    def test_split_expr_1(self):
+        # m = pyo.ConcreteModel()
+        # m.x = pyo.Var([1,2], domain=pyo.NonNegativeReals)
+        # m.y = pyo.Var(domain=pyo.Binary)
+        # m.obj = pyo.Objective(expr = 2*m.x[1] + 3*m.x[2] + m.y)
+
+        # m.Constraint1 = pyo.Constraint(expr = 3*m.x[1] + 4*m.x[2] >= 1 + m.y)
+        m = self.get_simple_model_2()
+
+        var_set = [m.x[1], m.x[2]]
+        result_munch = pyomo_utils.split_expr(m.obj.expr, var_set, allow_iterables=True)
+
+        assert isinstance(result_munch.in_set, (pyo_expr.NumericValue, int, float))
+        assert isinstance(result_munch.not_in_set, (pyo_expr.NumericValue, int, float))
+        assert isinstance(result_munch.constant, (pyo_expr.NumericValue, int, float))
+        assert isinstance(
+            result_munch.in_plus_cons, (pyo_expr.NumericValue, int, float)
+        )
+        assert isinstance(result_munch.out, (pyo_expr.NumericValue, int, float))
+
+        assert pyomo_compare_expressions(
+            result_munch.in_set, 2 * m.x[1] + 3 * m.x[2], include_named_exprs=False
+        )
+        assert pyomo_compare_expressions(
+            result_munch.in_plus_cons,
+            2 * m.x[1] + 3 * m.x[2],
+            include_named_exprs=False,
+        )
+        assert pyomo_compare_expressions(
+            result_munch.constant, 0, include_named_exprs=False
+        )
+        assert pyomo_compare_expressions(
+            result_munch.not_in_set, m.y, include_named_exprs=False
+        )
+        assert pyomo_compare_expressions(
+            result_munch.out, m.y, include_named_exprs=False
+        )
+
+        var_set = [m.x[1], m.x[2]]
+        result_munch = pyomo_utils.split_expr(
+            m.Constraint1.body, var_set, allow_iterables=True
+        )
+        # print(f"{str(m.Constraint1.body)=}")
+
+        assert pyomo_compare_expressions(
+            result_munch.in_set, -3 * m.x[1] + -4 * m.x[2], include_named_exprs=False
+        )
+        assert pyomo_compare_expressions(
+            result_munch.in_plus_cons,
+            -3 * m.x[1] + -4 * m.x[2] + 1,
+            include_named_exprs=False,
+        )
+        assert pyomo_compare_expressions(
+            result_munch.constant, 1, include_named_exprs=False
+        )
+        assert pyomo_compare_expressions(
+            result_munch.not_in_set, m.y, include_named_exprs=False
+        )
+        assert pyomo_compare_expressions(
+            result_munch.out, m.y, include_named_exprs=False
+        )
 
 
 if __name__ == "__main__":

@@ -12,8 +12,7 @@
 from collections import Counter
 
 from pyomo.common import unittest
-from pyomo.common.dependencies import attempt_import
-from pyomo.common.dependencies import numpy as numpy, numpy_available
+from pyomo.common.dependencies import numpy as numpy, numpy_available, attempt_import
 import pyomo.opt
 import pyomo.environ as pyo
 import warnings

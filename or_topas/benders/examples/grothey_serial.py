@@ -9,8 +9,23 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-from or_topas.benders.benders_cuts import BendersCutGenerator
+# from or_topas.benders.benders_cuts import BendersCutGenerator
+# from or_topas.benders.benders_parallel import BendersGenerator_Parallel as BendersCutGenerator
+from or_topas.benders.benders_serial import (
+    BendersGenerator_Serial as BendersCutGenerator,
+)
+
 import pyomo.environ as pyo
+
+"""
+This example presently is designed to work with gurobi_persistent and ipopt
+Adapted from the Pyomo.contrib.Benders Grothey problem to work with serial solver.
+
+To run this example:
+
+python grothey_ex.py
+
+"""
 
 
 def create_root():
