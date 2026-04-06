@@ -17,6 +17,10 @@ import dataclasses
 import json
 import weakref
 import math
+from operator import itemgetter
+from numpy.linalg import norm as np_norm
+from numpy import fromiter as np_fromiter
+from numpy import inf as np_inf
 
 from or_topas.util.mymunch import MyMunch, to_dict
 from .solution import Solution, PyomoSolution
@@ -328,6 +332,9 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
     """
     A subclass of SolutionPool with the policy of keep the latest k unique solutions.
     Added solutions are checked for uniqueness.
+    Default uniqueness check is done by hash of solution tuple representation.
+    There is an additional option to add a by norm tolerance check as well.
+    N.B. the tolerance check can be computationally expensive and scales linearly as the pool increases in size.
 
     This class is designed to integrate with the alternative_solution generation methods.
     Additionally, groups of solution pools can be handled with the PoolManager class.
@@ -345,21 +352,53 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
     max_pool_size : int
         The max_pool_size is the K value for keeping the latest K solutions.
         Must be a positive integer.
+    solution_tolerance : None or float
+        The positive tolerance used for norm based solution comparison.
+        If None, no tolerance based comparison will be used.
+        If float, must be positive.
+    norm_ord : int or np.inf
+        The L-norm to use with the solution tolerance comparison.
+        Defaults to one.
+        Supported values are 1,2, and np.inf
     """
 
-    def __init__(self, name=None, as_solution=None, counter=None, *, max_pool_size=1):
+    def __init__(
+        self,
+        name=None,
+        as_solution=None,
+        counter=None,
+        *,
+        max_pool_size=1,
+        solution_tolerance=None,
+        norm_ord=1,
+    ):
         if not (max_pool_size >= 1):
             raise ValueError("max_pool_size must be positive integer")
+        if (solution_tolerance is not None) and not (solution_tolerance > 0):
+            raise ValueError(
+                "solution_tolerance must either be None or positive float."
+            )
+        if norm_ord not in (1, 2, np_inf):
+            raise ValueError("norm_ord should be 1 (L1), 2 (L2), or np.inf")
         super().__init__(
             name, as_solution, counter, policy=PoolPolicy.keep_latest_unique
         )
         self.max_pool_size = max_pool_size
         self._int_deque = collections.deque()
         self._unique_solutions = set()
+        self.solution_tolerance = solution_tolerance
+        self.norm_ord = norm_ord
 
     @property
     def pool_config(self):
-        return dict(max_pool_size=self.max_pool_size)
+        if self.solution_tolerance is None:
+            return dict(max_pool_size=self.max_pool_size)
+        else:
+            return {
+                "max_pool_size": self.max_pool_size,
+                "solution_tolerance": self.solution_tolerance,
+                "norm_ord": self.norm_ord,
+            }
 
     def add(self, *args, **kwargs):
         """
@@ -390,8 +429,24 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
         # Return None if the solution has already been added to the pool
         #
         tuple_repn = soln._tuple_repn()
+
         if tuple_repn in self._unique_solutions:
             return None
+        if self.solution_tolerance is not None:
+            len_repn = len(tuple_repn)
+            sliced_repn = np_fromiter(map(itemgetter(1), tuple_repn), dtype=float)
+            if any(
+                (len_repn == len(tr))
+                and (
+                    np_norm(
+                        sliced_repn - np_fromiter(map(itemgetter(1), tr), dtype=float)
+                    )
+                    < self.solution_tolerance
+                )
+                for tr in self._unique_solutions
+            ):
+                return None
+
         self._unique_solutions.add(tuple_repn)
         #
         soln.id = self._next_solution_counter()
