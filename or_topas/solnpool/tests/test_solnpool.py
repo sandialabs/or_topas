@@ -520,6 +520,87 @@ class TestSolnPool(unittest.TestCase):
             }
         }
 
+    def test_keeplatestunique_add_with_norm_tolerance(self):
+        pm = PoolManager()
+        pm.add_pool(
+            name="pool",
+            policy=PoolPolicy.keep_latest_unique,
+            max_pool_size=2,
+            solution_tolerance=1e-6,
+            norm_ord=1,
+        )
+
+        retval = pm.add(soln(0, 0))
+        assert retval is not None
+        assert len(pm) == 1
+
+        retval = pm.add(soln(0, 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln(1e-7, 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln(1, 1))
+        assert retval is not None
+        assert len(pm) == 2
+
+        retval = pm.add(soln(1 + 1e-7, 1))
+        assert retval is None
+        assert len(pm) == 2
+
+        assert pm.get_pool_dicts() == {
+            "pool": {
+                "metadata": {
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
+                    "context_name": "pool",
+                    "policy": "keep_latest_unique",
+                },
+                "pool_config": {
+                    "max_pool_size": 2,
+                    "norm_ord": 1,
+                    "solution_tolerance": 1e-06,
+                },
+                "solutions": {
+                    0: {
+                        "id": 0,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            }
+                        ],
+                    },
+                    1: {
+                        "id": 1,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 1}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            }
+                        ],
+                    },
+                },
+            }
+        }
+
     def test_keepbest_bad_max_pool_size(self):
         pm = PoolManager()
         with self.assertRaises(ValueError):
