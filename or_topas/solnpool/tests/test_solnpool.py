@@ -19,11 +19,22 @@ from or_topas.solnpool import (
     VariableInfo,
     ObjectiveInfo,
 )
+from or_topas.util import try_import
+
+with try_import() as numpy_available:
+    import numpy as np
 
 
 def soln(value, objective):
     return Solution(
         variables=[VariableInfo(value=value)],
+        objectives=[ObjectiveInfo(value=objective)],
+    )
+
+
+def soln_multiple_variables(values, objective):
+    return Solution(
+        variables=[VariableInfo(value=value) for value in values],
         objectives=[ObjectiveInfo(value=objective)],
     )
 
@@ -520,6 +531,7 @@ class TestSolnPool(unittest.TestCase):
             }
         }
 
+    @unittest.skipUnless(numpy_available, "NumPy not found")
     def test_keeplatestunique_add_with_norm_tolerance(self):
         pm = PoolManager()
         pm.add_pool(
@@ -600,6 +612,486 @@ class TestSolnPool(unittest.TestCase):
                 },
             }
         }
+
+    @unittest.skipUnless(numpy_available, "NumPy not found")
+    def test_keeplatestunique_add_with_norm_tolerance(self):
+        pm = PoolManager()
+        pm.add_pool(
+            name="pool",
+            policy=PoolPolicy.keep_latest_unique,
+            max_pool_size=2,
+            solution_tolerance=1e-6,
+            norm_ord=1,
+        )
+
+        retval = pm.add(soln(0, 0))
+        assert retval is not None
+        assert len(pm) == 1
+
+        retval = pm.add(soln(0, 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln(1e-7, 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln(1, 1))
+        assert retval is not None
+        assert len(pm) == 2
+
+        retval = pm.add(soln(1 + 1e-7, 1))
+        assert retval is None
+        assert len(pm) == 2
+
+        assert pm.get_pool_dicts() == {
+            "pool": {
+                "metadata": {
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
+                    "context_name": "pool",
+                    "policy": "keep_latest_unique",
+                },
+                "pool_config": {
+                    "max_pool_size": 2,
+                    "norm_ord": 1,
+                    "solution_tolerance": 1e-06,
+                },
+                "solutions": {
+                    0: {
+                        "id": 0,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            }
+                        ],
+                    },
+                    1: {
+                        "id": 1,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 1}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            }
+                        ],
+                    },
+                },
+            }
+        }
+
+    @unittest.skipUnless(numpy_available, "NumPy not found")
+    def test_keeplatestunique_add_with_norm_tolerance_2(self):
+        pm = PoolManager()
+        pm.add_pool(
+            name="pool",
+            policy=PoolPolicy.keep_latest_unique,
+            max_pool_size=2,
+            solution_tolerance=1e-6,
+            norm_ord=1,
+        )
+
+        retval = pm.add(soln_multiple_variables([0], 0))
+        assert retval is not None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([0], 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([1e-7], 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([1], 1))
+        assert retval is not None
+        assert len(pm) == 2
+
+        retval = pm.add(soln_multiple_variables([1 + 1e-7], 1))
+        assert retval is None
+        assert len(pm) == 2
+
+        assert pm.get_pool_dicts() == {
+            "pool": {
+                "metadata": {
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
+                    "context_name": "pool",
+                    "policy": "keep_latest_unique",
+                },
+                "pool_config": {
+                    "max_pool_size": 2,
+                    "norm_ord": 1,
+                    "solution_tolerance": 1e-06,
+                },
+                "solutions": {
+                    0: {
+                        "id": 0,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            }
+                        ],
+                    },
+                    1: {
+                        "id": 1,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 1}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            }
+                        ],
+                    },
+                },
+            }
+        }
+
+    @unittest.skipUnless(numpy_available, "NumPy not found")
+    def test_keeplatestunique_add_with_norm_tolerance_3(self):
+        pm = PoolManager()
+        pm.add_pool(
+            name="pool",
+            policy=PoolPolicy.keep_latest_unique,
+            max_pool_size=2,
+            solution_tolerance=1e-6,
+            norm_ord=1,
+        )
+
+        retval = pm.add(soln_multiple_variables([0, 0], 0))
+        assert retval is not None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([0, 0], 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([1e-7, 0], 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([1, 1e-7], 1))
+        assert retval is not None
+        assert len(pm) == 2
+
+        retval = pm.add(soln_multiple_variables([1, 0], 1))
+        assert retval is None
+        assert len(pm) == 2
+
+        assert pm.get_pool_dicts() == {
+            "pool": {
+                "metadata": {
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
+                    "context_name": "pool",
+                    "policy": "keep_latest_unique",
+                },
+                "pool_config": {
+                    "max_pool_size": 2,
+                    "norm_ord": 1,
+                    "solution_tolerance": 1e-06,
+                },
+                "solutions": {
+                    0: {
+                        "id": 0,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                    },
+                    1: {
+                        "id": 1,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 1}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1e-7,
+                            },
+                        ],
+                    },
+                },
+            }
+        }
+
+    @unittest.skipUnless(numpy_available, "NumPy not found")
+    def test_keeplatestunique_add_with_norm_tolerance_4(self):
+        pm = PoolManager()
+        pm.add_pool(
+            name="pool",
+            policy=PoolPolicy.keep_latest_unique,
+            max_pool_size=2,
+            solution_tolerance=1e-6,
+            norm_ord=2,
+        )
+
+        retval = pm.add(soln_multiple_variables([0, 0], 0))
+        assert retval is not None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([0, 0], 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        # will not be added under the 2-norm
+        retval = pm.add(soln_multiple_variables([7e-7, 7e-7], 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([1, 1e-7], 1))
+        assert retval is not None
+        assert len(pm) == 2
+
+        assert pm.get_pool_dicts() == {
+            "pool": {
+                "metadata": {
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
+                    "context_name": "pool",
+                    "policy": "keep_latest_unique",
+                },
+                "pool_config": {
+                    "max_pool_size": 2,
+                    "norm_ord": 2,
+                    "solution_tolerance": 1e-06,
+                },
+                "solutions": {
+                    0: {
+                        "id": 0,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                    },
+                    1: {
+                        "id": 1,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 1}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1e-7,
+                            },
+                        ],
+                    },
+                },
+            }
+        }
+
+    @unittest.skipUnless(numpy_available, "NumPy not found")
+    def test_keeplatestunique_add_with_norm_tolerance_5(self):
+        pm = PoolManager()
+        pm.add_pool(
+            name="pool",
+            policy=PoolPolicy.keep_latest_unique,
+            max_pool_size=4,
+            solution_tolerance=1e-6,
+            norm_ord=np.inf,
+        )
+
+        retval = pm.add(soln_multiple_variables([0, 0], 0))
+        assert retval is not None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([0, 0], 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        # will not be added under the 2-norm
+        retval = pm.add(soln_multiple_variables([7e-7, 7e-7], 1))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([1, 1e-7], 1))
+        assert retval is not None
+        assert len(pm) == 2
+
+        assert pm.get_pool_dicts() == {
+            "pool": {
+                "metadata": {
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
+                    "context_name": "pool",
+                    "policy": "keep_latest_unique",
+                },
+                "pool_config": {
+                    "max_pool_size": 4,
+                    "norm_ord": np.inf,
+                    "solution_tolerance": 1e-06,
+                },
+                "solutions": {
+                    0: {
+                        "id": 0,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                    },
+                    1: {
+                        "id": 1,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 1}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1e-7,
+                            },
+                        ],
+                    },
+                },
+            }
+        }
+
+    def test_keeplatestunique_error_check_with_norm_tolerance(self):
+        """
+        Confirm that an exception is
+        """
+        with self.assertRaises(ValueError) as cm:
+            pm = PoolManager()
+            pm.add_pool(
+                name="pool",
+                policy=PoolPolicy.keep_latest_unique,
+                max_pool_size=2,
+                solution_tolerance=-10,
+                norm_ord=1,
+            )
+        expected_message = "solution_tolerance must either be None or positive float."
+        self.assertIn(expected_message, str(cm.exception))
+
+        with self.assertRaises(ValueError) as cm:
+            pm = PoolManager()
+            pm.add_pool(
+                name="pool",
+                policy=PoolPolicy.keep_latest_unique,
+                max_pool_size=2,
+                solution_tolerance=None,
+                norm_ord=-1.5,
+            )
+        expected_message = "norm_ord should be 1 (L1), 2 (L2), or np.inf"
+        self.assertIn(expected_message, str(cm.exception))
 
     def test_keepbest_bad_max_pool_size(self):
         pm = PoolManager()

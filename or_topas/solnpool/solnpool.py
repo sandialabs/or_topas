@@ -18,12 +18,16 @@ import json
 import weakref
 import math
 from operator import itemgetter
-from numpy.linalg import norm as np_norm
-from numpy import fromiter as np_fromiter
-from numpy import inf as np_inf
+
 
 from or_topas.util.mymunch import MyMunch, to_dict
+from or_topas.util import try_import
 from .solution import Solution, PyomoSolution
+
+with try_import() as numpy_available:
+    from numpy.linalg import norm as np_norm
+    from numpy import fromiter as np_fromiter
+    from numpy import inf as np_inf
 
 nan = float("nan")
 
@@ -374,10 +378,13 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
     ):
         if not (max_pool_size >= 1):
             raise ValueError("max_pool_size must be positive integer")
-        if (solution_tolerance is not None) and not (solution_tolerance > 0):
-            raise ValueError(
-                "solution_tolerance must either be None or positive float."
-            )
+        if solution_tolerance is not None:
+            if not numpy_available:
+                raise ImportError("Use of solution tolerance requires numpy")
+            if not (solution_tolerance > 0):
+                raise ValueError(
+                    "solution_tolerance must either be None or positive float."
+                )
         if norm_ord not in (1, 2, np_inf):
             raise ValueError("norm_ord should be 1 (L1), 2 (L2), or np.inf")
         super().__init__(
