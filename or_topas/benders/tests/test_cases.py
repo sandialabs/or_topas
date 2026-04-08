@@ -38,8 +38,8 @@ class modified_absolute_value:
         """
         This subproblem implements the following function
 
-        Q(x) =  max{R(x-a), -L(x-a)} if x \in [LB, UB]
-                +\infty              if x \not \in [LB,UB]
+        Q(x) =  max{R(x-a), -L(x-a)} if x in [LB, UB]
+                +\infty              if x not in [LB,UB]
 
         The subproblem that implements this is:
         Q(x) = min_{y >= 0} R*y[R] + L*y[L]
@@ -50,8 +50,8 @@ class modified_absolute_value:
         Note that this is only LP representable when -L <= R
         This subproblem should result in the following cuts:
         Opt Cuts:
-        \theta >= R(x-a)
-        \theta >= -L(x-a)
+        theta >= R(x-a)
+        theta >= -L(x-a)
         Corresponding to dual vertices [R, 0, 0]' and [-L, 0, 0]'
 
         Feas Cuts:
@@ -447,7 +447,7 @@ class Farmer:
         self.scenario_probabilities["AboveAverageScenario"] = 0.3333
 
     @staticmethod
-    def create_root(farmer):
+    def create_root(farmer, variant=0):
         m = pyo.ConcreteModel()
 
         m.crops = pyo.Set(initialize=farmer.crops, ordered=True)
@@ -469,6 +469,74 @@ class Farmer:
             )
             + sum(m.eta.values())
         )
+
+        if variant > 0:
+            if variant == 1:
+                # this mode will give us an integer farmer problem
+                # note that this is not normally how to handle integrality in models for Benders
+                # subproblem copies of integer variables need to be relaxed to continuous to get dual info
+                m.devoted_acreage.domain = pyo.NonNegativeIntegers
+            elif variant == 2:
+                # Variant 2: Binary indicators for discretized land-use buckets (range limiting)
+                # This creates 10 buckets per crop. If indicator[crop, s] == 1,
+                # then devoted_acreage[crop] must be in the s-th bucket range.
+                # Useful for testing binary variables in the master, AOS (alternative optimal solutions),
+                # and logic-based Benders or piecewise decisions.
+
+                points = 10
+                m.split_points = pyo.RangeSet(1, points)
+
+                def cutoff_init(model, i):
+                    return (i / points) * farmer.total_acreage
+
+                m.cutoffs = pyo.Param(m.split_points, initialize=cutoff_init)
+
+                # Binary indicator: 1 if this bucket is selected for the crop
+                m.land_use_indicators = pyo.Var(
+                    m.crops,
+                    m.split_points,
+                    within=pyo.Binary,
+                    doc="land_use_indicators[crop, bucket]",
+                )
+
+                # At most one bucket active per crop (can be relaxed to ==1 if you prefer exactly one)
+                def land_sos_def(model, crop):
+                    return (
+                        sum(
+                            model.land_use_indicators[crop, s]
+                            for s in model.split_points
+                        )
+                        == 1
+                    )
+
+                m.land_indicator_sos_cons = pyo.Constraint(m.crops, rule=land_sos_def)
+
+                # Big-M value
+                bigM = farmer.total_acreage + 1.0  # slightly larger than total acreage
+
+                # For each crop and each possible bucket s:
+                # If indicator == 1, then low_s <= devoted_acreage <= high_s
+                def land_upper_rule(model, crop, s):
+                    high_s = model.cutoffs[s]
+                    return model.devoted_acreage[crop] <= high_s + bigM * (
+                        1 - model.land_use_indicators[crop, s]
+                    )
+
+                def land_lower_rule(model, crop, s):
+                    low_s = model.cutoffs[s - 1] if s > 1 else 0.0
+                    return model.devoted_acreage[crop] >= low_s - bigM * (
+                        1 - model.land_use_indicators[crop, s]
+                    )
+
+                m.land_indicator_upper_cons = pyo.Constraint(
+                    m.crops, m.split_points, rule=land_upper_rule
+                )
+                m.land_indicator_lower_cons = pyo.Constraint(
+                    m.crops, m.split_points, rule=land_lower_rule
+                )
+            else:
+                raise RuntimeError(f"Attempted Unsupported modification mode")
+
         return m
 
     @staticmethod
@@ -538,7 +606,8 @@ class Farmer:
         # designed for gurobi_persistent
         solver_name = kwargs.get("solver_name", "gurobi_persistent")
         farmer = Farmer_Data
-        m = Farmer.create_root(farmer=farmer)
+        variant = kwargs.get("variant", 0)
+        m = Farmer.create_root(farmer=farmer, variant=variant)
         root_vars = list(m.devoted_acreage.values())
         m.benders = CutGenerator()
         transform = kwargs.get("transform", None)
@@ -566,7 +635,8 @@ class Farmer:
         **kwargs,
     ):
         farmer = Farmer_Data
-        m = Farmer.create_root(farmer=farmer)
+        variant = kwargs.get("variant", 0)
+        m = Farmer.create_root(farmer=farmer, variant=variant)
         root_vars = list(m.devoted_acreage.values())
         m.benders = CutGenerator()
         transform = kwargs.get("transform", None)
@@ -594,6 +664,8 @@ class Farmer:
         include_print=False,
         is_persistent=False,
         include_assert_checks=False,
+        variant=0,
+        iter_max=30,
     ):
         t0 = time.time()
         local_farmer = Farmer()
@@ -610,6 +682,7 @@ class Farmer:
             local_farmer,
             solver_name=mip_solver,
             transform=transform,
+            variant=variant,
         )
 
         if add_upper_bounds:
@@ -621,7 +694,7 @@ class Farmer:
                     "# Cuts", "Corn", "Sugar Beets", "Wheat", "Total_Time"
                 )
             )
-        for i in range(30):
+        for i in range(iter_max):
             if is_persistent:
                 res = opt.solve(tee=False, save_results=False)
                 cuts_added = m.benders.generate_cut()
@@ -643,7 +716,7 @@ class Farmer:
             if len(cuts_added) == 0:
                 break
 
-        if include_assert_checks:
+        if include_assert_checks and variant == 0:
             if mode == "s":
                 tol = 1e-7
                 assert abs(m.devoted_acreage["CORN"].value - 80) < tol

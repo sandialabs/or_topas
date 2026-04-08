@@ -346,6 +346,109 @@ class TestBendersSolver(unittest.TestCase):
         self.assertAlmostEqual(m.eta.value, -0.0337568, 4)
 
     #
+    #   Modified Farmer Tests
+    #
+    @unittest.skipIf(not gurobi_available, "gurobi is not available.")
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_integer_farmer(self):
+        mip_solver = "gurobi"
+        transform = "standard_lp"
+        t0 = time.time()
+        opt, m = tc.Farmer.setup_farmer(
+            tc.Farmer(),
+            solver_name=mip_solver,
+            # transform=default_transform,
+            transform=transform,
+            variant=1,
+        )
+
+        print(
+            "{0:<15}{1:<15}{2:<15}{3:<15}{4:<15}".format(
+                "# Cuts", "Corn", "Sugar Beets", "Wheat", "Total_Time"
+            )
+        )
+        for i in range(300):
+            res = opt.solve(m, tee=False)
+            cuts_added = m.benders.generate_cut()
+            # for c in cuts_added:
+            #     opt.add_constraint(c)
+            print(
+                "{0:<15}{1:<15.2f}{2:<15.2f}{3:<15.2f}{4:<15.2f}".format(
+                    len(cuts_added),
+                    m.devoted_acreage["CORN"].value,
+                    m.devoted_acreage["SUGAR_BEETS"].value,
+                    m.devoted_acreage["WHEAT"].value,
+                    time.time() - t0,
+                )
+            )
+            if len(cuts_added) == 0:
+                break
+
+        self.assertAlmostEqual(m.devoted_acreage["CORN"].value, 80, 7)
+        self.assertAlmostEqual(m.devoted_acreage["SUGAR_BEETS"].value, 250, 7)
+        self.assertAlmostEqual(m.devoted_acreage["WHEAT"].value, 170, 7)
+
+    @unittest.skipIf(not gurobi_available, "gurobi is not available.")
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_bucketed_farmer(self):
+        mip_solver = "gurobi"
+        transform = "standard_lp"
+        t0 = time.time()
+        opt, m = tc.Farmer.setup_farmer(
+            tc.Farmer(),
+            solver_name=mip_solver,
+            # transform=default_transform,
+            transform=transform,
+            variant=2,
+        )
+
+        print(
+            "{0:<15}{1:<15}{2:<15}{3:<15}{4:<15}".format(
+                "# Cuts", "Corn", "Sugar Beets", "Wheat", "Total_Time"
+            )
+        )
+        for i in range(300):
+            res = opt.solve(m, tee=False)
+            cuts_added = m.benders.generate_cut()
+            # for c in cuts_added:
+            #     opt.add_constraint(c)
+            print(
+                "{0:<15}{1:<15.2f}{2:<15.2f}{3:<15.2f}{4:<15.2f}".format(
+                    len(cuts_added),
+                    m.devoted_acreage["CORN"].value,
+                    m.devoted_acreage["SUGAR_BEETS"].value,
+                    m.devoted_acreage["WHEAT"].value,
+                    time.time() - t0,
+                )
+            )
+            if len(cuts_added) == 0:
+                break
+
+        self.assertAlmostEqual(m.devoted_acreage["CORN"].value, 80, 7)
+        self.assertAlmostEqual(m.devoted_acreage["SUGAR_BEETS"].value, 250, 7)
+        self.assertAlmostEqual(m.devoted_acreage["WHEAT"].value, 170, 7)
+
+        buckets_corn = {i + 1: 0 for i in range(10)}
+        buckets_sugar_beets = {i + 1: 0 for i in range(10)}
+        buckets_wheat = {i + 1: 0 for i in range(10)}
+        buckets_corn[2] = 1
+        buckets_sugar_beets[5] = 1
+        buckets_wheat[4] = 1
+
+        for i in range(10):
+            self.assertAlmostEqual(
+                m.land_use_indicators["CORN", i + 1].value, buckets_corn[i + 1], 7
+            )
+            self.assertAlmostEqual(
+                m.land_use_indicators["SUGAR_BEETS", i + 1].value,
+                buckets_sugar_beets[i + 1],
+                7,
+            )
+            self.assertAlmostEqual(
+                m.land_use_indicators["WHEAT", i + 1].value, buckets_wheat[i + 1], 7
+            )
+
+    #
     # abs Tests
     #
 
