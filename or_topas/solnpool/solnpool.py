@@ -17,9 +17,20 @@ import dataclasses
 import json
 import weakref
 import math
+from operator import itemgetter
+
 
 from or_topas.util.mymunch import MyMunch, to_dict
+from or_topas.util import try_import
 from .solution import Solution, PyomoSolution
+
+with try_import() as numpy_available:
+    from numpy.linalg import norm as np_norm
+    from numpy import fromiter as np_fromiter
+    from numpy import inf as np_inf
+    from numpy import any as np_any
+    from numpy import all as np_all
+    from numpy import array as np_array
 
 nan = float("nan")
 
@@ -61,6 +72,7 @@ class PoolPolicy(Enum):
     keep_best = "keep_best"
     keep_latest = "keep_latest"
     keep_latest_unique = "keep_latest_unique"
+    keep_pareto = "keep_pareto"
 
     def __str__(self):
         return f"{self.value}"
@@ -241,7 +253,7 @@ class SolutionPool_KeepAll(SolutionPoolBase):
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
             raise RuntimeError(
-                f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
+                f"Solution id {soln.id} already in solution pool context '{self.metadata.context_name}'"
             )
         #
         self._solutions[soln.id] = soln
@@ -312,7 +324,7 @@ class SolutionPool_KeepLatest(SolutionPoolBase):
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
             raise RuntimeError(
-                f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
+                f"Solution id {soln.id} already in solution pool context '{self.metadata.context_name}'"
             )
         #
         self._solutions[soln.id] = soln
@@ -328,6 +340,9 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
     """
     A subclass of SolutionPool with the policy of keep the latest k unique solutions.
     Added solutions are checked for uniqueness.
+    Default uniqueness check is done by hash of solution tuple representation.
+    There is an additional option to add a by norm tolerance check as well.
+    N.B. the tolerance check can be computationally expensive and scales linearly as the pool increases in size.
 
     This class is designed to integrate with the alternative_solution generation methods.
     Additionally, groups of solution pools can be handled with the PoolManager class.
@@ -345,21 +360,56 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
     max_pool_size : int
         The max_pool_size is the K value for keeping the latest K solutions.
         Must be a positive integer.
+    solution_tolerance : None or float
+        The positive tolerance used for norm based solution comparison.
+        If None, no tolerance based comparison will be used.
+        If float, must be positive.
+    norm_ord : int or np.inf
+        The L-norm to use with the solution tolerance comparison.
+        Defaults to one.
+        Supported values are 1,2, and np.inf
     """
 
-    def __init__(self, name=None, as_solution=None, counter=None, *, max_pool_size=1):
+    def __init__(
+        self,
+        name=None,
+        as_solution=None,
+        counter=None,
+        *,
+        max_pool_size=1,
+        solution_tolerance=None,
+        norm_ord=1,
+    ):
         if not (max_pool_size >= 1):
             raise ValueError("max_pool_size must be positive integer")
+        if solution_tolerance is not None:
+            if not numpy_available:
+                raise ImportError("Use of solution tolerance requires numpy")
+            if not (solution_tolerance > 0):
+                raise ValueError(
+                    "solution_tolerance must either be None or positive float."
+                )
+        if norm_ord not in (1, 2, np_inf):
+            raise ValueError("norm_ord should be 1 (L1), 2 (L2), or np.inf")
         super().__init__(
             name, as_solution, counter, policy=PoolPolicy.keep_latest_unique
         )
         self.max_pool_size = max_pool_size
         self._int_deque = collections.deque()
         self._unique_solutions = set()
+        self.solution_tolerance = solution_tolerance
+        self.norm_ord = norm_ord
 
     @property
     def pool_config(self):
-        return dict(max_pool_size=self.max_pool_size)
+        if self.solution_tolerance is None:
+            return dict(max_pool_size=self.max_pool_size)
+        else:
+            return {
+                "max_pool_size": self.max_pool_size,
+                "solution_tolerance": self.solution_tolerance,
+                "norm_ord": self.norm_ord,
+            }
 
     def add(self, *args, **kwargs):
         """
@@ -390,14 +440,30 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
         # Return None if the solution has already been added to the pool
         #
         tuple_repn = soln._tuple_repn()
+
         if tuple_repn in self._unique_solutions:
             return None
+        if self.solution_tolerance is not None:
+            len_repn = len(tuple_repn)
+            sliced_repn = np_fromiter(map(itemgetter(1), tuple_repn), dtype=float)
+            if any(
+                (len_repn == len(tr))
+                and (
+                    np_norm(
+                        sliced_repn - np_fromiter(map(itemgetter(1), tr), dtype=float)
+                    )
+                    < self.solution_tolerance
+                )
+                for tr in self._unique_solutions
+            ):
+                return None
+
         self._unique_solutions.add(tuple_repn)
         #
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
             raise RuntimeError(
-                f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
+                f"Solution id {soln.id} already in solution pool context '{self.metadata.context_name}'"
             )
         #
         self._int_deque.append(soln.id)
@@ -406,6 +472,229 @@ class SolutionPool_KeepLatestUnique(SolutionPoolBase):
             del self._solutions[index]
         #
         self._solutions[soln.id] = soln
+        return soln.id
+
+
+class SolutionPool_Pareto(SolutionPoolBase):
+    """
+    A subclass of SolutionPool with the policy of keep the (approximate) pareto (or multiple objective) frontier.
+    This pool tracks the minima (maxima) of the point set of the added solutions, which is the pool level approximation to computing the full frontier.
+    Added solutions are checked for uniqueness.
+    Default uniqueness check is done by hash of solution tuple representation.
+    There is an additional option to add a norm tolerance check as well.
+    N.B. the non-inferior and tolerance checks are computationally expensive and scale linearly as the pool increases in size.
+
+    This class is designed to integrate with the alternative_solution generation methods.
+    Additionally, groups of solution pools can be handled with the PoolManager class.
+
+    Parameters
+    ----------
+    name : str
+        String name to describe the pool.
+    as_solution : Callable[..., Solution] or None
+        Method for converting inputs into Solution objects.
+        A value of None will result in the default_as_solution function being used.
+    counter : PoolCounter or None
+        PoolCounter object to manage solution indexing.
+        A value of None will result in a new PoolCounter object being created and used.
+    sense_is_min : Boolean
+        Sense information to encode either minimization or maximization.
+        True means minimization problem. False means maximization problem.
+        This will change the direction of inclusion behavior in inferiority checks.
+        All objectives are assumed to have the same sense.
+        Defaults to True.
+    objective_tolerance : None or float
+        The non-negative tolerance used for difference between objectives.
+        A difference in objectives less than this threshold will be treated as zero.
+        If None, objective_tolerance will be set to zero.
+        Defaults to 1e-6.
+    report_newly_inferior_solns : Boolean
+        If True, this will augment the results returned to include solutions that were newly dominated.
+        N.B. this stresses the common add paradigm across pool types.
+        Defaults to False, only use if acknowledging this add behavior change can ripple.
+    solution_tolerance : None or float
+        The positive tolerance used for norm based solution comparison.
+        If None, no tolerance based comparison will be used.
+        If float, must be positive.
+    norm_ord : int or np.inf
+        The L-norm to use with the solution tolerance comparison.
+        Defaults to one.
+        Supported values are 1,2, and np.inf
+    """
+
+    def __init__(
+        self,
+        name=None,
+        as_solution=None,
+        counter=None,
+        *,
+        sense_is_min=True,
+        report_newly_inferior_solns=False,
+        objective_tolerance=1e-6,
+        solution_tolerance=None,
+        norm_ord=1,
+    ):
+        if not numpy_available:
+            raise ImportError("Use of SolutionPool_Pareto requires numpy")
+        if objective_tolerance is None:
+            objective_tolerance = 0
+        else:
+            if not (objective_tolerance >= 0):
+                raise ValueError(
+                    "objective_tolerance must either be None or positive float."
+                )
+        if solution_tolerance is not None:
+            if not (solution_tolerance > 0):
+                raise ValueError(
+                    "solution_tolerance must either be None or positive float."
+                )
+        if norm_ord not in (1, 2, np_inf):
+            raise ValueError("norm_ord should be 1 (L1), 2 (L2), or np.inf")
+        super().__init__(name, as_solution, counter, policy=PoolPolicy.keep_pareto)
+        self._unique_solutions = set()
+        self.objective_tolerance = objective_tolerance
+        self.solution_tolerance = solution_tolerance
+        self.norm_ord = norm_ord
+        self.report_newly_inferior_solns = report_newly_inferior_solns
+        self.sense_is_min = sense_is_min
+
+    @property
+    def pool_config(self):
+        if self.solution_tolerance is None:
+            return {
+                "objective_tolerance": self.objective_tolerance,
+                "report_newly_inferior_solns": self.report_newly_inferior_solns,
+                "sense_is_min": self.sense_is_min,
+            }
+        else:
+            return {
+                "objective_tolerance": self.objective_tolerance,
+                "solution_tolerance": self.solution_tolerance,
+                "norm_ord": self.norm_ord,
+                "report_newly_inferior_solns": self.report_newly_inferior_solns,
+                "sense_is_min": self.sense_is_min,
+            }
+
+    def _dominates(self, a_obj, b_obj):
+        """
+        Return True if solution A (weakly) epsilon-dominates solution B.
+
+        For minimization (sense_is_min=True):
+            A dominates B if A_i <= B_i + tol for all i  AND  A_i < B_i - tol for at least one i.
+
+        For maximization (sense_is_min=False):
+            A dominates B if A_i >= B_i - tol for all i  AND  A_i > B_i + tol for at least one i.
+
+        Parameters
+        ----------
+        a_obj : np.ndarray
+            Objective values of solution A (shape: (n_objectives,))
+        b_obj : np.ndarray
+            Objective values of solution B (shape: (n_objectives,))
+        """
+        tol = self.objective_tolerance
+
+        if self.sense_is_min:
+            # Minimization
+            better_or_equal = a_obj <= b_obj + tol
+            strictly_better = a_obj < b_obj - tol
+        else:
+            # Maximization
+            better_or_equal = a_obj >= b_obj - tol
+            strictly_better = a_obj > b_obj + tol
+
+        return np_all(better_or_equal) and np_any(strictly_better)
+
+    def add(self, *args, **kwargs):
+        """
+        Add inputted solution to SolutionPool.
+        Relies on the instance as_solution conversion method to convert inputs to Solution Object.
+        If solution already present, new solution is not added.
+        If input solution is new, non-inferiority check is done.
+        If non-inferior to all other pool solutions, the converted Solution object to the pool dictionary.
+        N.B. Solutions that differ by less than objective_tolerance in every objective are considered mutually non-dominated and both kept.
+        ID value for the solution generated as next increment of instance PoolCounter.
+        Previous solutions that are inferior to the new solution will be removed.
+
+        Parameters
+        ----------
+        Input needs to match as_solution format from pool initialization.
+
+        Returns
+        ----------
+        None or int or (int, list[Solution])
+            None value corresponds to solution was already present and is ignored.
+            When not present, the ID value to match the added solution from the solution pool's PoolCounter.
+            The ID value is also the pool dictionary key for this solution.
+            Note the advanced option to return the solutions removed due to being dominated by the new solution.
+        """
+        if len(args) == 1 and not kwargs and isinstance(args[0], Solution):
+            soln = args[0]
+        else:
+            soln = self._as_solution(*args, **kwargs)
+        #
+        # Return None if the solution has already been added to the pool
+        #
+        tuple_repn = soln._tuple_repn()
+        if tuple_repn in self._unique_solutions:
+            return None
+        if self.solution_tolerance is not None:
+            len_repn = len(tuple_repn)
+            sliced_repn = np_fromiter(map(itemgetter(1), tuple_repn), dtype=float)
+            if any(
+                (len_repn == len(tr))
+                and (
+                    np_norm(
+                        sliced_repn - np_fromiter(map(itemgetter(1), tr), dtype=float)
+                    )
+                    < self.solution_tolerance
+                )
+                for tr in self._unique_solutions
+            ):
+                return None
+        # by getting to here, the solution does not have an effective copy in the pool
+        newly_inferior_sol_ids = set()
+        soln_num_objectives = len(soln._objectives)
+        soln_obj_list = np_array([obj.value for obj in soln._objectives], dtype=float)
+        for index, pool_sol in self._solutions.items():
+            if len(pool_sol._objectives) != soln_num_objectives:
+                raise RuntimeError(
+                    f"Attempting to add sol with {soln_num_objectives} objectives, but pool sols have {len(pool_sol._objectives)} objectives"
+                )
+            pool_sol_obj_list = np_array(
+                [obj.value for obj in pool_sol._objectives], dtype=float
+            )
+
+            if self._dominates(soln_obj_list, pool_sol_obj_list):
+                # this is the case that the new solution dominates this pool solution
+                newly_inferior_sol_ids.add(index)
+            elif self._dominates(pool_sol_obj_list, soln_obj_list):
+                # this is the case that the pool solution dominates the new solution
+                return None
+            else:
+                # this is the case when soln is non-inferior/non-dominated to pool_sol
+                # so move on to the next comparison
+                continue
+
+        newly_inferior_sols = []
+        for sol_id in newly_inferior_sol_ids:
+            pool_sol = self._solutions.pop(sol_id)
+            # this is included here where there is not a pool size to prevent hash collisions
+            self._unique_solutions.discard(pool_sol._tuple_repn())
+            newly_inferior_sols.append(pool_sol)
+
+        self._unique_solutions.add(tuple_repn)
+        #
+        soln.id = self._next_solution_counter()
+        if soln.id in self._solutions:
+            raise RuntimeError(
+                f"Solution id {soln.id} already in solution pool context '{self.metadata.context_name}'"
+            )
+        #
+
+        self._solutions[soln.id] = soln
+        if self.report_newly_inferior_solns:
+            return soln.id, newly_inferior_sols
         return soln.id
 
 
@@ -557,7 +846,7 @@ class SolutionPool_KeepBest(SolutionPoolBase):
         soln.id = self._next_solution_counter()
         if soln.id in self._solutions:
             raise RuntimeError(
-                f"Solution id {soln.id} already in solution pool context '{self._context_name}'"
+                f"Solution id {soln.id} already in solution pool context '{self.metadata.context_name}'"
             )
         #
         self._solutions[soln.id] = soln
@@ -625,6 +914,7 @@ class PoolManager:
         PoolPolicy.keep_best: SolutionPool_KeepBest,
         PoolPolicy.keep_latest: SolutionPool_KeepLatest,
         PoolPolicy.keep_latest_unique: SolutionPool_KeepLatestUnique,
+        PoolPolicy.keep_pareto: SolutionPool_Pareto,
     }
 
     def __init__(self):
@@ -741,8 +1031,8 @@ class PoolManager:
 
         Returns
         ----------
-        int
-            The index of the solution that is added.
+        The return context of the active_pool's add method.
+        This is usually just and int that is the index of the solution added.
         """
         return self.active_pool.add(*args, **kwargs)
 
@@ -773,7 +1063,7 @@ class PoolManager:
         Initializes a new solution pool and adds it to this pool manager.
 
         The method expects parameters for the constructor of the corresponding solution pool.
-        Supported pools are `keep_all`, `keep_best`, `keep_latest`, and `keep_latest_unique`.
+        Supported pools are `keep_all`, `keep_best`, `keep_latest`, `keep_latest_unique`, and `keep_pareto`.
 
         Parameters
         ----------
@@ -930,7 +1220,7 @@ class PyomoPoolManager(PoolManager):
         Initializes a new solution pool and adds it to this pool manager.
 
         The method expects parameters for the constructor of the corresponding solution pool.
-        Supported pools are `keep_all`, `keep_best`, `keep_latest`, and `keep_latest_unique`.
+        Supported pools are `keep_all`, `keep_best`, `keep_latest`, `keep_latest_unique`, and `keep_pareto`.
 
         Parameters
         ----------
