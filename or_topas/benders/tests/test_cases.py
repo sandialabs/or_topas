@@ -39,7 +39,7 @@ class modified_absolute_value:
         This subproblem implements the following function
 
         Q(x) =  max{R(x-a), -L(x-a)} if x in [LB, UB]
-                +\infty              if x not in [LB,UB]
+                +infty              if x not in [LB,UB]
 
         The subproblem that implements this is:
         Q(x) = min_{y >= 0} R*y[R] + L*y[L]
