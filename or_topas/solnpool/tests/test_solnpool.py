@@ -39,6 +39,13 @@ def soln_multiple_variables(values, objective):
     )
 
 
+def soln_multiples(values, objectives):
+    return Solution(
+        variables=[VariableInfo(value=value) for value in values],
+        objectives=[ObjectiveInfo(value=objective) for objective in objectives],
+    )
+
+
 class TestSolnPool(unittest.TestCase):
 
     def test_pool_active_name(self):
@@ -1092,6 +1099,371 @@ class TestSolnPool(unittest.TestCase):
             )
         expected_message = "norm_ord should be 1 (L1), 2 (L2), or np.inf"
         self.assertIn(expected_message, str(cm.exception))
+
+    @unittest.skipUnless(numpy_available, "NumPy not found")
+    def test_pareto_add_with_norm_tolerance_1(self):
+        pm = PoolManager()
+        pm.add_pool(
+            name="pool",
+            policy=PoolPolicy.keep_pareto,
+            solution_tolerance=1e-6,
+            norm_ord=1,
+        )
+
+        retval = pm.add(soln_multiple_variables([0, 0], 0))
+        assert retval is not None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([0, 0], 0))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([1e-7, 0], 0))
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiple_variables([1, 1e-7], 0))
+        assert retval is not None
+        assert len(pm) == 2
+
+        retval = pm.add(soln_multiple_variables([1, 0], 0))
+        assert retval is None
+        assert len(pm) == 2
+
+        assert pm.get_pool_dicts() == {
+            "pool": {
+                "metadata": {
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
+                    "context_name": "pool",
+                    "policy": "keep_pareto",
+                },
+                "pool_config": {
+                    "norm_ord": 1,
+                    "solution_tolerance": 1e-06,
+                    "objective_tolerance": 1e-06,
+                    "report_newly_inferior_solns": False,
+                    "sense_is_min": True,
+                },
+                "solutions": {
+                    0: {
+                        "id": 0,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                    },
+                    1: {
+                        "id": 1,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0}
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1e-7,
+                            },
+                        ],
+                    },
+                },
+            }
+        }
+
+    @unittest.skipUnless(numpy_available, "NumPy not found")
+    def test_pareto_add_with_norm_tolerance_2(self):
+        pm = PoolManager()
+        pm.add_pool(
+            name="pool",
+            policy=PoolPolicy.keep_pareto,
+            solution_tolerance=1e-6,
+            norm_ord=1,
+            sense_is_min=False,
+        )
+
+        sol_1 = soln_multiples([0, 0], [1, 0, 0])
+        retval = pm.add(sol_1)
+        assert retval is not None
+        assert len(pm) == 1
+
+        sol_2 = soln_multiples([1, 0], [0, 0, 0])
+        retval = pm.add(sol_2)
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiples([1, 1e-7], [0, 1, 0]))
+        assert retval is not None
+        assert len(pm) == 2
+
+        retval = pm.add(soln_multiples([1, 0], [0, 1, 0]))
+        assert retval is None
+        assert len(pm) == 2
+
+        retval = pm.add(soln_multiples([2, 0], [0, 1 - 1e-5, 0]))
+        assert retval is None
+        assert len(pm) == 2
+
+        assert pm.get_pool_dicts() == {
+            "pool": {
+                "metadata": {
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
+                    "context_name": "pool",
+                    "policy": "keep_pareto",
+                },
+                "pool_config": {
+                    "norm_ord": 1,
+                    "solution_tolerance": 1e-06,
+                    "objective_tolerance": 1e-06,
+                    "report_newly_inferior_solns": False,
+                    "sense_is_min": False,
+                },
+                "solutions": {
+                    0: {
+                        "id": 0,
+                        "objectives": [
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            },
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                    },
+                    1: {
+                        "id": 1,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0},
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            },
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1e-7,
+                            },
+                        ],
+                    },
+                },
+            }
+        }
+
+    @unittest.skipUnless(numpy_available, "NumPy not found")
+    def test_pareto_add_with_norm_tolerance_3(self):
+        pm = PoolManager()
+        pm.add_pool(
+            name="pool",
+            policy=PoolPolicy.keep_pareto,
+            solution_tolerance=1e-6,
+            norm_ord=1,
+            sense_is_min=False,
+        )
+
+        sol_1 = soln_multiples([0, 0], [1, 0, 0])
+        retval = pm.add(sol_1)
+        assert retval is not None
+        assert len(pm) == 1
+
+        sol_2 = soln_multiples([1, 0], [0, 0, 0])
+        retval = pm.add(sol_2)
+        assert retval is None
+        assert len(pm) == 1
+
+        retval = pm.add(soln_multiples([1, 1e-7], [0, 1, 0]))
+        assert retval is not None
+        assert len(pm) == 2
+
+        retval = pm.add(soln_multiples([1, 0], [0, 1, 0]))
+        assert retval is None
+        assert len(pm) == 2
+
+        retval = pm.add(soln_multiples([2, 0], [0, 1 + 1e-5, 0]))
+        assert retval is not None
+        assert len(pm) == 2
+
+        retval = pm.add(soln_multiples([1, 1e-7], [0, 1, 0]))
+        assert retval is None
+        assert len(pm) == 2
+
+        assert pm.get_pool_dicts() == {
+            "pool": {
+                "metadata": {
+                    "as_solution_source": "or_topas.solnpool.solnpool.default_as_solution",
+                    "context_name": "pool",
+                    "policy": "keep_pareto",
+                },
+                "pool_config": {
+                    "norm_ord": 1,
+                    "solution_tolerance": 1e-06,
+                    "objective_tolerance": 1e-06,
+                    "report_newly_inferior_solns": False,
+                    "sense_is_min": False,
+                },
+                "solutions": {
+                    0: {
+                        "id": 0,
+                        "objectives": [
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1,
+                            },
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                    },
+                    2: {
+                        "id": 2,
+                        "objectives": [
+                            {"index": None, "name": None, "suffix": {}, "value": 0},
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 1 + 1e-5,
+                            },
+                            {
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                        "suffix": {},
+                        "variables": [
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 2,
+                            },
+                            {
+                                "discrete": False,
+                                "fixed": False,
+                                "index": None,
+                                "name": None,
+                                "suffix": {},
+                                "value": 0,
+                            },
+                        ],
+                    },
+                },
+            }
+        }
 
     def test_keepbest_bad_max_pool_size(self):
         pm = PoolManager()
