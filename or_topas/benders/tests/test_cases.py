@@ -482,57 +482,57 @@ class Farmer:
                 # then devoted_acreage[crop] must be in the s-th bucket range.
                 # Useful for testing binary variables in the master, AOS (alternative optimal solutions),
                 # and logic-based Benders or piecewise decisions.
-
+                m.buckets = pyo.Block()
                 points = 10
-                m.split_points = pyo.RangeSet(1, points)
+                m.buckets.split_points = pyo.RangeSet(1, points)
 
-                def cutoff_init(model, i):
+                def cutoff_init(b, i):
                     return (i / points) * farmer.total_acreage
 
-                m.cutoffs = pyo.Param(m.split_points, initialize=cutoff_init)
+                m.buckets.cutoffs = pyo.Param(
+                    m.buckets.split_points, initialize=cutoff_init
+                )
 
                 # Binary indicator: 1 if this bucket is selected for the crop
-                m.land_use_indicators = pyo.Var(
+                m.buckets.land_use_indicators = pyo.Var(
                     m.crops,
-                    m.split_points,
+                    m.buckets.split_points,
                     within=pyo.Binary,
-                    doc="land_use_indicators[crop, bucket]",
+                    doc="land_use_indicators[crop, split_point]",
                 )
 
                 # At most one bucket active per crop (can be relaxed to ==1 if you prefer exactly one)
-                def land_sos_def(model, crop):
+                def land_sos_def(b, crop):
                     return (
-                        sum(
-                            model.land_use_indicators[crop, s]
-                            for s in model.split_points
-                        )
-                        == 1
+                        sum(b.land_use_indicators[crop, s] for s in b.split_points) == 1
                     )
 
-                m.land_indicator_sos_cons = pyo.Constraint(m.crops, rule=land_sos_def)
+                m.buckets.land_indicator_sos_cons = pyo.Constraint(
+                    m.crops, rule=land_sos_def
+                )
 
                 # Big-M value
                 bigM = farmer.total_acreage + 1.0  # slightly larger than total acreage
 
                 # For each crop and each possible bucket s:
                 # If indicator == 1, then low_s <= devoted_acreage <= high_s
-                def land_upper_rule(model, crop, s):
-                    high_s = model.cutoffs[s]
-                    return model.devoted_acreage[crop] <= high_s + bigM * (
-                        1 - model.land_use_indicators[crop, s]
+                def land_upper_rule(b, crop, s):
+                    high_s = b.cutoffs[s]
+                    return b.parent_block().devoted_acreage[crop] <= high_s + bigM * (
+                        1 - b.land_use_indicators[crop, s]
                     )
 
-                def land_lower_rule(model, crop, s):
-                    low_s = model.cutoffs[s - 1] if s > 1 else 0.0
-                    return model.devoted_acreage[crop] >= low_s - bigM * (
-                        1 - model.land_use_indicators[crop, s]
+                def land_lower_rule(b, crop, s):
+                    low_s = b.cutoffs[s - 1] if s > 1 else 0.0
+                    return b.parent_block().devoted_acreage[crop] >= low_s - bigM * (
+                        1 - b.land_use_indicators[crop, s]
                     )
 
-                m.land_indicator_upper_cons = pyo.Constraint(
-                    m.crops, m.split_points, rule=land_upper_rule
+                m.buckets.land_indicator_upper_cons = pyo.Constraint(
+                    m.crops, m.buckets.split_points, rule=land_upper_rule
                 )
-                m.land_indicator_lower_cons = pyo.Constraint(
-                    m.crops, m.split_points, rule=land_lower_rule
+                m.buckets.land_indicator_lower_cons = pyo.Constraint(
+                    m.crops, m.buckets.split_points, rule=land_lower_rule
                 )
             else:
                 raise RuntimeError(f"Attempted Unsupported modification mode")
