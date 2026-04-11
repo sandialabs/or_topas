@@ -12,13 +12,14 @@ from or_topas.util.mymunch import MyMunch
 from or_topas.util.pyomo_utils import pprint_solution
 from pyomo.common.collections import ComponentSet
 
-
 """
 Overall method and gurantees based off of preprint:
 Extracting Alternative Solutions from Benders Decomposition, M Viens et. al
 https://arxiv.org/abs/2509.08671
 
 """
+
+
 def aos_benders_generate_candidates(
     m,
     rel_gap=0,
