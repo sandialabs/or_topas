@@ -69,7 +69,7 @@ class TestAOS_Benders_Persistent(unittest.TestCase):
     def test_farmer_aos_benders_filter_deterministic(self, mip_solver):
         num_solutions = 50
         mode = "d"
-        tee = False
+        tee = True
         tee_final = False
         rel_gaps = [0, 0.01, 0.5]
         expected_candidate_pool_size = [1, 6, 24]
@@ -108,7 +108,7 @@ class TestAOS_Benders_Persistent(unittest.TestCase):
     def test_farmer_aos_benders_filter_deterministic_ignore_opt_tol(self, mip_solver):
         num_solutions = 50
         mode = "d"
-        tee = False
+        tee = True
         tee_final = False
         rel_gaps = [0, 0.01, 0.5]
         expected_candidate_pool_size = [1, 1, 11]
@@ -132,6 +132,7 @@ class TestAOS_Benders_Persistent(unittest.TestCase):
                 mip_solver=mip_solver_non_persistent_version,
                 skip_vars=skip_vars,
                 ignore_opt_tol_in_basis=True,
+                tee=True,
             )
             assert (
                 len(candidate_pool) == expected_candidate_pool_size[index]
@@ -150,7 +151,7 @@ class TestAOS_Benders_Persistent(unittest.TestCase):
         # TODO: come back to this with a single cut version of AOS Benders is implemented
         num_solutions = 50
         mode = "s"
-        tee = False
+        tee = True
         tee_final = False
         rel_gaps = [0, 0.01]
         expected_candidate_pool_size = [1, 3]
@@ -736,7 +737,7 @@ class TestAOS_Benders_Non_Persistent(unittest.TestCase):
     def test_farmer_end_to_end_deterministic(self, mip_solver):
         num_solutions = 50
         mode = "d"
-        tee = False
+        tee = True
         tee_final = False
         rel_gaps = [0, 0.01]
         expected_true_pool_size = [1, 6]
@@ -758,7 +759,7 @@ class TestAOS_Benders_Non_Persistent(unittest.TestCase):
     def test_farmer_aos_benders_generate_candidates_deterministic(self, mip_solver):
         num_solutions = 50
         mode = "d"
-        tee = False
+        tee = True
         tee_final = False
         rel_gaps = [0, 0.01, 0.5]
         expected_candidate_pool_size = [1, 6, 24]
@@ -785,7 +786,7 @@ class TestAOS_Benders_Non_Persistent(unittest.TestCase):
     ):
         num_solutions = 50
         mode = "d"
-        tee = False
+        tee = True
         tee_final = False
         rel_gaps = [0, 0.01, 0.5]
         expected_candidate_pool_size = [1, 1, 11]
@@ -813,7 +814,7 @@ class TestAOS_Benders_Non_Persistent(unittest.TestCase):
         # TODO: come back to this with a single cut version of AOS Benders is implemented
         num_solutions = 50
         mode = "s"
-        tee = False
+        tee = True
         tee_final = False
         rel_gaps = [0, 0.01]
         expected_candidate_pool_size = [1, 3]
@@ -840,7 +841,7 @@ class TestAOS_Benders_Non_Persistent(unittest.TestCase):
     def test_farmer_aos_benders_filter_deterministic(self, mip_solver):
         num_solutions = 50
         mode = "d"
-        tee = False
+        tee = True
         tee_final = False
         rel_gaps = [0, 0.01, 0.5]
         expected_candidate_pool_size = [1, 6, 24]
@@ -872,7 +873,7 @@ class TestAOS_Benders_Non_Persistent(unittest.TestCase):
     def test_farmer_aos_benders_filter_deterministic_ignore_opt_tol(self, mip_solver):
         num_solutions = 50
         mode = "d"
-        tee = False
+        tee = True
         tee_final = False
         rel_gaps = [0, 0.01, 0.5]
         expected_candidate_pool_size = [1, 1, 11]
