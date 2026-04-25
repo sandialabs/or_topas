@@ -475,8 +475,20 @@ class Benders_Abstract(BlockData):
         )
         if len(objs) != 1:
             raise ValueError("Subproblem must have exactly one objective")
+
+        # For the layered transform, I think this just winds up being
+        # block indexed, so each block gets an aux_cons and a rhs_exprs
+        # we then just treat each of these
+        # also need to do a dual import for each of the blocks
+        # N.B. this ripples to cut formation too
+        # preserve the expr of active objective for easy use later
         orig_obj = objs[0]
-        orig_obj_expr = orig_obj.expr
+        # We put these in dicts on the block, but not natively as block attributes.
+        # This wrapping avoids the error when b != obj[i].parent_block()
+        # N.B. we have a gurantee in this transform that len(objs) == 1
+        b.orig_objs = {i: objs[i] for i, v in enumerate(objs)}
+        b.orig_obj_exprs = {i: objs[i].expr for i, v in enumerate(objs)}
+        # delete old objective so we can add a new one
         b.del_component(orig_obj)
 
         b._z = pyo.Var(bounds=(0, None))
@@ -484,38 +496,105 @@ class Benders_Abstract(BlockData):
         b.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
         b._eta = pyo.Var()
 
-        b.aux_cons = pyo.ConstraintList()
-        for c in list(
-            b.component_data_objects(
-                pyo.Constraint, descend_into=True, active=True, sort=True
-            )
+        # Collect block set and make sure dual vars are imported.
+        # We assume use of a solver that supports duals.
+        b.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+        b.block_set = ComponentSet([b])
+        for local_b in b.component_data_objects(
+            pyo.Block, descend_into=True, active=True, sort=True
         ):
-            if not relax_subproblem_cons:
-                c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
-                if not Benders_Abstract._any_common_elements(root_vars, c_vars):
-                    continue
-            if c.equality:
-                body = c.body
-                rhs = pyo.value(c.lower)
-                body -= rhs
-                b.aux_cons.add(body - b._z <= 0)
-                b.aux_cons.add(-body - b._z <= 0)
-                Benders_Abstract._del_con(c)
-            else:
-                body = c.body
-                lower = pyo.value(c.lower)
-                upper = pyo.value(c.upper)
-                if upper is not None:
-                    body_upper = body - upper - b._z
-                    b.aux_cons.add(body_upper <= 0)
-                if lower is not None:
-                    body_lower = body - lower
-                    body_lower = -body_lower
-                    body_lower -= b._z
-                    b.aux_cons.add(body_lower <= 0)
-                Benders_Abstract._del_con(c)
+            # guarantee we are requiring each block to have the needed suffix info
+            local_b.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+            b.block_set.add(local_b)
 
-        b.obj_con = pyo.Constraint(expr=orig_obj_expr - b._eta - b._z <= 0)
+        b.aux_cons_map = ComponentMap()
+        b.aux_cons_rhs_exprs_dict = ComponentMap()
+        for local_b in b.block_set:
+            local_b.aux_cons = pyo.ConstraintList()
+            local_b.aux_cons_rhs_exprs = []
+            for c in list(
+                local_b.component_data_objects(
+                    pyo.Constraint, descend_into=False, active=True, sort=True
+                )
+            ):
+                if not relax_subproblem_cons:
+                    c_vars = ComponentSet(
+                        identify_variables(c.body, include_fixed=False)
+                    )
+                    if not Benders_Abstract._any_common_elements(root_vars, c_vars):
+                        continue
+                if c.equality:
+                    body = c.body
+                    rhs = pyo.value(c.lower)
+                    body -= rhs
+                    local_b.aux_cons.add(body - b._z <= 0)
+                    local_b.aux_cons.add(-body - b._z <= 0)
+                    Benders_Abstract._del_con(c)
+                else:
+                    body = c.body
+                    lower = pyo.value(c.lower)
+                    upper = pyo.value(c.upper)
+                    if upper is not None:
+                        body_upper = body - upper - b._z
+                        local_b.aux_cons.add(body_upper <= 0)
+                    if lower is not None:
+                        body_lower = body - lower
+                        body_lower = -body_lower
+                        body_lower -= b._z
+                        local_b.aux_cons.add(body_lower <= 0)
+                    Benders_Abstract._del_con(c)
+
+            b.aux_cons_map[local_b] = local_b.aux_cons
+            b.aux_cons_rhs_exprs_dict[local_b] = local_b.aux_cons_rhs_exprs
+
+        # single layer block transform
+        # this can't support a tree of blocks
+        # b.aux_cons = pyo.ConstraintList()
+        # for c in list(
+        #     b.component_data_objects(
+        #         pyo.Constraint, descend_into=True, active=True, sort=True
+        #     )
+        # ):
+        #     if not relax_subproblem_cons:
+        #         c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
+        #         if not Benders_Abstract._any_common_elements(root_vars, c_vars):
+        #             continue
+        #     if c.equality:
+        #         body = c.body
+        #         rhs = pyo.value(c.lower)
+        #         body -= rhs
+        #         b.aux_cons.add(body - b._z <= 0)
+        #         b.aux_cons.add(-body - b._z <= 0)
+        #         Benders_Abstract._del_con(c)
+        #     else:
+        #         body = c.body
+        #         lower = pyo.value(c.lower)
+        #         upper = pyo.value(c.upper)
+        #         if upper is not None:
+        #             body_upper = body - upper - b._z
+        #             b.aux_cons.add(body_upper <= 0)
+        #         if lower is not None:
+        #             body_lower = body - lower
+        #             body_lower = -body_lower
+        #             body_lower -= b._z
+        #             b.aux_cons.add(body_lower <= 0)
+        #         Benders_Abstract._del_con(c)
+
+        # since this references an objective, it needs to go on the block that has all the information guaranteed to be present.
+        # The guaranteed block is not b, it is b.orig_objs[0].parent_block
+        # also need to have a way to find this constraint from subproblem
+        # original
+        # b.obj_con = pyo.Constraint(expr=b.orig_obj_expr - b._eta - b._z <= 0)
+
+        # new
+        obj_con_local_block = b.orig_objs[0].parent_block()
+        if obj_con_local_block is None:
+            # if the obj was on the root block, parent_block will be None
+            obj_con_local_block = b
+        obj_con_local_block.obj_con = pyo.Constraint(
+            expr=b.orig_obj_exprs[0] - b._eta - b._z <= 0
+        )
+        b.obj_con_tracker = {0: obj_con_local_block}
 
     @staticmethod
     def _standard_lp_subproblem_transform(*args, **kwargs):
@@ -931,8 +1010,17 @@ class Benders_Abstract(BlockData):
         # Subproblem data collection
         #
         subproblem_constant = pyo.value(subproblem._z)
+
+        # need to update to support general location of obj con
+        # original
         subproblem_eta = sign_convention * pyo.value(
             subproblem.dual[subproblem.obj_con]
+        )
+
+        # new, we now have subproblem.obj_con_tracker = {0 : obj_con_local_block}
+        obj_con_block = subproblem.obj_con_tracker[0]
+        subproblem_eta = sign_convention * pyo.value(
+            obj_con_block.dual[obj_con_block.obj_con]
         )
         subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
         temp_ndx = 0
