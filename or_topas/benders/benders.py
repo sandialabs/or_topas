@@ -471,7 +471,7 @@ class Benders_Abstract(BlockData):
         root_vars = ComponentSet(root_vars)
 
         objs = list(
-            b.component_data_objects(pyo.Objective, descend_into=False, active=True)
+            b.component_data_objects(pyo.Objective, descend_into=True, active=True)
         )
         if len(objs) != 1:
             raise ValueError("Subproblem must have exactly one objective")
@@ -488,8 +488,7 @@ class Benders_Abstract(BlockData):
         # N.B. we have a gurantee in this transform that len(objs) == 1
         b.orig_objs = {i: objs[i] for i, v in enumerate(objs)}
         b.orig_obj_exprs = {i: objs[i].expr for i, v in enumerate(objs)}
-        # delete old objective so we can add a new one
-        b.del_component(orig_obj)
+
 
         b._z = pyo.Var(bounds=(0, None))
         b.objective = pyo.Objective(expr=b._z)
@@ -588,6 +587,8 @@ class Benders_Abstract(BlockData):
 
         # new
         obj_con_local_block = b.orig_objs[0].parent_block()
+        
+        
         if obj_con_local_block is None:
             # if the obj was on the root block, parent_block will be None
             obj_con_local_block = b
@@ -595,6 +596,8 @@ class Benders_Abstract(BlockData):
             expr=b.orig_obj_exprs[0] - b._eta - b._z <= 0
         )
         b.obj_con_tracker = {0: obj_con_local_block}
+        # delete old objective so we can add a new one
+        obj_con_local_block.del_component(orig_obj)
 
     @staticmethod
     def _standard_lp_subproblem_transform(*args, **kwargs):
@@ -650,7 +653,7 @@ class Benders_Abstract(BlockData):
 
         # check that there is only one active objective in subproblem
         objs = list(
-            b.component_data_objects(pyo.Objective, descend_into=False, active=True)
+            b.component_data_objects(pyo.Objective, descend_into=True, active=True)
         )
         if len(objs) != 1:
             raise ValueError("Subproblem must have exactly one objective")
@@ -1013,12 +1016,15 @@ class Benders_Abstract(BlockData):
 
         # need to update to support general location of obj con
         # original
-        subproblem_eta = sign_convention * pyo.value(
-            subproblem.dual[subproblem.obj_con]
-        )
+        # subproblem_eta = sign_convention * pyo.value(
+        #     subproblem.dual[subproblem.obj_con]
+        # )
 
         # new, we now have subproblem.obj_con_tracker = {0 : obj_con_local_block}
         obj_con_block = subproblem.obj_con_tracker[0]
+        obj_con_block.pprint()
+        for i,v in enumerate(obj_con_block):
+            print(f"{i=}, {v=}")
         subproblem_eta = sign_convention * pyo.value(
             obj_con_block.dual[obj_con_block.obj_con]
         )
