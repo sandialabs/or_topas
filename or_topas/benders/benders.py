@@ -489,7 +489,6 @@ class Benders_Abstract(BlockData):
         b.orig_objs = {i: objs[i] for i, v in enumerate(objs)}
         b.orig_obj_exprs = {i: objs[i].expr for i, v in enumerate(objs)}
 
-
         b._z = pyo.Var(bounds=(0, None))
         b.objective = pyo.Objective(expr=b._z)
         b.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
@@ -546,49 +545,9 @@ class Benders_Abstract(BlockData):
             b.aux_cons_map[local_b] = local_b.aux_cons
             b.aux_cons_rhs_exprs_dict[local_b] = local_b.aux_cons_rhs_exprs
 
-        # single layer block transform
-        # this can't support a tree of blocks
-        # b.aux_cons = pyo.ConstraintList()
-        # for c in list(
-        #     b.component_data_objects(
-        #         pyo.Constraint, descend_into=True, active=True, sort=True
-        #     )
-        # ):
-        #     if not relax_subproblem_cons:
-        #         c_vars = ComponentSet(identify_variables(c.body, include_fixed=False))
-        #         if not Benders_Abstract._any_common_elements(root_vars, c_vars):
-        #             continue
-        #     if c.equality:
-        #         body = c.body
-        #         rhs = pyo.value(c.lower)
-        #         body -= rhs
-        #         b.aux_cons.add(body - b._z <= 0)
-        #         b.aux_cons.add(-body - b._z <= 0)
-        #         Benders_Abstract._del_con(c)
-        #     else:
-        #         body = c.body
-        #         lower = pyo.value(c.lower)
-        #         upper = pyo.value(c.upper)
-        #         if upper is not None:
-        #             body_upper = body - upper - b._z
-        #             b.aux_cons.add(body_upper <= 0)
-        #         if lower is not None:
-        #             body_lower = body - lower
-        #             body_lower = -body_lower
-        #             body_lower -= b._z
-        #             b.aux_cons.add(body_lower <= 0)
-        #         Benders_Abstract._del_con(c)
-
-        # since this references an objective, it needs to go on the block that has all the information guaranteed to be present.
-        # The guaranteed block is not b, it is b.orig_objs[0].parent_block
-        # also need to have a way to find this constraint from subproblem
-        # original
-        # b.obj_con = pyo.Constraint(expr=b.orig_obj_expr - b._eta - b._z <= 0)
-
         # new
         obj_con_local_block = b.orig_objs[0].parent_block()
-        
-        
+
         if obj_con_local_block is None:
             # if the obj was on the root block, parent_block will be None
             obj_con_local_block = b
@@ -658,12 +617,6 @@ class Benders_Abstract(BlockData):
         if len(objs) != 1:
             raise ValueError("Subproblem must have exactly one objective")
 
-        # For the layered transform, I think this just winds up being
-        # block indexed, so each block gets an aux_cons and a rhs_exprs
-        # we then just treat each of these
-        # also need to do a dual import for each of the blocks
-        # N.B. this ripples to cut formation too
-
         # preserve the expr of active objective for easy use later
         orig_obj = objs[0]
         # We put these in dicts on the block, but not natively as block attributes.
@@ -686,6 +639,10 @@ class Benders_Abstract(BlockData):
         b.aux_cons_map = ComponentMap()
         b.aux_cons_rhs_exprs_dict = ComponentMap()
 
+        # We want to have block level control of the constraints.
+        # This is done to avoid accidentally promoting variables to blocks unaware of them.
+        # If b.subblock.cons1 = b.subblock.y <= 1, assigning the replacment cons to b.aux_cons = b.subblock.y <= 1
+        # will attempt to assign variable b.subblock.y to a higher level block than is supported.
         for local_b in b.block_set:
             local_b.aux_cons = pyo.ConstraintList()
             local_b.aux_cons_rhs_exprs = []
@@ -698,6 +655,9 @@ class Benders_Abstract(BlockData):
                 if display_transform_info:
                     print("\n Next Constraint starts as:")
                     c.pprint()
+                # TODO: in doing this transform, we replace all the constriants with aux_cons versions.
+                # we may want an option of keeping track of the mapping of new aux_cons to original constraints
+                # so that debugging would be less complicated for an end user.
 
                 # TODO: in the move constants to RHS version, we may not need a full split_expr
                 # check and possibly replace
@@ -787,102 +747,6 @@ class Benders_Abstract(BlockData):
             b.aux_cons_map[local_b] = local_b.aux_cons
             b.aux_cons_rhs_exprs_dict[local_b] = local_b.aux_cons_rhs_exprs
 
-        # single layer block transform
-        # this can't support a tree of blocks
-        # # iterate through all active constraints on block
-        # for c in list(
-        #     b.component_data_objects(
-        #         pyo.Constraint, descend_into=True, active=True, sort=True
-        #     )
-        # ):
-        #     if display_transform_info:
-        #         print("\n Next Constraint starts as:")
-        #         c.pprint()
-
-        #     # TODO: in the move constants to RHS version, we may not need a full split_expr
-        #     # check and possibly replace
-        #     body_split = pyomo_utils.split_expr(
-        #         c.body, subproblem_master_vars, allow_iterables=True
-        #     )
-
-        #     # N.B.: there are two possible versions of this transform
-        #     # in case one, we do Wy + Tx <= h, x = x_bar and cuts become <pi, h> + <gamma, x_bar>
-        #     # in case two, we do Wy <= h-Tx, x= x_bar and cuts become <pi, h-Tx> + <gamma, x_bar-x_var.value>
-        #     # case one is probably more efficient, the difference is between treating x implicitly like a parameter or like a fixed variable with reduced cost terms
-
-        #     if c.equality:
-        #         # in this case user lower eval due to equality
-        #         # starts as lower.expr == body.expr
-
-        #         # transform case 1
-        #         rhs = body_split.constant - c.lower
-        #         lhs = -body_split.out - body_split.in_set
-
-        #         # transform case 2
-        #         # rhs = body_split.in_plus_cons - c.lower
-        #         # lhs = -body_split.out
-
-        #         # update constraint and tracking info
-        #         b.aux_cons_rhs_exprs.append(rhs)
-        #         b.aux_cons.add(lhs == rhs)
-        #         # delete old version of constraint
-        #         Benders_Abstract._del_con(c)
-
-        #         if display_transform_info:
-        #             print("Equality Constraint case")
-        #             print(f"Sides now: {str(lhs)=} == {str(rhs)=}")
-        #             last_added_cons = b.aux_cons[len(b.aux_cons)]
-        #             print("Newly Added Constraint is:")
-        #             last_added_cons.pprint()
-        #     else:
-        #         lower = pyo.value(c.lower)
-        #         upper = pyo.value(c.upper)
-
-        #         if upper is not None:
-        #             # case where upper has contents
-        #             # body.expr <= upper.expr
-
-        #             # transform case 1
-        #             rhs = body_split.constant + c.upper
-        #             lhs = body_split.in_set + body_split.out
-
-        #             # transform case 2
-        #             # rhs = -body_split.in_plus_cons + c.upper
-        #             # lhs = body_split.out
-
-        #             # update constraint and tracking info
-        #             b.aux_cons_rhs_exprs.append(rhs)
-        #             b.aux_cons.add(lhs <= rhs)
-
-        #             if display_transform_info:
-        #                 print("LEQ Constraint case")
-        #                 print(f"Sides now: {str(lhs)=} <= {str(rhs)=}")
-        #                 last_added_cons = b.aux_cons[len(b.aux_cons)]
-        #                 print("Newly Added Constraint is:")
-        #                 last_added_cons.pprint()
-        #         if lower is not None:
-        #             # case where lower has contents
-        #             # lower.expr <= body.expr
-
-        #             # transform case 1
-        #             rhs = body_split.constant - c.lower
-        #             lhs = -body_split.out - body_split.in_set
-
-        #             # transform case 2
-        #             # rhs = body_split.in_plus_cons - c.lower
-        #             # lhs = -body_split.out
-
-        #             b.aux_cons_rhs_exprs.append(rhs)
-        #             b.aux_cons.add(lhs <= rhs)
-        #             if display_transform_info:
-        #                 print("GEQ Constraint case")
-        #                 print(f"Sides now: {str(lhs)=} <= {str(rhs)=}")
-        #                 last_added_cons = b.aux_cons[len(b.aux_cons)]
-        #                 print("Newly Added Constraint is:")
-        #                 last_added_cons.pprint()
-
-        #         # delete old version of constraint
-        #         Benders_Abstract._del_con(c)
         if display_transform_info:
             print("Done standard lp transform")
 
@@ -1014,19 +878,10 @@ class Benders_Abstract(BlockData):
         #
         subproblem_constant = pyo.value(subproblem._z)
 
-        # need to update to support general location of obj con
-        # original
-        # subproblem_eta = sign_convention * pyo.value(
-        #     subproblem.dual[subproblem.obj_con]
-        # )
-
         # new, we now have subproblem.obj_con_tracker = {0 : obj_con_local_block}
         obj_con_block = subproblem.obj_con_tracker[0]
-        obj_con_block.pprint()
-        for i,v in enumerate(obj_con_block):
-            print(f"{i=}, {v=}")
         subproblem_eta = sign_convention * pyo.value(
-            obj_con_block.dual[obj_con_block.obj_con]
+            subproblem.dual[obj_con_block.obj_con]
         )
         subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
         temp_ndx = 0
@@ -1236,25 +1091,18 @@ class Benders_Abstract(BlockData):
             else:
                 # optimal solution case:
 
-                # need to add the block layering here
-                # instead of one subproblem.aux_cons, we now have
-                # subproblem.aux_cons_map[local_b] = local_b.aux_cons
-                # subproblem.aux_cons_rhs_exprs_dict[local_b] = local_b.aux_cons_rhs_exprs
-
-                # original
-                # subproblem_constant = -sign_convention * sum(
-                #     subproblem.dual[subproblem.aux_cons[c]]
-                #     * pyo.value(subproblem.aux_cons_rhs_exprs[i])
-                #     for i, c in enumerate(subproblem.aux_cons)
-                # )
-
-                # new
+                # Note that the dual information is held in the top level block.
+                # this subproblem.dual is a map (think of it like a compoent map) from constraints to info
+                # so even if the constraint is defined on a lower level, we use that constraint in the general dual attribute
+                # on subproblem.
+                # N.B. that c is an int here, and local_aux_cons[c] is the actual constraint object
                 subproblem_constant = -sign_convention * sum(
-                    local_b.dual[local_aux_cons[c]]
+                    subproblem.dual[local_aux_cons[c]]
                     * pyo.value(subproblem.aux_cons_rhs_exprs_dict[local_b][i])
                     for local_b, local_aux_cons in subproblem.aux_cons_map.items()
                     for i, c in enumerate(local_aux_cons)
                 )
+
                 subproblem_coeff = np.zeros(len(self.root_vars), dtype="d")
                 temp_ndx = 0
                 for root_var, c in var_to_con_map.items():
