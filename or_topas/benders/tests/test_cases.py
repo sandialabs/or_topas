@@ -103,6 +103,63 @@ class modified_absolute_value:
         return m, complicating_vars_map
 
     @staticmethod
+    def create_nested_subproblem(root_x, data):
+        """
+        Modification of create_subproblem to allow testing of nested blocks
+        """
+
+        if data == None:
+            data = MyMunch(a=0, L=1, R=1, LB=-5, UB=5)
+        else:
+            assert isinstance(data, MyMunch), "Need data argument to be a MyMunch"
+            # these variables need default values
+            data.a = 0 if ("a" not in data or data.a is None) else data.a
+            data.L = 1 if ("L" not in data or data.L is None) else data.L
+            data.R = 1 if ("R" not in data or data.R is None) else data.R
+
+            # optional arguments
+            data.LB = -5 if "LB" not in data else data.LB
+            data.UB = 5 if "UB" not in data else data.UB
+
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        m.y_block = pyo.Block()
+
+        y_indices = ["Right", "Left"]
+        if data.LB is not None:
+            y_indices.append("LB_Slack")
+        if data.UB is not None:
+            y_indices.append("UB_Slack")
+        m.y_block.y_indices = pyo.Set(initialize=y_indices)
+        m.y_block.y = pyo.Var(m.y_block.y_indices, bounds=(0, None))
+
+        # objective
+        m.y_block.obj = pyo.Objective(
+            expr=data.R * m.y_block.y["Right"] + data.L * m.y_block.y["Left"]
+        )
+
+        # vertex constriant
+        m.vertex_cons = pyo.Constraint(
+            expr=-m.y_block.y["Right"] + m.y_block.y["Left"] == data.a - m.x
+        )
+
+        # optional lower bound constraint
+        if data.LB is not None:
+            m.y_block.lb_cons = pyo.Constraint(
+                expr=m.y_block.y["LB_Slack"] - m.x == -data.LB
+            )
+
+        if data.UB is not None:
+            m.y_block.ub_cons = pyo.Constraint(
+                expr=m.y_block.y["UB_Slack"] + m.x == data.UB
+            )
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root_x] = m.x
+
+        return m, complicating_vars_map
+
+    @staticmethod
     def setup_modified_absolute_value(
         solver_name,
         CutGenerator=BendersGenerator_Serial,
@@ -250,6 +307,36 @@ class absolute_value:
         m.y2 = pyo.Var(bounds=(0, None))
         m.obj = pyo.Objective(expr=m.y1 + m.y2)
         m.c1 = pyo.Constraint(expr=m.y1 - m.y2 == m.x)
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root.x] = m.x
+
+        return m, complicating_vars_map
+
+    @staticmethod
+    def create_nested_subproblem_1(root):
+        m = pyo.ConcreteModel()
+        m.sb = pyo.Block()
+        m.x = pyo.Var()
+        m.sb.y1 = pyo.Var(bounds=(0, None))
+        m.sb.y2 = pyo.Var(bounds=(0, None))
+        m.sb.obj = pyo.Objective(expr=m.sb.y1 + m.sb.y2)
+        m.sb.c1 = pyo.Constraint(expr=m.sb.y1 - m.sb.y2 == m.x)
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root.x] = m.x
+
+        return m, complicating_vars_map
+
+    @staticmethod
+    def create_nested_subproblem_2(root):
+        m = pyo.ConcreteModel()
+        m.sb = pyo.Block()
+        m.x = pyo.Var()
+        m.y1 = pyo.Var(bounds=(0, None))
+        m.y2 = pyo.Var(bounds=(0, None))
+        m.obj = pyo.Objective(expr=m.y1 + m.y2)
+        m.sb.c1 = pyo.Constraint(expr=m.y1 - m.y2 == m.x)
 
         complicating_vars_map = pyo.ComponentMap()
         complicating_vars_map[root.x] = m.x
@@ -671,6 +758,46 @@ class Grothey:
         m.obj = pyo.Objective(expr=-m.x2)
         m.c1 = pyo.Constraint(expr=(m.x1 - 1) ** 2 + m.x2**2 <= pyo.log(m.y))
         m.c2 = pyo.Constraint(expr=(m.x1 + 1) ** 2 + m.x2**2 <= pyo.log(m.y))
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root.y] = m.y
+
+        return m, complicating_vars_map
+
+    @staticmethod
+    def create_nested_subproblem_1(root):
+        m = pyo.ConcreteModel()
+        m.subblock = pyo.Block()
+        m.subblock.x1 = pyo.Var()
+        m.x2 = pyo.Var()
+        m.y = pyo.Var()
+        m.obj = pyo.Objective(expr=-m.x2)
+        m.subblock.c1 = pyo.Constraint(
+            expr=(m.subblock.x1 - 1) ** 2 + m.x2**2 <= pyo.log(m.y)
+        )
+        m.subblock.c2 = pyo.Constraint(
+            expr=(m.subblock.x1 + 1) ** 2 + m.x2**2 <= pyo.log(m.y)
+        )
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root.y] = m.y
+
+        return m, complicating_vars_map
+
+    @staticmethod
+    def create_nested_subproblem_2(root):
+        m = pyo.ConcreteModel()
+        m.subblock = pyo.Block()
+        m.subblock.x1 = pyo.Var()
+        m.subblock.x2 = pyo.Var()
+        m.y = pyo.Var()
+        m.subblock.obj = pyo.Objective(expr=-m.subblock.x2)
+        m.subblock.c1 = pyo.Constraint(
+            expr=(m.subblock.x1 - 1) ** 2 + m.subblock.x2**2 <= pyo.log(m.y)
+        )
+        m.subblock.c2 = pyo.Constraint(
+            expr=(m.subblock.x1 + 1) ** 2 + m.subblock.x2**2 <= pyo.log(m.y)
+        )
 
         complicating_vars_map = pyo.ComponentMap()
         complicating_vars_map[root.y] = m.y
