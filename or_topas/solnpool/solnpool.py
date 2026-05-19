@@ -728,8 +728,9 @@ class SolutionPool_KeepBest(SolutionPoolBase):
         Value of None results in no max pool limit based on number of solutions.
         If not None, the value must be a positive integer.
         The max_pool_size is the K value for keeping the latest K solutions.
-    objective : int
+    objective_index : int
         The index of the objective function that is used to compare solutions.
+        Defaults to zero. Only needed with multiple objectives in solution objects.
     abs_tolerance : None or int
         absolute tolerance from best solution based on objective beyond which to reject a solution.
         None results in absolute tolerance test passing new solution.
@@ -751,7 +752,7 @@ class SolutionPool_KeepBest(SolutionPoolBase):
         counter=None,
         *,
         max_pool_size=None,
-        objective=0,
+        objective_index=0,
         abs_tolerance=0.0,
         rel_tolerance=None,
         sense_is_min=True,
@@ -761,7 +762,7 @@ class SolutionPool_KeepBest(SolutionPoolBase):
         if not ((max_pool_size is None) or (max_pool_size >= 1)):
             raise ValueError("max_pool_size must be None or positive integer")
         self.max_pool_size = max_pool_size
-        self.objective = objective
+        self.objective_index = objective_index
         self.abs_tolerance = abs_tolerance
         self.rel_tolerance = rel_tolerance
         self.sense_is_min = sense_is_min
@@ -773,7 +774,7 @@ class SolutionPool_KeepBest(SolutionPoolBase):
     def pool_config(self):
         return dict(
             max_pool_size=self.max_pool_size,
-            objective=self.objective,
+            objective_index=self.objective_index,
             abs_tolerance=self.abs_tolerance,
             rel_tolerance=self.rel_tolerance,
             sense_is_min=self.sense_is_min,
@@ -813,7 +814,7 @@ class SolutionPool_KeepBest(SolutionPoolBase):
             return None
         self._unique_solutions.add(tuple_repn)
         #
-        value = soln.objective(self.objective).value
+        value = soln.objective(self.objective_index).value
         keep = False
         new_best_value = False
         if self.best_value is nan:
