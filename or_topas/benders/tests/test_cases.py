@@ -4,9 +4,13 @@ from or_topas.benders import (
     BendersGenerator_Serial,
 )
 from or_topas.util.mymunch import MyMunch
+from or_topas.util import try_import
 import itertools
 from math import pi as pi_value
 import time
+
+with try_import() as matpower_available:
+    from matpowercaseframes import CaseFrames
 
 
 class modified_absolute_value:
@@ -1132,3 +1136,98 @@ class EnergyGrid:
                 break
 
         return opt, m
+    
+class MatpowerGrid(EnergyGrid):
+    """
+    Extension for EnergyGrid that loads any pglib-opf case using matpowercaseframes.
+    
+    Code adapted from a Grok generated parser to match matpowercaseframes to EnergyGrid structure.
+    """
+
+    def __init__(self, m_file: str, baseMVA: float = 100.0, defaultEmptyCost: float = 50.0):
+        """
+        m_file : str
+            Path to pglib-opf file (e.g. "pglib_opf_case118_ieee.m")
+        baseMVA : float
+            Base power (default 100).
+        defaultEmptyCost : float
+            Price for generation when missing from data file (default 50)
+        """
+        assert matpower_available, "MatpowerGrid use requires matpowercaseframes to be avaiable"
+
+        # === 1. Call parent constructor FIRST ===
+        # This runs the original EnergyGrid.__init__ (which sets the toy 3-bus data).
+        # We do this for correctness and future-proofing, even though we will override everything.
+        # super().__init__()
+
+        # === 2. Now load real data and OVERRIDE everything ===
+        self.baseMVA = baseMVA
+
+        try:
+            cf = CaseFrames(m_file)
+        except Exception as e:
+            raise RuntimeError("Error in CaseFrames creation in MatpowerGrid initialization") from e
+
+        try:
+            # Full raw DataFrames — kept for generator-level analysis (non-uniqueness)
+            self.bus_df = cf.bus.copy()
+            self.gen_df = cf.gen.copy()           # ← Critical for your "same generators on" rule
+            self.gencost_df = getattr(cf, 'gencost', None)
+            self.branch_df = cf.branch.copy()
+
+            # Buses
+            self.buses = sorted(self.bus_df['BUS_I'].astype(int).tolist())
+
+            # Aggregated per-bus data (used by the existing continuous DC-OPF model)
+            gen = self.gen_df.copy()
+            gen['GEN_BUS'] = gen['GEN_BUS'].astype(int)
+
+            self.gen_max_dict = {}
+            self.cost_dict = {}
+
+            for b in self.buses:
+                gens_on_bus = gen[gen['GEN_BUS'] == b]
+                self.gen_max_dict[b] = (
+                    float(gens_on_bus['PMAX'].sum()) / baseMVA
+                    if not gens_on_bus.empty else 0.0
+                )
+                self.cost_dict[b] = (
+                    float(gens_on_bus['COST'].iloc[0])
+                    if not gens_on_bus.empty and 'COST' in gens_on_bus.columns
+                    else defaultEmptyCost
+                )
+
+            # Loads
+            bus = self.bus_df.copy()
+            bus['BUS_I'] = bus['BUS_I'].astype(int)
+            self.load_dict = dict(zip(
+                bus['BUS_I'],
+                bus['PD'].values / baseMVA
+            ))
+
+            # Network
+            branch = self.branch_df.copy()
+            branch['F_BUS'] = branch['F_BUS'].astype(int)
+            branch['T_BUS'] = branch['T_BUS'].astype(int)
+
+            self.lines = list(zip(branch['F_BUS'], branch['T_BUS']))
+
+            self.flow_bounds_dict = {}
+            self.susceptance_dict = {}
+
+            for _, row in branch.iterrows():
+                f, t = int(row['F_BUS']), int(row['T_BUS'])
+                rate = float(row.get('RATE_A', 9999.0)) / baseMVA
+                if rate <= 0:
+                    rate = 9999.0
+                self.flow_bounds_dict[(f, t)] = rate
+                # self.flow_bounds_dict[(t, f)] = rate #removing symmetry case here
+
+                x = float(row['BR_X'])
+                b = 1.0 / x if abs(x) > 1e-8 else 1e6
+                self.susceptance_dict[(f, t)] = b
+                # self.susceptance_dict[(t, f)] = b
+
+            self.theta_bounds_dict = {b: pi_value for b in self.buses}
+        except Exception as e:
+            raise RuntimeError(f"Issue in MatpowerGrid data parsing") from e
