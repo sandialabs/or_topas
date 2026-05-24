@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name="or_topas"
-version="1.0"
+version="1.0.0"
 dependencies = [
     "pyomo",
     ]
-readme = {file = "README.md", content-type = "text/plain"}
+readme = {file = "README.md", content-type = "text/markdown"}
 description="Topas supports the generation of alternative solutions for pyomo models"
 classifiers=[
         "Intended Audience :: End Users/Desktop",
