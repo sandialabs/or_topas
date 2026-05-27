@@ -477,6 +477,130 @@ class absolute_value:
         return opt, m
 
 
+class newsvendor:
+    # adapted from the Sparow Newsvendor example
+    @staticmethod
+    def create_root(
+        eta_count=None,
+        eta_lb=-1000,
+    ):
+        m = pyo.ConcreteModel()
+        # x is benders variable, saved for later
+        m.x = pyo.Var(bounds=(0, None), initialize=0)
+        if eta_count is None:
+            m.eta = pyo.Var(bounds=(eta_lb, None))
+            m.obj = pyo.Objective(expr=m.eta, sense=pyo.minimize)
+        else:
+            m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
+            m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, None))
+            m.obj = pyo.Objective(
+                expr=sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
+            )
+        return m
+
+    @staticmethod
+    def create_subproblem(root, data=dict(), prob=1):
+        b = data.get("b", 1.5)
+        c = data.get("c", 1.0)
+        h = data.get("h", 0.1)
+        d = data.get("d", 50)
+
+        M = pyo.ConcreteModel()
+
+        M.x = pyo.Var(within=pyo.NonNegativeReals)
+
+        M.y = pyo.Var()
+        M.greater = pyo.Constraint(expr=M.y >= (c - b) * M.x + b * d)
+        M.less = pyo.Constraint(expr=M.y >= (c + h) * M.x - h * d)
+
+        M.o = pyo.Objective(expr=prob * M.y)
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root.x] = M.x
+
+        return M, complicating_vars_map
+
+    @staticmethod
+    def setup_newsvendor(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        transform = kwargs.get("transform", None)
+        eta_count = kwargs.get("eta_count", None)
+        data_lists = kwargs.get("data_lists", dict())
+        m = newsvendor.create_root(eta_count=eta_count)
+        # TODO/N.B. using list(m.x) here breaks
+        root_vars = [m.x]
+        m.benders = CutGenerator()
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
+        if eta_count is None:
+            subproblem_fn_kwargs = dict()
+            subproblem_fn_kwargs["root"] = m
+            subproblem_fn_kwargs["data"] = data_lists.get(0, dict())
+            m.benders.add_subproblem(
+                subproblem_fn=newsvendor.create_subproblem,
+                subproblem_fn_kwargs=subproblem_fn_kwargs,
+                root_eta=m.eta,
+                subproblem_solver=solver_name,
+            )
+        else:
+            for s in m.scenarios:
+                subproblem_fn_kwargs = dict()
+                subproblem_fn_kwargs["root"] = m
+                subproblem_fn_kwargs["data"] = data_lists.get(s, dict())
+                subproblem_fn_kwargs["prob"] = 1 / len(m.scenarios)
+                m.benders.add_subproblem(
+                    subproblem_fn=newsvendor.create_subproblem,
+                    subproblem_fn_kwargs=subproblem_fn_kwargs,
+                    root_eta=m.eta[s],
+                    subproblem_solver=solver_name,
+                )
+        opt = pyo.SolverFactory(solver_name)
+        return opt, m
+
+    @staticmethod
+    def setup_newsvendor_persistent(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        transform = kwargs.get("transform", None)
+        eta_count = kwargs.get("eta_count", None)
+        obj_offset = kwargs.get("obj_offset", 0)
+        data_lists = kwargs.get("data_lists", dict())
+        m = newsvendor.create_root(eta_count=eta_count)
+        # TODO/N.B. using list(m.x) here breaks
+        root_vars = [m.x]
+        m.benders = CutGenerator()
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
+        if eta_count is None:
+            subproblem_fn_kwargs = dict()
+            subproblem_fn_kwargs["root"] = m
+            subproblem_fn_kwargs["data"] = data_lists.get(0, dict())
+            m.benders.add_subproblem(
+                subproblem_fn=newsvendor.create_subproblem,
+                subproblem_fn_kwargs=subproblem_fn_kwargs,
+                root_eta=m.eta,
+                subproblem_solver=solver_name,
+            )
+        else:
+            for s in m.scenarios:
+                subproblem_fn_kwargs = dict()
+                subproblem_fn_kwargs["root"] = m
+                subproblem_fn_kwargs["data"] = data_lists.get(s, dict())
+                subproblem_fn_kwargs["prob"] = 1 / len(m.scenarios)
+                m.benders.add_subproblem(
+                    subproblem_fn=newsvendor.create_subproblem,
+                    subproblem_fn_kwargs=subproblem_fn_kwargs,
+                    root_eta=m.eta[s],
+                    subproblem_solver=solver_name,
+                )
+        opt = pyo.SolverFactory(solver_name)
+        opt.set_instance(m)
+        return opt, m
+
+
 class Farmer:
     def __init__(self):
         self.crops = ["WHEAT", "CORN", "SUGAR_BEETS"]
@@ -1136,15 +1260,18 @@ class EnergyGrid:
                 break
 
         return opt, m
-    
+
+
 class MatpowerGrid(EnergyGrid):
     """
     Extension for EnergyGrid that loads any pglib-opf case using matpowercaseframes.
-    
+
     Code adapted from a Grok generated parser to match matpowercaseframes to EnergyGrid structure.
     """
 
-    def __init__(self, m_file: str, baseMVA: float = 100.0, defaultEmptyCost: float = 50.0):
+    def __init__(
+        self, m_file: str, baseMVA: float = 100.0, defaultEmptyCost: float = 50.0
+    ):
         """
         m_file : str
             Path to pglib-opf file (e.g. "pglib_opf_case118_ieee.m")
@@ -1153,7 +1280,9 @@ class MatpowerGrid(EnergyGrid):
         defaultEmptyCost : float
             Price for generation when missing from data file (default 50)
         """
-        assert matpower_available, "MatpowerGrid use requires matpowercaseframes to be avaiable"
+        assert (
+            matpower_available
+        ), "MatpowerGrid use requires matpowercaseframes to be avaiable"
 
         # === 1. Call parent constructor FIRST ===
         # This runs the original EnergyGrid.__init__ (which sets the toy 3-bus data).
@@ -1166,64 +1295,64 @@ class MatpowerGrid(EnergyGrid):
         try:
             cf = CaseFrames(m_file)
         except Exception as e:
-            raise RuntimeError("Error in CaseFrames creation in MatpowerGrid initialization") from e
+            raise RuntimeError(
+                "Error in CaseFrames creation in MatpowerGrid initialization"
+            ) from e
 
         try:
             # Full raw DataFrames — kept for generator-level analysis (non-uniqueness)
             self.bus_df = cf.bus.copy()
-            self.gen_df = cf.gen.copy()           # ← Critical for your "same generators on" rule
-            self.gencost_df = getattr(cf, 'gencost', None)
+            self.gen_df = cf.gen.copy()  # ← Critical for your "same generators on" rule
+            self.gencost_df = getattr(cf, "gencost", None)
             self.branch_df = cf.branch.copy()
 
             # Buses
-            self.buses = sorted(self.bus_df['BUS_I'].astype(int).tolist())
+            self.buses = sorted(self.bus_df["BUS_I"].astype(int).tolist())
 
             # Aggregated per-bus data (used by the existing continuous DC-OPF model)
             gen = self.gen_df.copy()
-            gen['GEN_BUS'] = gen['GEN_BUS'].astype(int)
+            gen["GEN_BUS"] = gen["GEN_BUS"].astype(int)
 
             self.gen_max_dict = {}
             self.cost_dict = {}
 
             for b in self.buses:
-                gens_on_bus = gen[gen['GEN_BUS'] == b]
+                gens_on_bus = gen[gen["GEN_BUS"] == b]
                 self.gen_max_dict[b] = (
-                    float(gens_on_bus['PMAX'].sum()) / baseMVA
-                    if not gens_on_bus.empty else 0.0
+                    float(gens_on_bus["PMAX"].sum()) / baseMVA
+                    if not gens_on_bus.empty
+                    else 0.0
                 )
                 self.cost_dict[b] = (
-                    float(gens_on_bus['COST'].iloc[0])
-                    if not gens_on_bus.empty and 'COST' in gens_on_bus.columns
+                    float(gens_on_bus["COST"].iloc[0])
+                    if not gens_on_bus.empty and "COST" in gens_on_bus.columns
                     else defaultEmptyCost
                 )
 
             # Loads
             bus = self.bus_df.copy()
-            bus['BUS_I'] = bus['BUS_I'].astype(int)
-            self.load_dict = dict(zip(
-                bus['BUS_I'],
-                bus['PD'].values / baseMVA
-            ))
+            bus["BUS_I"] = bus["BUS_I"].astype(int)
+            self.load_dict = dict(zip(bus["BUS_I"], bus["PD"].values / baseMVA))
 
             # Network
             branch = self.branch_df.copy()
-            branch['F_BUS'] = branch['F_BUS'].astype(int)
-            branch['T_BUS'] = branch['T_BUS'].astype(int)
+            branch["F_BUS"] = branch["F_BUS"].astype(int)
+            branch["T_BUS"] = branch["T_BUS"].astype(int)
 
-            self.lines = list(zip(branch['F_BUS'], branch['T_BUS']))
+            self.lines = list(zip(branch["F_BUS"], branch["T_BUS"]))
 
             self.flow_bounds_dict = {}
             self.susceptance_dict = {}
 
             for _, row in branch.iterrows():
-                f, t = int(row['F_BUS']), int(row['T_BUS'])
-                rate = float(row.get('RATE_A', 9999.0)) / baseMVA
+                f, t = int(row["F_BUS"]), int(row["T_BUS"])
+                rate = float(row.get("RATE_A", 9999.0)) / baseMVA
                 if rate <= 0:
                     rate = 9999.0
                 self.flow_bounds_dict[(f, t)] = rate
                 # self.flow_bounds_dict[(t, f)] = rate #removing symmetry case here
 
-                x = float(row['BR_X'])
+                x = float(row["BR_X"])
                 b = 1.0 / x if abs(x) > 1e-8 else 1e6
                 self.susceptance_dict[(f, t)] = b
                 # self.susceptance_dict[(t, f)] = b

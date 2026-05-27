@@ -420,6 +420,51 @@ class TestBendersSolver(unittest.TestCase):
                 self.assertAlmostEqual(m.eta.value, 0.0, 4)
 
     #
+    # Newsvendor tests
+    #
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_single_scenario_newsvendor(self, solver):
+
+        data_lists = {0: {"d": 50}}
+        opt, m = tc.newsvendor.setup_newsvendor(
+            solver_name=solver, data_lists=data_lists
+        )
+
+        for i in range(30):
+            res = opt.solve(m, tee=False)
+            cuts_added = m.benders.generate_cut()
+            if len(cuts_added) == 0:
+                break
+        self.assertAlmostEqual(m.x.value, 50.0, 4)
+        self.assertAlmostEqual(pyo.value(m.obj), 50.0, 4)
+        self.assertAlmostEqual(m.eta.value, 50.0, 4)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_multiple_scenario_newsvendor(self, solver):
+        data_lists = {
+            0: {"d": 15},
+            1: {"d": 60},
+            2: {"d": 72},
+            3: {"d": 78},
+            4: {"d": 82},
+        }
+        eta_count = len(data_lists)
+        opt, m = tc.newsvendor.setup_newsvendor(
+            solver_name=solver, data_lists=data_lists, eta_count=eta_count
+        )
+
+        for i in range(30):
+            res = opt.solve(m, tee=False)
+            cuts_added = m.benders.generate_cut()
+            if len(cuts_added) == 0:
+                break
+        self.assertAlmostEqual(m.x.value, 60.0, 4)
+        self.assertAlmostEqual(pyo.value(m.obj), 76.5, 4)
+        # self.assertAlmostEqual(m.eta.value, 50.0, 4)
+
+    #
     # DCOPF Tests
     #
 
