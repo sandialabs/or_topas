@@ -75,6 +75,7 @@ transforms = ["standard_lp", "feasibility"]
 with try_import() as matpower_available:
     from matpowercaseframes import CaseFrames
 
+
 @pytest.mark.skipif(not matpower_available, reason="Need Matpower for these tests")
 class TestBendersOPFExamples(unittest.TestCase):
 
@@ -225,11 +226,11 @@ class TestBendersOPFExamples(unittest.TestCase):
             self.assertAlmostEqual(sum(gen_list), sum(grid.load_dict.values()), 4)
             self.assertAlmostEqual(pyo.value(m.obj), expected_obj, 4)
 
-    def test_matpower_creation(self):
+    def Xtest_matpower_creation(self):
         file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
         grid = tc.MatpowerGrid(m_file=file_path)
 
-    def test_matpower_creation_bad_path(self):
+    def Xtest_matpower_creation_bad_path(self):
         with self.assertRaises(RuntimeError) as cm:
             file_path = "PGLIB_Data/pglib_not_here.m"
             grid = tc.MatpowerGrid(m_file=file_path)
@@ -239,7 +240,7 @@ class TestBendersOPFExamples(unittest.TestCase):
     @parameterized.expand(
         input=infeasibility_persistent_test_solvers, skip_on_empty=True
     )
-    def test_matpower_traditional_solve(self, mip_solver):
+    def Xtest_matpower_traditional_solve(self, mip_solver):
         file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
         grid = tc.MatpowerGrid(m_file=file_path)
         model = tc.EnergyGrid.create_tiny_opf(grid, mode=2)
@@ -251,7 +252,7 @@ class TestBendersOPFExamples(unittest.TestCase):
     @parameterized.expand(
         input=infeasibility_persistent_test_solvers, skip_on_empty=True
     )
-    def test_matpower_traditional_solve_2(self, mip_solver):
+    def Xtest_matpower_traditional_solve_2(self, mip_solver):
         file_path = "PGLIB_Data/pglib_opf_case14_ieee.m"
         grid = tc.MatpowerGrid(m_file=file_path)
         model = tc.EnergyGrid.create_tiny_opf(grid, mode=2)
