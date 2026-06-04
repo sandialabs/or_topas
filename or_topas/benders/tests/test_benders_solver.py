@@ -421,16 +421,21 @@ class TestBendersSolver(unittest.TestCase):
 
     #
     # Reduced cost tests
+    # These check how Benders works on dual information that would originally have been in reduced cost attributes.
     #
 
-    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @parameterized.expand(
+        input=iter_product(non_persistent_mip_solvers, transforms),
+        name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
+        skip_on_empty=True,
+    )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    def test_reduced_costs_handling(self, solver):
+    def test_reduced_costs_handling(self, solver, transform):
 
         m = tc.reduced_costs_tester.create_root()
         root_vars = [m.x]
         m.benders = BendersCutGenerator()
-        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=default_transform)
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
         m.benders.add_subproblem(
             subproblem_fn=tc.reduced_costs_tester.create_subproblem,
             subproblem_fn_kwargs={"root": m},
@@ -448,18 +453,20 @@ class TestBendersSolver(unittest.TestCase):
         self.assertAlmostEqual(pyo.value(m.obj), 5.0, 4)
         self.assertAlmostEqual(m.eta.value, 5.0, 4)
 
-    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @parameterized.expand(
+        input=iter_product(non_persistent_mip_solvers, transforms),
+        name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
+        skip_on_empty=True,
+    )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    def test_reduced_costs_handling_2(self, solver):
+    def test_reduced_costs_handling_2(self, solver, transform):
 
         m = tc.reduced_costs_tester.create_root()
         root_vars = [m.x]
         y_lower_bounds = [-3, 0, 72, 1.5]
         for y_lb in y_lower_bounds:
             m.benders = BendersCutGenerator()
-            m.benders.set_input(
-                root_vars=root_vars, tol=1e-8, transform=default_transform
-            )
+            m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
             m.benders.add_subproblem(
                 subproblem_fn=tc.reduced_costs_tester.create_subproblem,
                 subproblem_fn_kwargs={"root": m, "y_bounds": (y_lb, None)},
@@ -477,9 +484,13 @@ class TestBendersSolver(unittest.TestCase):
             self.assertAlmostEqual(pyo.value(m.obj), y_lb, 4)
             self.assertAlmostEqual(m.eta.value, y_lb, 4)
 
-    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @parameterized.expand(
+        input=iter_product(non_persistent_mip_solvers, transforms),
+        name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
+        skip_on_empty=True,
+    )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    def test_reduced_costs_handling_3(self, solver):
+    def test_reduced_costs_handling_3(self, solver, transform):
 
         m = tc.reduced_costs_tester.create_root()
         root_vars = [m.x]
@@ -487,9 +498,7 @@ class TestBendersSolver(unittest.TestCase):
         for y_lb in y_lower_bounds:
             prob = 0.6
             m.benders = BendersCutGenerator()
-            m.benders.set_input(
-                root_vars=root_vars, tol=1e-8, transform=default_transform
-            )
+            m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
             m.benders.add_subproblem(
                 subproblem_fn=tc.reduced_costs_tester.create_subproblem,
                 subproblem_fn_kwargs={
@@ -511,9 +520,13 @@ class TestBendersSolver(unittest.TestCase):
             self.assertAlmostEqual(pyo.value(m.obj), y_lb * prob, 4)
             self.assertAlmostEqual(m.eta.value, y_lb * prob, 4)
 
-    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @parameterized.expand(
+        input=iter_product(non_persistent_mip_solvers, transforms),
+        name_func=lambda func, num, params: f"{func.__name__}_solver_{params.args[0]}_transform_{params.args[1]}",
+        skip_on_empty=True,
+    )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
-    def test_reduced_costs_handling_4(self, solver):
+    def test_reduced_costs_handling_4(self, solver, transform):
 
         m = tc.reduced_costs_tester.create_root(eta_count=2)
         root_vars = [m.x]
@@ -521,9 +534,7 @@ class TestBendersSolver(unittest.TestCase):
         y_bounds_2 = [0, 72, 1.5, -3]
         for i in range(len(y_bounds_1)):
             m.benders = BendersCutGenerator()
-            m.benders.set_input(
-                root_vars=root_vars, tol=1e-8, transform=default_transform
-            )
+            m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
             prob_1 = 0.6
             prob_2 = 0.4
             m.benders.add_subproblem(
