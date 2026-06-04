@@ -420,6 +420,143 @@ class TestBendersSolver(unittest.TestCase):
                 self.assertAlmostEqual(m.eta.value, 0.0, 4)
 
     #
+    # Reduced cost tests
+    #
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_reduced_costs_handling(self, solver):
+
+        m = tc.reduced_costs_tester.create_root()
+        root_vars = [m.x]
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=default_transform)
+        m.benders.add_subproblem(
+            subproblem_fn=tc.reduced_costs_tester.create_subproblem,
+            subproblem_fn_kwargs={"root": m},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        opt = pyo.SolverFactory(solver)
+
+        for i in range(30):
+            res = opt.solve(m, tee=False)
+            cuts_added = m.benders.generate_cut()
+            if len(cuts_added) == 0:
+                break
+        # self.assertAlmostEqual(m.x.value, 0.0, 4)
+        self.assertAlmostEqual(pyo.value(m.obj), 5.0, 4)
+        self.assertAlmostEqual(m.eta.value, 5.0, 4)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_reduced_costs_handling_2(self, solver):
+
+        m = tc.reduced_costs_tester.create_root()
+        root_vars = [m.x]
+        y_lower_bounds = [-3, 0, 72, 1.5]
+        for y_lb in y_lower_bounds:
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars, tol=1e-8, transform=default_transform
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.reduced_costs_tester.create_subproblem,
+                subproblem_fn_kwargs={"root": m, "y_bounds": (y_lb, None)},
+                root_eta=m.eta,
+                subproblem_solver=solver,
+            )
+            opt = pyo.SolverFactory(solver)
+
+            for i in range(30):
+                res = opt.solve(m, tee=False)
+                cuts_added = m.benders.generate_cut()
+                if len(cuts_added) == 0:
+                    break
+            # self.assertAlmostEqual(m.x.value, 0.0, 4)
+            self.assertAlmostEqual(pyo.value(m.obj), y_lb, 4)
+            self.assertAlmostEqual(m.eta.value, y_lb, 4)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_reduced_costs_handling_3(self, solver):
+
+        m = tc.reduced_costs_tester.create_root()
+        root_vars = [m.x]
+        y_lower_bounds = [-3, 0, 72, 1.5]
+        for y_lb in y_lower_bounds:
+            prob = 0.6
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars, tol=1e-8, transform=default_transform
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.reduced_costs_tester.create_subproblem,
+                subproblem_fn_kwargs={
+                    "root": m,
+                    "y_bounds": (y_lb, None),
+                    "probability": prob,
+                },
+                root_eta=m.eta,
+                subproblem_solver=solver,
+            )
+            opt = pyo.SolverFactory(solver)
+
+            for i in range(30):
+                res = opt.solve(m, tee=False)
+                cuts_added = m.benders.generate_cut()
+                if len(cuts_added) == 0:
+                    break
+            # self.assertAlmostEqual(m.x.value, 0.0, 4)
+            self.assertAlmostEqual(pyo.value(m.obj), y_lb * prob, 4)
+            self.assertAlmostEqual(m.eta.value, y_lb * prob, 4)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_reduced_costs_handling_4(self, solver):
+
+        m = tc.reduced_costs_tester.create_root(eta_count=2)
+        root_vars = [m.x]
+        y_bounds_1 = [-3, 0, 72, 1.5]
+        y_bounds_2 = [0, 72, 1.5, -3]
+        for i in range(len(y_bounds_1)):
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars, tol=1e-8, transform=default_transform
+            )
+            prob_1 = 0.6
+            prob_2 = 0.4
+            m.benders.add_subproblem(
+                subproblem_fn=tc.reduced_costs_tester.create_subproblem,
+                subproblem_fn_kwargs={
+                    "root": m,
+                    "y_bounds": (y_bounds_1[i], None),
+                    "probability": prob_1,
+                },
+                root_eta=m.eta[0],
+                subproblem_solver=solver,
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.reduced_costs_tester.create_subproblem,
+                subproblem_fn_kwargs={
+                    "root": m,
+                    "y_bounds": (y_bounds_2[i], None),
+                    "probability": prob_2,
+                },
+                root_eta=m.eta[1],
+                subproblem_solver=solver,
+            )
+            expected_y = y_bounds_1[i] * prob_1 + y_bounds_2[i] * prob_2
+            opt = pyo.SolverFactory(solver)
+
+            for i in range(30):
+                res = opt.solve(m, tee=False)
+                cuts_added = m.benders.generate_cut()
+                if len(cuts_added) == 0:
+                    break
+            self.assertAlmostEqual(pyo.value(m.obj), expected_y, 4)
+
+    #
     # DCOPF Tests
     #
 
