@@ -420,6 +420,37 @@ class TestBendersSolver(unittest.TestCase):
                 self.assertAlmostEqual(m.eta.value, 0.0, 4)
 
     #
+    # Newsvendor Examples
+    #
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_newsvendor(self, solver):
+
+        m = tc.newsvendor.create_root()
+        root_vars = [m.x]
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=default_transform)
+        m.benders.add_subproblem(
+            subproblem_fn=tc.newsvendor.create_subproblem,
+            subproblem_fn_kwargs={"root_x": m.x},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        opt = pyo.SolverFactory(solver)
+
+        for i in range(30):
+            res = opt.solve(m, tee=False)
+            cuts_added = m.benders.generate_cut()
+            for i, v in enumerate(cuts_added):
+                v.pprint()
+            if len(cuts_added) == 0:
+                break
+        self.assertAlmostEqual(m.x.value, 50.0, 4)
+        self.assertAlmostEqual(pyo.value(m.obj), 50.0, 4)
+        self.assertAlmostEqual(m.eta.value, 50.0, 4)
+
+    #
     # Reduced cost tests
     # These check how Benders works on dual information that would originally have been in reduced cost attributes.
     #

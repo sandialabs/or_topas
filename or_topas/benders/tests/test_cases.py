@@ -9,6 +9,54 @@ from math import pi as pi_value
 import time
 
 
+class newsvendor:
+
+    @staticmethod
+    def create_root(
+        eta_count=None,
+        eta_lb=-1000,
+        eta_ub=None,
+        x_lb=0,
+        x_ub=None,
+        obj_offset=0,
+    ):
+        m = pyo.ConcreteModel()
+        # x is benders variable, saved for later
+        m.x = pyo.Var(bounds=(x_lb, x_ub), initialize=0)
+        if eta_count is None:
+            m.eta = pyo.Var(bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(expr=obj_offset + m.eta, sense=pyo.minimize)
+        else:
+            m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
+            m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(
+                expr=obj_offset + sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
+            )
+        return m
+
+    @staticmethod
+    def create_subproblem(root_x, data=dict()):
+        b = data.get("b", 1.5)
+        c = data.get("c", 1)
+        h = data.get("h", 0.1)
+        d = data.get("d", 50)
+        prob = data.get("prob", 1)
+        ID_val = data.get("ID", 0)
+        M = pyo.ConcreteModel(ID_val)
+
+        M.x = pyo.Var(within=pyo.NonNegativeReals)
+
+        M.y = pyo.Var()
+        M.greater = pyo.Constraint(expr=M.y >= (c - b) * M.x + b * d)
+        M.less = pyo.Constraint(expr=M.y >= (c + h) * M.x - h * d)
+
+        M.o = pyo.Objective(expr=prob * M.y)
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root_x] = M.x
+        return M, complicating_vars_map
+
+
 class modified_absolute_value:
     @staticmethod
     def create_root(
