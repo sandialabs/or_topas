@@ -9,6 +9,8 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
+__version__ = "1.0.0"
+
 from . import util
 from . import solnpool
 from . import aos

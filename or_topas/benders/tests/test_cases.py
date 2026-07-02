@@ -13,6 +13,54 @@ with try_import() as matpower_available:
     from matpowercaseframes import CaseFrames
 
 
+class newsvendor:
+
+    @staticmethod
+    def create_root(
+        eta_count=None,
+        eta_lb=-1000,
+        eta_ub=None,
+        x_lb=0,
+        x_ub=None,
+        obj_offset=0,
+    ):
+        m = pyo.ConcreteModel()
+        # x is benders variable, saved for later
+        m.x = pyo.Var(bounds=(x_lb, x_ub), initialize=0)
+        if eta_count is None:
+            m.eta = pyo.Var(bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(expr=obj_offset + m.eta, sense=pyo.minimize)
+        else:
+            m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
+            m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(
+                expr=obj_offset + sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
+            )
+        return m
+
+    @staticmethod
+    def create_subproblem(root_x, data=dict()):
+        b = data.get("b", 1.5)
+        c = data.get("c", 1)
+        h = data.get("h", 0.1)
+        d = data.get("d", 50)
+        prob = data.get("prob", 1)
+        ID_val = data.get("ID", 0)
+        M = pyo.ConcreteModel(ID_val)
+
+        M.x = pyo.Var(within=pyo.NonNegativeReals)
+
+        M.y = pyo.Var()
+        M.greater = pyo.Constraint(expr=M.y >= (c - b) * M.x + b * d)
+        M.less = pyo.Constraint(expr=M.y >= (c + h) * M.x - h * d)
+
+        M.o = pyo.Objective(expr=prob * M.y)
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root_x] = M.x
+        return M, complicating_vars_map
+
+
 class modified_absolute_value:
     @staticmethod
     def create_root(
@@ -494,11 +542,8 @@ class newsvendor:
             m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
             m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, None))
             m.obj = pyo.Objective(
-                expr=sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
-            )
-        return m
-
-    @staticmethod
+                expr=sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize)
+    
     def create_subproblem(root, data=dict(), prob=1):
         b = data.get("b", 1.5)
         c = data.get("c", 1.0)
@@ -599,6 +644,70 @@ class newsvendor:
         opt = pyo.SolverFactory(solver_name)
         opt.set_instance(m)
         return opt, m
+                
+class reduced_costs_tester:
+    """
+    This is a test to check for reduced cost terms in Benders.
+    The overall optimization problem is:
+    \min_{x,y} \sum_{s \in S} p_s y_s
+                y_s \in [Y_{s,min}, Y_{s,max}], \forall s \in S
+                y_s \geq x + h_s, \forall s \in S
+                x \in [X_{min}, X_{max}]
+    where p_s >= 0
+
+    The optimal value for feasible programs is:
+        z^* is \sum_{s \in S} p_s max{Y_{s,min}, X_{min} + h_s}
+
+    This splits into the following benders problems:
+    Master problem:
+    \min_{x,\theta} \theta
+                x \in [X_{min}, X_{max}]
+                \theta \geq OptCut_{c}(x), \forall c \in OptCuts
+                0 \geq FeasCut_{c}(x), \forall c \in FeasCuts
+
+    Q_s(x) = \min_{y} p_s y_s
+                y \in [Y_{s,min}, Y_{s,max}]
+                y \geq x + h_s
+
+    N.B. that when x+h_s < Y_{s,min} the y variable domain constraint is binding.
+    Domain variable duals are held in 'reduced cost' terms rather than dual attributes.
+
+    This class tests for the case that transforms have successfully made reduced cost data
+        accessible through dual attributes.
+    """
+
+    @staticmethod
+    def create_root(
+        eta_count=None, eta_lb=-100, eta_ub=None, x_lb=None, x_ub=None, obj_offset=0
+    ):
+        # this is directly adapted from the absolute value method
+        m = pyo.ConcreteModel()
+        # x is benders variable, saved for later
+        m.x = pyo.Var(bounds=(x_lb, x_ub), initialize=0)
+        if eta_count is None:
+            m.eta = pyo.Var(bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(expr=obj_offset + m.eta, sense=pyo.minimize)
+        else:
+            m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
+            m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(
+                expr=obj_offset + sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
+            )
+        return m
+
+    @staticmethod
+    def create_subproblem(root, y_bounds=(5, None), probability=1.0, h=-10):
+        # default solution with unbounded x should be y* = 5
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        m.y = pyo.Var(bounds=y_bounds)
+        m.obj = pyo.Objective(expr=probability * m.y)
+        m.c1 = pyo.Constraint(expr=m.y >= m.x + h)
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root.x] = m.x
+
+        return m, complicating_vars_map
 
 
 class Farmer:

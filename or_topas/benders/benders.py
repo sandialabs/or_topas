@@ -4,8 +4,6 @@ import json
 import copy
 import logging
 
-import logging
-
 from pyomo.common.collections import ComponentSet, ComponentMap
 from pyomo.common.dependencies import (
     mpi4py,
@@ -69,7 +67,7 @@ class Benders_Abstract(BlockData):
 
     # TODO: what methods do we want here
     def set_input(self, *args, **kwargs):
-        """
+        r"""
         It is very important for root_vars to be in the same order for every process.
 
         Parameters
@@ -100,6 +98,7 @@ class Benders_Abstract(BlockData):
             self.root_vars_indices[v] = i
         self.tol = kwargs.get("tol", 1e-6)
         self.subproblem_solvers = list()
+        self.default_convert_bounds_to_constraints = True
 
     def add_subproblem(self, *args, **kwargs):
         # old required arguments, we will want these to all be kwargs now
@@ -128,6 +127,12 @@ class Benders_Abstract(BlockData):
         relax_subproblem_complicating_vars = kwargs.get(
             "relax_subproblem_complicating_vars",
             self.default_relax_subproblem_complicating_vars,
+        )
+        convert_bounds_to_constraints = kwargs.get(
+            "convert_bounds_to_constraints", self.default_convert_bounds_to_constraints
+        )
+        skip_bounds_transform_set = kwargs.get(
+            "skip_bounds_transform_set", ComponentSet()
         )
 
         # parallel specific code
@@ -160,6 +165,8 @@ class Benders_Abstract(BlockData):
             root_vars=root_vars,
             relax_subproblem_cons=relax_subproblem_cons,
             complicating_vars_map=complicating_vars_map,
+            convert_bounds_to_constraints=convert_bounds_to_constraints,
+            skip_bounds_transform_set=skip_bounds_transform_set,
         )
         # parallel specific code
         # this also does not impact the general code below
@@ -260,7 +267,7 @@ class Benders_Abstract(BlockData):
     def _fix_first_stage_var_copies(
         *, subproblem, root_vars, complicating_vars_map, mode=1
     ):
-        """
+        r"""
         There are several ways to handle enforcing sub_var.val = root_var.val
         First is by adding constraints to enforce equality.
         Second is by fixing the values of the sub_var variables to root_var values.
@@ -297,7 +304,7 @@ class Benders_Abstract(BlockData):
     def _fix_first_stage_var_copies_by_constraint(
         *, subproblem, root_vars, complicating_vars_map
     ):
-        """
+        r"""
         There are several ways to handle enforcing sub_var.val = root_var.val
         One of the most direct is to directly add constraints that enforce it.
         This method handles the enforcement of the constraint based equality method.
@@ -324,7 +331,7 @@ class Benders_Abstract(BlockData):
     def _fix_first_stage_var_copies_by_variable_fixing(
         *, subproblem, root_vars, complicating_vars_map
     ):
-        """
+        r"""
         There are several ways to handle enforcing sub_var.val = root_var.val
         This method handles the enforcement by fixing the sub_vars to the root_var value
 
@@ -348,7 +355,7 @@ class Benders_Abstract(BlockData):
     def _fix_first_stage_var_copies_by_parameter_value_setting(
         *, subproblem, root_vars, complicating_vars_map
     ):
-        """
+        r"""
         There are several ways to handle enforcing sub_var.val = root_var.val
         This method handles the enforcement by fixing the parameter replacements of sub_vars to the root_var value
         Retuires parameters to be mutable
@@ -389,7 +396,7 @@ class Benders_Abstract(BlockData):
 
     @staticmethod
     def _feasibility_subproblem_transform(*args, **kwargs):
-        """
+        r"""
         It is easier to understand this transform after reading Grothey, Leyffer,
         and McKinnon "A note on feasibility in Benders Decomposition" [GLM99]_
         N.B. this transform is directly adapted from Pyomo.contrib.benders.
@@ -560,7 +567,7 @@ class Benders_Abstract(BlockData):
 
     @staticmethod
     def _standard_lp_subproblem_transform(*args, **kwargs):
-        """
+        r"""
         The goal of this is to take a program of the form:
         min <p, x> + <q, y>
         Ax + By <= c
@@ -584,6 +591,10 @@ class Benders_Abstract(BlockData):
         sum_{c \in cons} c.val * c.dual
 
         This directly makes the forming of classical Benders optimality and feasibility cuts easier.
+        N.B. we rely on convert_bounds_to_constraints mode to convert variable bounds to constraints.
+             This conversion avoids the need to care about reduced cost attributtes elsewhere, by
+             putting everything in clear cut dual attributes.
+             Variables that are first stage variables or in skip_bounds_transform_set are not converted.
         """
 
         assert "b" in kwargs, "Need argument b in _standard_lp_subproblem_transform"
@@ -601,6 +612,12 @@ class Benders_Abstract(BlockData):
         relax_subproblem_cons = kwargs.get("relax_subproblem_cons")
         complicating_vars_map = kwargs.get("complicating_vars_map")
         display_transform_info = kwargs.get("display_transform_info", False)
+        convert_bounds_to_constraints = kwargs.get(
+            "convert_bounds_to_constraints", True
+        )
+        skip_bounds_transform_set = kwargs.get(
+            "skip_bounds_transform_set", ComponentSet()
+        )
 
         if display_transform_info:
             print("In standard lp transform")
@@ -661,6 +678,9 @@ class Benders_Abstract(BlockData):
 
                 # TODO: in the move constants to RHS version, we may not need a full split_expr
                 # check and possibly replace
+
+                # N.B. if c.body = Wy + Tx - h, for c is Wy + Tx - h <= 0 sense
+                # then body.out = Wy, body.in = Tx, and body.constant = -h
                 body_split = pyomo_utils.split_expr(
                     c.body, subproblem_master_vars, allow_iterables=True
                 )
@@ -691,10 +711,11 @@ class Benders_Abstract(BlockData):
                     if display_transform_info:
                         print("Equality Constraint case")
                         print(f"Sides now: {str(lhs)=} == {str(rhs)=}")
-                        last_added_cons = local_b.aux_cons[len(local_b.aux_cons)]
+                        last_added_cons = local_b.aux_cons[len(local_b.aux_cons) - 1]
                         print("Newly Added Constraint is:")
                         last_added_cons.pprint()
                 else:
+
                     lower = pyo.value(c.lower)
                     upper = pyo.value(c.upper)
 
@@ -702,8 +723,11 @@ class Benders_Abstract(BlockData):
                         # case where upper has contents
                         # body.expr <= upper.expr
 
-                        # transform case 1
-                        rhs = body_split.constant + c.upper
+                        # transform case 1, Wy + Tx <= h format
+                        # rhs should be h so constants
+                        # rhs = upper.constant - body.constant
+                        rhs = -body_split.constant + c.upper
+                        # lhs should be Wy + Tx
                         lhs = body_split.in_set + body_split.out
 
                         # transform case 2
@@ -717,15 +741,21 @@ class Benders_Abstract(BlockData):
                         if display_transform_info:
                             print("LEQ Constraint case")
                             print(f"Sides now: {str(lhs)=} <= {str(rhs)=}")
-                            last_added_cons = local_b.aux_cons[len(local_b.aux_cons)]
-                            print("Newly Added Constraint is:")
-                            last_added_cons.pprint()
+                            # last_added_cons = local_b.aux_cons[
+                            #     len(local_b.aux_cons) - 1
+                            # ]
+                            # print("Newly Added Constraint is:")
+                            # last_added_cons.pprint()
                     if lower is not None:
                         # case where lower has contents
                         # lower.expr <= body.expr
 
-                        # transform case 1
+                        # transform case 1, Wy + Tx <= h format
+                        # rhs should be h, so constants
+                        # rhs = body.constant - lower.constant
                         rhs = body_split.constant - c.lower
+                        # lhs should be Wy + Tx
+                        # lhs = -body.out - body.in
                         lhs = -body_split.out - body_split.in_set
 
                         # transform case 2
@@ -737,12 +767,66 @@ class Benders_Abstract(BlockData):
                         if display_transform_info:
                             print("GEQ Constraint case")
                             print(f"Sides now: {str(lhs)=} <= {str(rhs)=}")
-                            last_added_cons = b.aux_cons[len(b.aux_cons)]
-                            print("Newly Added Constraint is:")
-                            last_added_cons.pprint()
+                            # last_added_cons = local_b.aux_cons[
+                            #     len(local_b.aux_cons) - 1
+                            # ]
+                            # print("Newly Added Constraint is:")
+                            # last_added_cons.pprint()
 
                     # delete old version of constraint
                     Benders_Abstract._del_con(c)
+
+            if convert_bounds_to_constraints:
+                for var in list(
+                    local_b.component_data_objects(
+                        pyo.Var, descend_into=False, active=True, sort=True
+                    )
+                ):
+                    # skip the master variables
+                    if (
+                        var in subproblem_master_vars
+                        or var in skip_bounds_transform_set
+                    ):
+                        continue
+
+                    # checking domain bounds as LB_v \leq var \leq UB_v
+                    lb, ub = var.bounds
+                    if lb is not None:
+                        # add constraint as -var \leq -LB_v
+                        local_b.aux_cons_rhs_exprs.append(-lb)
+                        local_b.aux_cons.add(-var <= -lb)
+
+                        # handle printout
+                        if display_transform_info:
+                            print("Variable Transform Case for Lower Bound")
+                            print(
+                                f"Lower Bound now replaced as: -{str(var)=} <= {str(-lb)=}"
+                            )
+                            last_added_cons = local_b.aux_cons[
+                                len(local_b.aux_cons) - 1
+                            ]
+                            print("Newly Added Constraint is:")
+                            last_added_cons.pprint()
+
+                    if ub is not None:
+                        # add constraint as var \leq UB_v
+                        local_b.aux_cons_rhs_exprs.append(ub)
+                        local_b.aux_cons.add(var <= ub)
+
+                        # handle printout
+                        if display_transform_info:
+                            print("Variable Transform Case for Upper Bound")
+                            print(
+                                f"Upper Bound now replaced as: {str(var)=} <= {str(ub)=}"
+                            )
+                            last_added_cons = local_b.aux_cons[
+                                len(local_b.aux_cons) - 1
+                            ]
+                            print("Newly Added Constraint is:")
+                            last_added_cons.pprint()
+
+                    # handle the bounds resetting
+                    var.bounds = (None, None)
 
             b.aux_cons_map[local_b] = local_b.aux_cons
             b.aux_cons_rhs_exprs_dict[local_b] = local_b.aux_cons_rhs_exprs
@@ -764,6 +848,7 @@ class Benders_Abstract(BlockData):
         if allow_infeasible:
             # add ability to treat primal infeasible
             allowed_conditions.add(pyo.TerminationCondition.infeasible)
+            allowed_conditions.add(pyo.TerminationCondition.infeasibleOrUnbounded)
             if (
                 subproblem_solver_name is not None
                 and "gurobi" in subproblem_solver_name.lower()
@@ -963,6 +1048,8 @@ class Benders_Abstract(BlockData):
         )
         infeasible_model = (
             res.solver.termination_condition == pyo.TerminationCondition.infeasible
+            or res.solver.termination_condition
+            == pyo.TerminationCondition.infeasibleOrUnbounded
         )
         assert optimal_solution or (
             allow_infeasible and infeasible_model
