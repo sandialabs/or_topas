@@ -226,37 +226,83 @@ class TestBendersOPFExamples(unittest.TestCase):
             self.assertAlmostEqual(sum(gen_list), sum(grid.load_dict.values()), 4)
             self.assertAlmostEqual(pyo.value(m.obj), expected_obj, 4)
 
-    def Xtest_matpower_creation(self):
-        file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
-        grid = tc.MatpowerGrid(m_file=file_path)
+    # def Xtest_matpower_creation(self):
+    #     file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
+    #     grid = tc.MatpowerGrid(m_file=file_path)
 
-    def Xtest_matpower_creation_bad_path(self):
-        with self.assertRaises(RuntimeError) as cm:
-            file_path = "PGLIB_Data/pglib_not_here.m"
-            grid = tc.MatpowerGrid(m_file=file_path)
-        expected_message = "Error in CaseFrames creation in MatpowerGrid initialization"
-        self.assertIn(expected_message, str(cm.exception))
+    # def Xtest_matpower_creation_bad_path(self):
+    #     with self.assertRaises(RuntimeError) as cm:
+    #         file_path = "PGLIB_Data/pglib_not_here.m"
+    #         grid = tc.MatpowerGrid(m_file=file_path)
+    #     expected_message = "Error in CaseFrames creation in MatpowerGrid initialization"
+    #     self.assertIn(expected_message, str(cm.exception))
+
+    # @parameterized.expand(
+    #     input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    # )
+    # def Xtest_matpower_traditional_solve(self, mip_solver):
+    #     file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
+    #     grid = tc.MatpowerGrid(m_file=file_path)
+    #     model = tc.EnergyGrid.create_tiny_opf(grid, mode=2)
+    #     model.pprint()
+    #     opt = pyo.SolverFactory(mip_solver)
+    #     opt.set_instance(model)
+    #     res = opt.solve(tee=False, save_results=False)
+
+    # @parameterized.expand(
+    #     input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    # )
+    # def Xtest_matpower_traditional_solve_2(self, mip_solver):
+    #     file_path = "PGLIB_Data/pglib_opf_case14_ieee.m"
+    #     grid = tc.MatpowerGrid(m_file=file_path)
+    #     model = tc.EnergyGrid.create_tiny_opf(grid, mode=2)
+    #     model.pprint()
+    #     opt = pyo.SolverFactory(mip_solver)
+    #     opt.set_instance(model)
+    #     res = opt.solve(tee=False, save_results=False)
 
     @parameterized.expand(
         input=infeasibility_persistent_test_solvers, skip_on_empty=True
     )
-    def Xtest_matpower_traditional_solve(self, mip_solver):
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_matpower_case5_benders(self, solver):
+        """Benders decomposition on real pglib case5 (repo layout)."""
         file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
         grid = tc.MatpowerGrid(m_file=file_path)
+        m = tc.EnergyGrid.create_root(grid=grid)
+        root_vars = list(m.generation.values())
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(root_vars=root_vars, tol=1e-6, transform="standard_lp", allow_infeasible=True)
+        m.benders.add_subproblem(
+            subproblem_fn=tc.EnergyGrid.create_subproblem,
+            subproblem_fn_kwargs={"root": m, "grid": grid},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        opt = pyo.SolverFactory(solver)
+        opt.set_instance(m)
+        for _ in range(15):
+            opt.solve(tee=False, save_results=False)
+            cuts = m.benders.generate_cut()
+            for c in cuts:
+                opt.add_constraint(c)
+            if not cuts:
+                break
+        gen_sum = sum(v.value for v in root_vars)
+        self.assertAlmostEqual(gen_sum, sum(grid.load_dict.values()), delta=0.01)
+
+    def test_matpower_case5_creation_and_solve(self):
+        """Smoke test using exact repo path."""
+        file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
+        grid = tc.MatpowerGrid(m_file=file_path)
+        self.assertEqual(len(grid.buses), 5)
         model = tc.EnergyGrid.create_tiny_opf(grid, mode=2)
-        model.pprint()
-        opt = pyo.SolverFactory(mip_solver)
+        opt = pyo.SolverFactory("gurobi_persistent")
         opt.set_instance(model)
-        res = opt.solve(tee=False, save_results=False)
+        res = opt.solve(tee=False)
+        self.assertEqual(res.solver.termination_condition, pyo.TerminationCondition.optimal)
 
-    @parameterized.expand(
-        input=infeasibility_persistent_test_solvers, skip_on_empty=True
-    )
-    def Xtest_matpower_traditional_solve_2(self, mip_solver):
+    def test_matpower_case14_smoke(self):
         file_path = "PGLIB_Data/pglib_opf_case14_ieee.m"
         grid = tc.MatpowerGrid(m_file=file_path)
-        model = tc.EnergyGrid.create_tiny_opf(grid, mode=2)
-        model.pprint()
-        opt = pyo.SolverFactory(mip_solver)
-        opt.set_instance(model)
-        res = opt.solve(tee=False, save_results=False)
+        self.assertEqual(len(grid.buses), 14)
