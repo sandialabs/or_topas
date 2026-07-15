@@ -291,12 +291,25 @@ class TestBendersOPFExamples(unittest.TestCase):
         gen_sum = sum(v.value for v in root_vars)
         self.assertAlmostEqual(gen_sum, sum(grid.load_dict.values()), delta=0.01)
 
+
+
+
     def test_matpower_case5_creation_and_solve(self):
         """Smoke test using exact repo path."""
         file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
         grid = tc.MatpowerGrid(m_file=file_path)
         self.assertEqual(len(grid.buses), 5)
         model = tc.EnergyGrid.create_tiny_opf(grid, mode=2)
+        if True:
+            model.write(
+                filename='model.lp',
+                format='lp',
+                io_options={
+                    'symbolic_solver_labels': True,      # human-readable variable/constraint names
+                    'file_determinism': 2,               # SORT_INDICES (or 3 for full symbol sort)
+                    'skip_trivial_constraints': False,   # usually keep them for diagnosis
+                }
+            )
         opt = pyo.SolverFactory("gurobi_persistent")
         opt.set_instance(model)
         res = opt.solve(tee=False)
