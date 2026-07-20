@@ -1084,7 +1084,7 @@ class EnergyGrid:
         }
         self.theta_bounds_dict = {"bus1": pi_value, "bus2": pi_value, "bus3": pi_value}
         self.buses = ["bus1", "bus2", "bus3"]
-        self.lines = itertools.combinations(self.buses, 2)
+        self.lines = list(itertools.combinations(self.buses, 2))
         # {('bus1', 'bus2'), ('bus1', 'bus3'), ('bus2', 'bus3')}
 
     # DC-Optimal Power Flow Example
@@ -1569,3 +1569,145 @@ class MatpowerGrid(EnergyGrid):
 
         except Exception as e:
             raise RuntimeError(f"Issue in MatpowerGrid data parsing: {e}") from e
+        
+
+class EnergyGridWithCommitment(EnergyGrid):
+    """Base commitment extension – adds binary indicators + epsilon min output."""
+
+    def __init__(self, epsilon=1.0):
+        super().__init__()
+        self.epsilon = float(epsilon)
+
+    @staticmethod
+    def create_tiny_opf(grid, mode=2):
+        """Extended OPF with commitment indicators."""
+        if not isinstance(grid, EnergyGridWithCommitment):
+            return EnergyGrid.create_tiny_opf(grid, mode=mode)
+
+        model = EnergyGrid.create_tiny_opf(grid, mode=mode)
+
+        model.gen_buses = pyo.Set(
+            initialize=[b for b in model.buses if model.capacity[b] > 0]
+        )
+        model.epsilon = pyo.Param(initialize=grid.epsilon, mutable=True)
+        model.commit = pyo.Var(model.gen_buses, domain=pyo.Binary, initialize=1)
+
+        def min_gen_rule(m, bus):
+            return m.generation[bus] >= m.epsilon * m.commit[bus]
+        model.min_gen_commit = pyo.Constraint(model.gen_buses, rule=min_gen_rule)
+
+        def max_gen_commit_rule(m, bus):
+            return m.generation[bus] <= m.capacity[bus] * m.commit[bus]
+        model.max_gen_commit = pyo.Constraint(model.gen_buses, rule=max_gen_commit_rule)
+
+        mode_names = {0: "Copper Plate", 1: "Network Flow", 2: "DC-OPF"}
+        print(f"Model in {mode_names[mode]} Mode WITH COMMITMENT (epsilon={grid.epsilon})")
+        return model
+
+    @staticmethod
+    def create_root(grid, eta_lb=None, eta_ub=None):
+        """Master: only commitment binaries + eta. Objective = min eta."""
+        model = pyo.ConcreteModel()
+        model.buses = pyo.Set(initialize=grid.buses)
+        model.costs = pyo.Param(model.buses, initialize=grid.cost_dict)
+        model.capacity = pyo.Param(model.buses, initialize=grid.gen_max_dict)
+
+        model.gen_buses = pyo.Set(
+            initialize=[b for b in model.buses if model.capacity[b] > 0]
+        )
+        model.commit = pyo.Var(model.gen_buses, domain=pyo.Binary, initialize=1)
+
+        model.eta = pyo.Var(initialize=0.0)
+        if eta_lb is not None:
+            model.eta.setlb(eta_lb)
+        if eta_ub is not None:
+            model.eta.setub(eta_ub)
+
+        model.obj = pyo.Objective(expr=model.eta, sense=pyo.minimize)
+        return model
+
+    @staticmethod
+    def create_subproblem(root, grid, mode=2, feasibility_only=False):
+        """Subproblem with relaxed (continuous unbounded) commit vars."""
+        if feasibility_only:
+            raise UserWarning("feasibility_only=True is ignored in EnergyGridWithCommitment (dispatch-cost objective is always kept).")
+
+        m = EnergyGridWithCommitment.create_tiny_opf(grid, mode=mode)
+
+        # Relax commit to continuous unbounded for proper duals
+        for bus in m.gen_buses:
+            m.commit[bus].domain = pyo.Reals
+
+        complicating_vars_map = pyo.ComponentMap()
+        for bus in m.gen_buses:
+            complicating_vars_map[root.commit[bus]] = m.commit[bus]
+
+        return m, complicating_vars_map
+
+    @staticmethod
+    def setup_energy_grid_commitment_persistent(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        """Persistent Benders setup for commitment version."""
+        grid = kwargs.get("grid", EnergyGridWithCommitment())
+        if not isinstance(grid, EnergyGridWithCommitment):
+            raise TypeError("setup_energy_grid_commitment_persistent requires an EnergyGridWithCommitment grid")
+
+        eta_lb = kwargs.get("eta_lb", None)
+        eta_ub = kwargs.get("eta_ub", None)
+        m = EnergyGridWithCommitment.create_root(grid, eta_lb=eta_lb, eta_ub=eta_ub)
+
+        transform = kwargs.get("transform", "standard_lp")
+        feasibility_only = kwargs.get("feasibility_only", False)
+
+        root_vars = list(m.commit.values())
+
+        m.benders = CutGenerator()
+        m.benders.set_input(
+            root_vars=root_vars,
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=True,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=EnergyGridWithCommitment.create_subproblem,
+            subproblem_fn_kwargs={
+                "root": m,
+                "grid": grid,
+                "mode": kwargs.get("mode", 2),
+                "feasibility_only": feasibility_only,
+            },
+            root_eta=m.eta,
+            subproblem_solver=solver_name,
+        )
+        opt = pyo.SolverFactory(solver_name)
+        opt.set_instance(m)
+        return opt, m
+
+
+class MatpowerGridWithCommitment(MatpowerGrid, EnergyGridWithCommitment):
+    """
+    Real Matpower/pglib-opf case + generator commitment indicators
+    (binary on/off with epsilon min output) + full Benders support.
+    """
+
+    def __init__(
+        self,
+        m_file: str,
+        baseMVA: float = 100.0,
+        defaultEmptyCost: float = 50.0,
+        epsilon: float = 1.0,
+    ):
+        # Commitment layer first (sets self.epsilon)
+        EnergyGridWithCommitment.__init__(self, epsilon=epsilon)
+        # Matpower data loading (overrides everything with real case)
+        MatpowerGrid.__init__(self, m_file, baseMVA, defaultEmptyCost)
+
+        # Convenience
+        self.gen_buses = [b for b in self.buses if self.gen_max_dict.get(b, 0.0) > 0]
+
+        # print(f"✅ MatpowerGridWithCommitment loaded | {m_file} | ε={epsilon} | "
+        #       f"{len(self.gen_buses)} generators")
+
