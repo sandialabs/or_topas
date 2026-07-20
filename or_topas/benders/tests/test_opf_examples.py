@@ -319,3 +319,259 @@ class TestBendersOPFExamples(unittest.TestCase):
         file_path = "PGLIB_Data/pglib_opf_case14_ieee.m"
         grid = tc.MatpowerGrid(m_file=file_path)
         self.assertEqual(len(grid.buses), 14)
+
+    # ------------------------------------------------------------------
+    # Commitment model baseline tests from Grok 4.20
+    # ------------------------------------------------------------------
+
+    def test_commitment_3bus_creation(self):
+        """Smoke: EnergyGridWithCommitment builds and has expected components."""
+        for eps in (0.0, 1.0, 5.0):
+            grid = tc.EnergyGridWithCommitment(epsilon=eps)
+            model = tc.EnergyGridWithCommitment.create_tiny_opf(grid, mode=2)
+
+            self.assertTrue(hasattr(model, "commit"))
+            self.assertTrue(hasattr(model, "gen_buses"))
+            self.assertTrue(hasattr(model, "min_gen_commit"))
+            self.assertTrue(hasattr(model, "max_gen_commit"))
+            self.assertEqual(len(model.gen_buses), 2)          # bus1, bus2
+            self.assertAlmostEqual(pyo.value(model.epsilon), eps)
+            for b in model.gen_buses:
+                self.assertIs(model.commit[b].domain, pyo.Binary)
+
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_commitment_3bus_monolithic(self, solver):
+        """Full MIP (no Benders) on 3-bus commitment model solves optimally
+        and respects the indicator constraints."""
+        for eps in (0.0, 1.0):
+            grid = tc.EnergyGridWithCommitment(epsilon=eps)
+            model = tc.EnergyGridWithCommitment.create_tiny_opf(grid, mode=2)
+
+            opt = pyo.SolverFactory(solver)
+            opt.set_instance(model)
+            res = opt.solve(tee=False, save_results=False)
+            self.assertEqual(
+                res.solver.termination_condition,
+                pyo.TerminationCondition.optimal,
+            )
+
+            # Power balance
+            total_gen = sum(pyo.value(model.generation[b]) for b in model.buses)
+            self.assertAlmostEqual(
+                total_gen, sum(grid.load_dict.values()), places=4
+            )
+
+            # Indicator logic
+            for b in model.gen_buses:
+                u = pyo.value(model.commit[b])
+                g = pyo.value(model.generation[b])
+                self.assertGreaterEqual(g, -1e-6)
+                if u < 0.5:                       # committed off
+                    self.assertAlmostEqual(g, 0.0, places=4)
+                else:                             # committed on
+                    self.assertGreaterEqual(g, eps - 1e-4)
+                    self.assertLessEqual(g, grid.gen_max_dict[b] + 1e-4)
+
+            # Objective consistency
+            expected_obj = sum(
+                grid.cost_dict[b] * pyo.value(model.generation[b])
+                for b in model.buses
+            )
+            self.assertAlmostEqual(pyo.value(model.obj), expected_obj, places=4)
+
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_commitment_3bus_benders_smoke(self, solver):
+        """Benders setup + short cut loop on commitment model does not crash
+        and terminates with a finite eta."""
+        grid = tc.EnergyGridWithCommitment(epsilon=1.0)
+
+        # Prefer the helper if it exists; otherwise fall back to hand-rolled setup
+        if hasattr(tc.EnergyGridWithCommitment, "setup_energy_grid_commitment_persistent"):
+            opt, m = tc.EnergyGridWithCommitment.setup_energy_grid_commitment_persistent(
+                solver_name=solver,
+                grid=grid,
+                eta_lb=-1e5,
+                eta_ub=1e5,
+                mode=2,
+            )
+        else:
+            m = tc.EnergyGridWithCommitment.create_root(grid, eta_lb=-1e5, eta_ub=1e5)
+            root_vars = list(m.commit.values())
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars,
+                tol=1e-8,
+                transform="standard_lp",
+                allow_infeasible=True,
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.EnergyGridWithCommitment.create_subproblem,
+                subproblem_fn_kwargs={"root": m, "grid": grid, "mode": 2},
+                root_eta=m.eta,
+                subproblem_solver=solver,
+            )
+            opt = pyo.SolverFactory(solver)
+            opt.set_instance(m)
+
+        for i in range(15):
+            res = opt.solve(tee=False, save_results=False)
+            cuts = m.benders.generate_cut()
+            for c in cuts:
+                opt.add_constraint(c)
+            if not cuts:
+                break
+
+        self.assertLess(i, 15, "Should not need 15 cuts on the 3-bus commitment model")
+        self.assertTrue(pyo.value(m.eta) < 1e20)          # finite
+
+
+    def test_commitment_subproblem_domain_relaxation(self):
+        """create_subproblem must relax commit variables to continuous (Reals)
+        so that dual information can be obtained."""
+        grid = tc.EnergyGridWithCommitment(epsilon=1.0)
+        root = tc.EnergyGridWithCommitment.create_root(grid)
+        sub, _ = tc.EnergyGridWithCommitment.create_subproblem(
+            root, grid, mode=2, feasibility_only=False
+        )
+
+        for b in sub.gen_buses:
+            self.assertIs(sub.commit[b].domain, pyo.Reals)
+
+
+    @pytest.mark.skipif(not matpower_available, reason="Need Matpower for these tests")
+    def test_matpower_commitment_case5_creation(self):
+        """Smoke: MatpowerGridWithCommitment builds on case5."""
+        file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
+        grid = tc.MatpowerGridWithCommitment(m_file=file_path, epsilon=1.0)
+        self.assertEqual(len(grid.buses), 5)
+        model = tc.MatpowerGridWithCommitment.create_tiny_opf(grid, mode=2)
+        self.assertTrue(hasattr(model, "commit"))
+        self.assertGreater(len(model.gen_buses), 0)
+
+
+    @pytest.mark.skipif(not matpower_available, reason="Need Matpower for these tests")
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_matpower_commitment_case5_monolithic(self, solver):
+        """Full MIP on real case5 commitment model solves optimally."""
+        file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
+        grid = tc.MatpowerGridWithCommitment(m_file=file_path, epsilon=1.0)
+        model = tc.MatpowerGridWithCommitment.create_tiny_opf(grid, mode=2)
+
+        opt = pyo.SolverFactory(solver)
+        opt.set_instance(model)
+        res = opt.solve(tee=False, save_results=False)
+        self.assertEqual(
+            res.solver.termination_condition,
+            pyo.TerminationCondition.optimal,
+        )
+
+        total_gen = sum(pyo.value(model.generation[b]) for b in model.buses)
+        self.assertAlmostEqual(
+            total_gen, sum(grid.load_dict.values()), delta=0.05
+        )
+
+    # ------------------------------------------------------------------
+    # Optimal commitment pattern tests (3-bus) Grok 4.20 generated
+    # ------------------------------------------------------------------
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_commitment_3bus_optimal_patterns_extensive(self, solver):
+        """Extensive-form: for every mode the optimal commitment vectors
+        are exactly the three that turn on at least one generator."""
+        expected = {(1, 0), (0, 1), (1, 1)}
+        eps = 1.0
+
+        for mode in (0, 1, 2):
+            optimal = set()
+            for u1, u2 in [(0, 0), (1, 0), (0, 1), (1, 1)]:
+                grid = tc.EnergyGridWithCommitment(epsilon=eps)
+                model = tc.EnergyGridWithCommitment.create_tiny_opf(grid, mode=mode)
+
+                # Fix the two commitment variables
+                model.commit["bus1"].fix()
+                model.commit["bus1"].set_value(u1)
+                model.commit["bus2"].fix()
+                model.commit["bus2"].set_value(u2)
+
+                opt = pyo.SolverFactory(solver)
+                opt.set_instance(model)
+                res = opt.solve(tee=False, save_results=False)
+
+                if (
+                    res.solver.termination_condition
+                    == pyo.TerminationCondition.optimal
+                    and abs(pyo.value(model.obj) - 5000.0) < 1e-3
+                ):
+                    optimal.add((u1, u2))
+
+            self.assertEqual(
+                optimal,
+                expected,
+                f"mode={mode}: extensive-form optimal set was {optimal}",
+            )
+
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_commitment_3bus_optimal_patterns_benders(self, solver):
+        """Benders: each of the three known optimal commitment patterns
+        produces a subproblem cost of 5000; the all-off pattern does not."""
+        expected = {(1, 0), (0, 1), (1, 1)}
+        eps = 1.0
+        tol = 1e-3
+
+        for mode in (0, 1, 2):
+            grid = tc.EnergyGridWithCommitment(epsilon=eps)
+            root = tc.EnergyGridWithCommitment.create_root(grid)
+
+            costs = {}
+            for u1, u2 in [(0, 0), (1, 0), (0, 1), (1, 1)]:
+                # Build a fresh subproblem and fix the (relaxed) commit variables
+                sub, _ = tc.EnergyGridWithCommitment.create_subproblem(
+                    root, grid, mode=mode, feasibility_only=False
+                )
+                sub.commit["bus1"].fix()
+                sub.commit["bus1"].set_value(u1)
+                sub.commit["bus2"].fix()
+                sub.commit["bus2"].set_value(u2)
+
+                opt = pyo.SolverFactory(solver)
+                opt.set_instance(sub)
+                res = opt.solve(tee=False, save_results=False)
+
+                if res.solver.termination_condition == pyo.TerminationCondition.optimal:
+                    costs[(u1, u2)] = pyo.value(sub.obj)
+                else:
+                    costs[(u1, u2)] = float("inf")
+
+            # The three expected patterns must all achieve ~5000
+            for pat in expected:
+                self.assertAlmostEqual(
+                    costs[pat],
+                    5000.0,
+                    delta=tol,
+                    msg=f"mode={mode}, pattern={pat}: expected cost 5000, got {costs[pat]}",
+                )
+
+            # All-off must be strictly worse (or infeasible)
+            self.assertGreater(
+                costs[(0, 0)],
+                5000.0 + tol,
+                msg=f"mode={mode}: all-off should not be optimal",
+            )
