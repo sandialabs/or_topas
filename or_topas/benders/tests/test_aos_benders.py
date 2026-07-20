@@ -731,6 +731,209 @@ class TestAOS_Benders_Persistent(unittest.TestCase):
             ), f"Expected {expected_true_pool_size[index]} true solutions, got {len(true_pool)}"
 
 
+    # ------------------------------------------------------------------
+    # AOS-Benders tests for the 3-bus commitment OPF, Grok 4.20 generated
+    # ------------------------------------------------------------------
+
+    @parameterized.expand(input=persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_commitment_3bus_aos_benders_binary_relgap0(self, mip_solver):
+        """AOS-Benders (binary enumeration) on the 3-bus commitment model.
+        At rel_gap=0 the true pool must contain exactly the three optimal
+        commitment patterns (1,0), (0,1), (1,1)."""
+        eps = 1.0
+        mode = 2
+        rel_gap = 0.0
+        num_solutions = 20
+        expected_patterns = {(1, 0), (0, 1), (1, 1)}
+
+        grid = tc.EnergyGridWithCommitment(epsilon=eps)
+
+        # Build and solve the commitment Benders model to optimality
+        if hasattr(tc.EnergyGridWithCommitment, "setup_energy_grid_commitment_persistent"):
+            opt, m = tc.EnergyGridWithCommitment.setup_energy_grid_commitment_persistent(
+                solver_name=mip_solver,
+                grid=grid,
+                eta_lb=-1e5,
+                eta_ub=1e5,
+                mode=mode,
+            )
+        else:
+            # Hand-rolled fallback that matches the continuous tests
+            m = tc.EnergyGridWithCommitment.create_root(grid, eta_lb=-1e5, eta_ub=1e5)
+            root_vars = list(m.commit.values())
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars,
+                tol=1e-8,
+                transform="standard_lp",
+                allow_infeasible=True,
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.EnergyGridWithCommitment.create_subproblem,
+                subproblem_fn_kwargs={"root": m, "grid": grid, "mode": mode},
+                root_eta=m.eta,
+                subproblem_solver=mip_solver,
+            )
+            opt = pyo.SolverFactory(mip_solver)
+            opt.set_instance(m)
+
+        # Short Benders loop to optimality
+        for i in range(20):
+            opt.solve(tee=False, save_results=False)
+            cuts = m.benders.generate_cut()
+            for c in cuts:
+                opt.add_constraint(c)
+            if not cuts:
+                break
+        self.assertLess(i, 20, "Benders should converge well before 20 iterations")
+
+        # AOS pass – binary enumeration
+        mip_solver_non_persistent = persistent_to_non_persistent_solver_map.get(
+            mip_solver, "gurobi"
+        )
+        candidate_pool, data = aos_benders_generate_candidates(
+            m=m,
+            rel_gap=rel_gap,
+            num_solutions=num_solutions,
+            mip_solver=mip_solver_non_persistent,
+            enumeration_method="binary",
+            tee=False,
+        )
+        true_pool = aos_benders_filter(
+            candidate_pool, data, tee=False, tee_final=False
+        )
+
+        # Extract the commitment vectors from every solution that survived filtering
+        recovered = set()
+        for sol in true_pool:
+            sol.load_into_model(
+                model=m,
+                value_overrides=None,
+                descend_into=True,
+                skip_nan_inf=True,
+                error_if_value_missing=False,
+                track_missing=True,
+                track_fixed=True,
+                track_unfixed=True,
+                track_nan_inf=True,
+                unfix_by_default=False,
+                fix_continuous=False,
+                fix_binary=False,
+                fix_integer=False,
+                fix_if_sol_var_fixed=False,
+                fix_var_names=None,
+            )
+            u1 = int(round(pyo.value(m.commit["bus1"])))
+            u2 = int(round(pyo.value(m.commit["bus2"])))
+            recovered.add((u1, u2))
+
+        self.assertEqual(
+            recovered,
+            expected_patterns,
+            f"Expected optimal commitment patterns {expected_patterns}, "
+            f"got {recovered}",
+        )
+        self.assertEqual(
+            len(true_pool),
+            3,
+            f"Expected true pool of size 3, got {len(true_pool)}",
+        )
+
+
+    @parameterized.expand(input=persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_commitment_3bus_aos_benders_binary_relgap_positive(self, mip_solver):
+        """With a modest positive relative gap the three optimal patterns
+        must still be present in the true pool."""
+        eps = 1.0
+        mode = 2
+        rel_gap = 0.01
+        num_solutions = 20
+        expected_patterns = {(1, 0), (0, 1), (1, 1)}
+
+        grid = tc.EnergyGridWithCommitment(epsilon=eps)
+
+        if hasattr(tc.EnergyGridWithCommitment, "setup_energy_grid_commitment_persistent"):
+            opt, m = tc.EnergyGridWithCommitment.setup_energy_grid_commitment_persistent(
+                solver_name=mip_solver,
+                grid=grid,
+                eta_lb=-1e5,
+                eta_ub=1e5,
+                mode=mode,
+            )
+        else:
+            m = tc.EnergyGridWithCommitment.create_root(grid, eta_lb=-1e5, eta_ub=1e5)
+            root_vars = list(m.commit.values())
+            m.benders = BendersCutGenerator()
+            m.benders.set_input(
+                root_vars=root_vars,
+                tol=1e-8,
+                transform="standard_lp",
+                allow_infeasible=True,
+            )
+            m.benders.add_subproblem(
+                subproblem_fn=tc.EnergyGridWithCommitment.create_subproblem,
+                subproblem_fn_kwargs={"root": m, "grid": grid, "mode": mode},
+                root_eta=m.eta,
+                subproblem_solver=mip_solver,
+            )
+            opt = pyo.SolverFactory(mip_solver)
+            opt.set_instance(m)
+
+        for i in range(20):
+            opt.solve(tee=False, save_results=False)
+            cuts = m.benders.generate_cut()
+            for c in cuts:
+                opt.add_constraint(c)
+            if not cuts:
+                break
+
+        mip_solver_non_persistent = persistent_to_non_persistent_solver_map.get(
+            mip_solver, "gurobi"
+        )
+        candidate_pool, data = aos_benders_generate_candidates(
+            m=m,
+            rel_gap=rel_gap,
+            num_solutions=num_solutions,
+            mip_solver=mip_solver_non_persistent,
+            enumeration_method="binary",
+            tee=False,
+        )
+        true_pool = aos_benders_filter(
+            candidate_pool, data, tee=False, tee_final=False
+        )
+
+        recovered = set()
+        for sol in true_pool:
+            sol.load_into_model(
+                model=m,
+                value_overrides=None,
+                descend_into=True,
+                skip_nan_inf=True,
+                error_if_value_missing=False,
+                track_missing=True,
+                track_fixed=True,
+                track_unfixed=True,
+                track_nan_inf=True,
+                unfix_by_default=False,
+                fix_continuous=False,
+                fix_binary=False,
+                fix_integer=False,
+                fix_if_sol_var_fixed=False,
+                fix_var_names=None,
+            )
+            u1 = int(round(pyo.value(m.commit["bus1"])))
+            u2 = int(round(pyo.value(m.commit["bus2"])))
+            recovered.add((u1, u2))
+
+        # All three optimal patterns must still be present
+        self.assertTrue(
+            expected_patterns.issubset(recovered),
+            f"True pool missing some optimal patterns. "
+            f"Expected at least {expected_patterns}, recovered {recovered}",
+        )
+
 class TestAOS_Benders_Non_Persistent(unittest.TestCase):
 
     @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
