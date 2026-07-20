@@ -916,7 +916,6 @@ class TestBendersUtils(unittest.TestCase):
         # assert results_munch.subproblem_needs_cut == True
         self.assertAlmostEqual(results_munch.subproblem_eta, expected_obj_answer, 3)
 
-        
     @parameterized.expand(
         input=infeasibility_persistent_test_solvers, skip_on_empty=True
     )

@@ -23,13 +23,26 @@ def aos_benders_generate_candidates(
     bound_smoothing_tol=1e-6,
     tee=False,
     scenarios=None,
-    enumeration_method="linear",
     binary_var_set=None,
+    enumeration_method="linear",  # "linear" | "binary" | "gurobi_pool"
 ):
-    # At present, only LP AOS Supported
+    """
+    Generate candidate solutions for subsequent AOS-Benders filtering.
 
-    # assume that we have a solved model
-    # objectives = [pyo.value(o) for o in m.component_objects(pyo.Objective, descend_into=False, active=True)]
+    enumeration_method
+        "linear"       – vertex enumeration of continuous LP masters
+                         (or_topas.aos.enumerate_linear_solutions / Lee Recursive Vertex Enumeration)
+        "binary"       – no-good cuts on binary variables
+                         (or_topas.aos.enumerate_binary_solutions / Balas No-Good Cuts)
+        "gurobi_pool"  – Gurobi Solution Pool with PoolSearchMode=2
+                         (or_topas.aos.gurobi_generate_solutions / Danna’s OneTree run Solver Side)
+
+    binary_var_set : optional collection of binary variables
+        Only used when enumeration_method="binary".  If None, all unfixed
+        binary variables are used for the no-good cuts.
+    """
+    # Supports LP (linear), binary (Balas), and Gurobi Solution Pool AOS
+
     if scenarios is None and hasattr(m, "scenarios"):
         scenarios = m.scenarios
 
@@ -37,15 +50,10 @@ def aos_benders_generate_candidates(
         o for o in m.component_objects(pyo.Objective, descend_into=False, active=True)
     ]
     assert len(objectives) == 1, "Should only have one active objective"
-    # need to grap lower bound before objectives gets updated
     lower_bound = pyo.value(objectives[0])
     if tee:
         print(f"{lower_bound=}")
 
-    # compute gap settings
-
-    # find all Benders blocks, general
-    # get benders blocks
     benders_blocks = [
         b
         for b in m.component_data_objects(pyo.Block)
@@ -54,30 +62,26 @@ def aos_benders_generate_candidates(
     assert len(benders_blocks) == 1, "There should only be one benders block"
     benders_block = benders_blocks[0]
 
-    # hypothetically we want to deactivate Benders block before AOS pass
-    # since we don't want the Benders Cut block stuff in solutions, but need m.benders.cuts
-    # since benders cuts live in the benders_block, not the master, at present we can't deactivate
-    # benders_block.deactivate()
-
+    # ------------------------------------------------------------------
+    # AOS pass
+    # ------------------------------------------------------------------
     if enumeration_method == "linear":
         if binary_var_set is not None and tee:
-            raise RuntimeWarning(
-                f"In {enumeration_method=}, the value of {binary_var_set=} should be None and was not"
+            print(
+                f"Warning: binary_var_set is ignored when enumeration_method='linear' "
+                f"(got {binary_var_set=})"
             )
-        # check that all vars have bounds
-        # LP AOS needs this
+
+        # LP AOS requires finite bounds on all variables
         unbounded_vars = [
             v
             for v in m.component_data_objects(pyo.Var, descend_into=True, active=True)
-            if (v.has_lb() == False or v.has_ub() == False)
+            if (v.has_lb() is False or v.has_ub() is False)
         ]
-        assert (
-            len(unbounded_vars) == 0
-        ), f"Need to make sure all vars have bounds for LP AOS methods, there are {len(unbounded_vars)} unbounded variables"
-
-        # do AOS pass
-        # can we augment the AOS methods to return to us what the min/max supported values are?
-        # it computes it, we should be able to augment to get it
+        assert len(unbounded_vars) == 0, (
+            f"Need to make sure all vars have bounds for LP AOS methods; "
+            f"there are {len(unbounded_vars)} unbounded variables"
+        )
 
         candidate_sol_pool = or_topas.aos.enumerate_linear_solutions(
             model=m,
@@ -87,38 +91,62 @@ def aos_benders_generate_candidates(
             variables_to_skip=skip_vars,
             ignore_opt_tol_in_basis=ignore_opt_tol_in_basis,
         )
+
     elif enumeration_method == "binary":
         if (skip_vars is not None or ignore_opt_tol_in_basis) and tee:
-            raise RuntimeWarning(
-                f"In {enumeration_method=}, the value of {skip_vars=} should be None and {ignore_opt_tol_in_basis=} should be Falsy"
+            print(
+                "Warning: skip_vars and ignore_opt_tol_in_basis are LP-specific "
+                "and are ignored when enumeration_method='binary'."
             )
 
         candidate_sol_pool = or_topas.aos.enumerate_binary_solutions(
             model=m,
             num_solutions=num_solutions,
-            variables=None,
+            variables=binary_var_set,  # pass through; None → all unfixed binaries
             rel_opt_gap=rel_gap,
             solver=mip_solver,
             tee=tee,
         )
-    else:
-        raise ValueError(
-            f"enumeration_method must be 'linear' or 'binary', got {enumeration_method}"
+
+        # Balas leaves a temporary _balas block; clean it up
+        if hasattr(m, "_balas"):
+            m.del_component("_balas")
+
+    elif enumeration_method == "gurobi_pool":
+        if tee and "gurobi" not in str(mip_solver).lower():
+            print(
+                f"Note: enumeration_method='gurobi_pool' always uses Gurobi "
+                f"via appsi (mip_solver={mip_solver!r} is ignored)."
+            )
+        if binary_var_set is not None and tee:
+            print(
+                "Warning: binary_var_set is ignored when enumeration_method='gurobi_pool'."
+            )
+
+        candidate_sol_pool = or_topas.aos.gurobi_generate_solutions(
+            model=m,
+            num_solutions=num_solutions,
+            rel_opt_gap=rel_gap,
+            solver_options={},
+            tee=tee,
+            pool_search_mode=2,  # forced – optimality ordered
         )
 
-    # reactivate Benders blocks
-    # add in if the deactivate ever gets used again
-    # benders_block.activate()
+    else:
+        raise ValueError(
+            f"enumeration_method must be 'linear', 'binary', or 'gurobi_pool'; "
+            f"got {enumeration_method!r}"
+        )
 
-    # filter solutions step
+    # ------------------------------------------------------------------
+    # Common post-processing (unchanged)
+    # ------------------------------------------------------------------
     upper_bound = lower_bound + rel_gap * abs(lower_bound) + bound_smoothing_tol
     if tee:
         print(f"{upper_bound=}")
     other_data_munch = MyMunch(
         objective_expr=m.obj,
         model=m,
-        # TODO: update this to use the benders_block found above
-        # benders_block=m.benders,
         benders_block=benders_block,
         scenarios=scenarios,
         upper_bound=upper_bound,

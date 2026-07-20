@@ -63,7 +63,6 @@ with try_import() as matpower_available:
 #         return M, complicating_vars_map
 
 
-
 class modified_absolute_value:
     @staticmethod
     def create_root(
@@ -555,7 +554,7 @@ class newsvendor:
             )
         print(f"{type(m)=}")
         return m
-    
+
     def create_subproblem(root_x, data=dict(), prob=1):
         b = data.get("b", 1.5)
         c = data.get("c", 1.0)
@@ -656,7 +655,8 @@ class newsvendor:
         opt = pyo.SolverFactory(solver_name)
         opt.set_instance(m)
         return opt, m
-                
+
+
 class reduced_costs_tester:
     """
     This is a test to check for reduced cost terms in Benders.
@@ -1390,97 +1390,97 @@ class MatpowerGrid(EnergyGrid):
     Code adapted from a Grok generated parser to match matpowercaseframes to EnergyGrid structure.
     """
 
-        # def __init__(
-        #     self, m_file: str, baseMVA: float = 100.0, defaultEmptyCost: float = 50.0
-        # ):
-        #     """
-        #     m_file : str
-        #         Path to pglib-opf file (e.g. "pglib_opf_case118_ieee.m")
-        #     baseMVA : float
-        #         Base power (default 100).
-        #     defaultEmptyCost : float
-        #         Price for generation when missing from data file (default 50)
-        #     """
-        #     assert (
-        #         matpower_available
-        #     ), "MatpowerGrid use requires matpowercaseframes to be avaiable"
+    # def __init__(
+    #     self, m_file: str, baseMVA: float = 100.0, defaultEmptyCost: float = 50.0
+    # ):
+    #     """
+    #     m_file : str
+    #         Path to pglib-opf file (e.g. "pglib_opf_case118_ieee.m")
+    #     baseMVA : float
+    #         Base power (default 100).
+    #     defaultEmptyCost : float
+    #         Price for generation when missing from data file (default 50)
+    #     """
+    #     assert (
+    #         matpower_available
+    #     ), "MatpowerGrid use requires matpowercaseframes to be avaiable"
 
-        #     # === 1. Call parent constructor FIRST ===
-        #     # This runs the original EnergyGrid.__init__ (which sets the toy 3-bus data).
-        #     # We do this for correctness and future-proofing, even though we will override everything.
-        #     # super().__init__()
+    #     # === 1. Call parent constructor FIRST ===
+    #     # This runs the original EnergyGrid.__init__ (which sets the toy 3-bus data).
+    #     # We do this for correctness and future-proofing, even though we will override everything.
+    #     # super().__init__()
 
-        #     # === 2. Now load real data and OVERRIDE everything ===
-        #     self.baseMVA = baseMVA
+    #     # === 2. Now load real data and OVERRIDE everything ===
+    #     self.baseMVA = baseMVA
 
-        #     try:
-        #         cf = CaseFrames(m_file)
-        #     except Exception as e:
-        #         raise RuntimeError(
-        #             "Error in CaseFrames creation in MatpowerGrid initialization"
-        #         ) from e
+    #     try:
+    #         cf = CaseFrames(m_file)
+    #     except Exception as e:
+    #         raise RuntimeError(
+    #             "Error in CaseFrames creation in MatpowerGrid initialization"
+    #         ) from e
 
-        #     try:
-        #         # Full raw DataFrames — kept for generator-level analysis (non-uniqueness)
-        #         self.bus_df = cf.bus.copy()
-        #         self.gen_df = cf.gen.copy()  # ← Critical for your "same generators on" rule
-        #         self.gencost_df = getattr(cf, "gencost", None)
-        #         self.branch_df = cf.branch.copy()
+    #     try:
+    #         # Full raw DataFrames — kept for generator-level analysis (non-uniqueness)
+    #         self.bus_df = cf.bus.copy()
+    #         self.gen_df = cf.gen.copy()  # ← Critical for your "same generators on" rule
+    #         self.gencost_df = getattr(cf, "gencost", None)
+    #         self.branch_df = cf.branch.copy()
 
-        #         # Buses
-        #         self.buses = sorted(self.bus_df["BUS_I"].astype(int).tolist())
+    #         # Buses
+    #         self.buses = sorted(self.bus_df["BUS_I"].astype(int).tolist())
 
-        #         # Aggregated per-bus data (used by the existing continuous DC-OPF model)
-        #         gen = self.gen_df.copy()
-        #         gen["GEN_BUS"] = gen["GEN_BUS"].astype(int)
+    #         # Aggregated per-bus data (used by the existing continuous DC-OPF model)
+    #         gen = self.gen_df.copy()
+    #         gen["GEN_BUS"] = gen["GEN_BUS"].astype(int)
 
-        #         self.gen_max_dict = {}
-        #         self.cost_dict = {}
+    #         self.gen_max_dict = {}
+    #         self.cost_dict = {}
 
-        #         for b in self.buses:
-        #             gens_on_bus = gen[gen["GEN_BUS"] == b]
-        #             self.gen_max_dict[b] = (
-        #                 float(gens_on_bus["PMAX"].sum()) / baseMVA
-        #                 if not gens_on_bus.empty
-        #                 else 0.0
-        #             )
-        #             self.cost_dict[b] = (
-        #                 float(gens_on_bus["COST"].iloc[0])
-        #                 if not gens_on_bus.empty and "COST" in gens_on_bus.columns
-        #                 else defaultEmptyCost
-        #             )
+    #         for b in self.buses:
+    #             gens_on_bus = gen[gen["GEN_BUS"] == b]
+    #             self.gen_max_dict[b] = (
+    #                 float(gens_on_bus["PMAX"].sum()) / baseMVA
+    #                 if not gens_on_bus.empty
+    #                 else 0.0
+    #             )
+    #             self.cost_dict[b] = (
+    #                 float(gens_on_bus["COST"].iloc[0])
+    #                 if not gens_on_bus.empty and "COST" in gens_on_bus.columns
+    #                 else defaultEmptyCost
+    #             )
 
-        #         # Loads
-        #         bus = self.bus_df.copy()
-        #         bus["BUS_I"] = bus["BUS_I"].astype(int)
-        #         self.load_dict = dict(zip(bus["BUS_I"], bus["PD"].values / baseMVA))
+    #         # Loads
+    #         bus = self.bus_df.copy()
+    #         bus["BUS_I"] = bus["BUS_I"].astype(int)
+    #         self.load_dict = dict(zip(bus["BUS_I"], bus["PD"].values / baseMVA))
 
-        #         # Network
-        #         branch = self.branch_df.copy()
-        #         branch["F_BUS"] = branch["F_BUS"].astype(int)
-        #         branch["T_BUS"] = branch["T_BUS"].astype(int)
+    #         # Network
+    #         branch = self.branch_df.copy()
+    #         branch["F_BUS"] = branch["F_BUS"].astype(int)
+    #         branch["T_BUS"] = branch["T_BUS"].astype(int)
 
-        #         self.lines = list(zip(branch["F_BUS"], branch["T_BUS"]))
+    #         self.lines = list(zip(branch["F_BUS"], branch["T_BUS"]))
 
-        #         self.flow_bounds_dict = {}
-        #         self.susceptance_dict = {}
+    #         self.flow_bounds_dict = {}
+    #         self.susceptance_dict = {}
 
-        #         for _, row in branch.iterrows():
-        #             f, t = int(row["F_BUS"]), int(row["T_BUS"])
-        #             rate = float(row.get("RATE_A", 9999.0)) / baseMVA
-        #             if rate <= 0:
-        #                 rate = 9999.0
-        #             self.flow_bounds_dict[(f, t)] = rate
-        #             # self.flow_bounds_dict[(t, f)] = rate #removing symmetry case here
+    #         for _, row in branch.iterrows():
+    #             f, t = int(row["F_BUS"]), int(row["T_BUS"])
+    #             rate = float(row.get("RATE_A", 9999.0)) / baseMVA
+    #             if rate <= 0:
+    #                 rate = 9999.0
+    #             self.flow_bounds_dict[(f, t)] = rate
+    #             # self.flow_bounds_dict[(t, f)] = rate #removing symmetry case here
 
-        #             x = float(row["BR_X"])
-        #             b = 1.0 / x if abs(x) > 1e-8 else 1e6
-        #             self.susceptance_dict[(f, t)] = b
-        #             # self.susceptance_dict[(t, f)] = b
+    #             x = float(row["BR_X"])
+    #             b = 1.0 / x if abs(x) > 1e-8 else 1e6
+    #             self.susceptance_dict[(f, t)] = b
+    #             # self.susceptance_dict[(t, f)] = b
 
-        #         self.theta_bounds_dict = {b: pi_value for b in self.buses}
-        #     except Exception as e:
-        #         raise RuntimeError(f"Issue in MatpowerGrid data parsing") from e
+    #         self.theta_bounds_dict = {b: pi_value for b in self.buses}
+    #     except Exception as e:
+    #         raise RuntimeError(f"Issue in MatpowerGrid data parsing") from e
 
     def __init__(
         self, m_file: str, baseMVA: float = 100.0, defaultEmptyCost: float = 50.0
@@ -1527,7 +1527,9 @@ class MatpowerGrid(EnergyGrid):
                     and len(self.gen_df) <= len(self.gencost_df)
                 ):
                     try:
-                        gcost_row = self.gencost_df.iloc[gens_on_bus.index[0] if not gens_on_bus.empty else 0]
+                        gcost_row = self.gencost_df.iloc[
+                            gens_on_bus.index[0] if not gens_on_bus.empty else 0
+                        ]
                         # Find the first plausible linear cost coefficient (typical pglib pattern)
                         for v in gcost_row:
                             if isinstance(v, (int, float)) and 1 < float(v) < 200:
@@ -1565,11 +1567,15 @@ class MatpowerGrid(EnergyGrid):
             self.theta_bounds_dict = {b: pi_value for b in self.buses}
 
             # Optional: expose raw data for debugging
-            self.raw = {"bus": self.bus_df, "gen": self.gen_df, "branch": self.branch_df}
+            self.raw = {
+                "bus": self.bus_df,
+                "gen": self.gen_df,
+                "branch": self.branch_df,
+            }
 
         except Exception as e:
             raise RuntimeError(f"Issue in MatpowerGrid data parsing: {e}") from e
-        
+
 
 class EnergyGridWithCommitment(EnergyGrid):
     """Base commitment extension – adds binary indicators + epsilon min output."""
@@ -1594,14 +1600,18 @@ class EnergyGridWithCommitment(EnergyGrid):
 
         def min_gen_rule(m, bus):
             return m.generation[bus] >= m.epsilon * m.commit[bus]
+
         model.min_gen_commit = pyo.Constraint(model.gen_buses, rule=min_gen_rule)
 
         def max_gen_commit_rule(m, bus):
             return m.generation[bus] <= m.capacity[bus] * m.commit[bus]
+
         model.max_gen_commit = pyo.Constraint(model.gen_buses, rule=max_gen_commit_rule)
 
         mode_names = {0: "Copper Plate", 1: "Network Flow", 2: "DC-OPF"}
-        print(f"Model in {mode_names[mode]} Mode WITH COMMITMENT (epsilon={grid.epsilon})")
+        print(
+            f"Model in {mode_names[mode]} Mode WITH COMMITMENT (epsilon={grid.epsilon})"
+        )
         return model
 
     @staticmethod
@@ -1630,7 +1640,9 @@ class EnergyGridWithCommitment(EnergyGrid):
     def create_subproblem(root, grid, mode=2, feasibility_only=False):
         """Subproblem with relaxed (continuous unbounded) commit vars."""
         if feasibility_only:
-            raise UserWarning("feasibility_only=True is ignored in EnergyGridWithCommitment (dispatch-cost objective is always kept).")
+            raise UserWarning(
+                "feasibility_only=True is ignored in EnergyGridWithCommitment (dispatch-cost objective is always kept)."
+            )
 
         m = EnergyGridWithCommitment.create_tiny_opf(grid, mode=mode)
 
@@ -1653,7 +1665,9 @@ class EnergyGridWithCommitment(EnergyGrid):
         """Persistent Benders setup for commitment version."""
         grid = kwargs.get("grid", EnergyGridWithCommitment())
         if not isinstance(grid, EnergyGridWithCommitment):
-            raise TypeError("setup_energy_grid_commitment_persistent requires an EnergyGridWithCommitment grid")
+            raise TypeError(
+                "setup_energy_grid_commitment_persistent requires an EnergyGridWithCommitment grid"
+            )
 
         eta_lb = kwargs.get("eta_lb", None)
         eta_ub = kwargs.get("eta_ub", None)
@@ -1710,4 +1724,3 @@ class MatpowerGridWithCommitment(MatpowerGrid, EnergyGridWithCommitment):
 
         # print(f"✅ MatpowerGridWithCommitment loaded | {m_file} | ε={epsilon} | "
         #       f"{len(self.gen_buses)} generators")
-
