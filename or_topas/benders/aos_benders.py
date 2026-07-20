@@ -23,6 +23,8 @@ def aos_benders_generate_candidates(
     bound_smoothing_tol=1e-6,
     tee=False,
     scenarios=None,
+    enumeration_method="linear",
+    binary_var_set=None,
 ):
     # At present, only LP AOS Supported
 
@@ -57,29 +59,52 @@ def aos_benders_generate_candidates(
     # since benders cuts live in the benders_block, not the master, at present we can't deactivate
     # benders_block.deactivate()
 
-    # check that all vars have bounds
-    # LP AOS needs this
-    unbounded_vars = [
-        v
-        for v in m.component_data_objects(pyo.Var, descend_into=True, active=True)
-        if (v.has_lb() == False or v.has_ub() == False)
-    ]
-    assert (
-        len(unbounded_vars) == 0
-    ), f"Need to make sure all vars have bounds for LP AOS methods, there are {len(unbounded_vars)} unbounded variables"
+    if enumeration_method == "linear":
+        if binary_var_set is not None and tee:
+            raise RuntimeWarning(
+                f"In {enumeration_method=}, the value of {binary_var_set=} should be None and was not"
+            )
+        # check that all vars have bounds
+        # LP AOS needs this
+        unbounded_vars = [
+            v
+            for v in m.component_data_objects(pyo.Var, descend_into=True, active=True)
+            if (v.has_lb() == False or v.has_ub() == False)
+        ]
+        assert (
+            len(unbounded_vars) == 0
+        ), f"Need to make sure all vars have bounds for LP AOS methods, there are {len(unbounded_vars)} unbounded variables"
 
-    # do AOS pass
-    # can we augment the AOS methods to return to us what the min/max supported values are?
-    # it computes it, we should be able to augment to get it
+        # do AOS pass
+        # can we augment the AOS methods to return to us what the min/max supported values are?
+        # it computes it, we should be able to augment to get it
 
-    candidate_sol_pool = or_topas.aos.enumerate_linear_solutions(
-        model=m,
-        solver=mip_solver,
-        rel_opt_gap=rel_gap,
-        num_solutions=num_solutions,
-        variables_to_skip=skip_vars,
-        ignore_opt_tol_in_basis=ignore_opt_tol_in_basis,
-    )
+        candidate_sol_pool = or_topas.aos.enumerate_linear_solutions(
+            model=m,
+            solver=mip_solver,
+            rel_opt_gap=rel_gap,
+            num_solutions=num_solutions,
+            variables_to_skip=skip_vars,
+            ignore_opt_tol_in_basis=ignore_opt_tol_in_basis,
+        )
+    elif enumeration_method == "binary":
+        if (skip_vars is not None or ignore_opt_tol_in_basis) and tee:
+            raise RuntimeWarning(
+                f"In {enumeration_method=}, the value of {skip_vars=} should be None and {ignore_opt_tol_in_basis=} should be Falsy"
+            )
+
+        candidate_sol_pool = or_topas.aos.enumerate_binary_solutions(
+            model=m,
+            num_solutions=num_solutions,
+            variables=None,
+            rel_opt_gap=rel_gap,
+            solver=mip_solver,
+            tee=tee,
+        )
+    else:
+        raise ValueError(
+            f"enumeration_method must be 'linear' or 'binary', got {enumeration_method}"
+        )
 
     # reactivate Benders blocks
     # add in if the deactivate ever gets used again
