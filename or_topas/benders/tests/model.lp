@@ -2,11 +2,11 @@
 
 min 
 obj:
-+2.0 generation(1)
-+2.0 generation(2)
-+2.0 generation(3)
-+2.0 generation(4)
-+50.0 generation(5)
++14.0 generation(1)
++50.0 generation(2)
++30.0 generation(3)
++40.0 generation(4)
++10.0 generation(5)
 
 s.t.
 

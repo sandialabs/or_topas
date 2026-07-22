@@ -89,7 +89,7 @@ class modified_absolute_value:
 
     @staticmethod
     def create_subproblem(root_x, data):
-        """
+        r"""
         This subproblem implements the following function
 
         Q(x) =  max{R(x-a), -L(x-a)} if x \in [LB, UB]
@@ -658,7 +658,7 @@ class newsvendor:
 
 
 class reduced_costs_tester:
-    """
+    r"""
     This is a test to check for reduced cost terms in Benders.
     The overall optimization problem is:
     \min_{x,y} \sum_{s \in S} p_s y_s
@@ -1519,23 +1519,35 @@ class MatpowerGrid(EnergyGrid):
                     else 0.0
                 )
 
-                # Use gencost_df for realistic linear costs (falls back gracefully)
+                # Extract the linear cost coefficient c1.
+                # gencost rows are in the same order as gen rows.
                 cost = defaultEmptyCost
                 if (
                     self.gencost_df is not None
                     and not self.gencost_df.empty
-                    and len(self.gen_df) <= len(self.gencost_df)
+                    and not gens_on_bus.empty
                 ):
                     try:
-                        gcost_row = self.gencost_df.iloc[
-                            gens_on_bus.index[0] if not gens_on_bus.empty else 0
-                        ]
-                        # Find the first plausible linear cost coefficient (typical pglib pattern)
-                        for v in gcost_row:
-                            if isinstance(v, (int, float)) and 1 < float(v) < 200:
-                                cost = float(v)
-                                break
-                    except:
+                        # Positional index of the first generator that belongs to this bus
+                        # (gencost is aligned with gen by row order)
+                        pos = gen.index.get_loc(gens_on_bus.index[0])
+                        if isinstance(pos, slice):  # safety for non-unique indices
+                            pos = pos.start
+                        gcost_row = self.gencost_df.iloc[pos]
+
+                        # Standard polynomial format:
+                        #   model, startup, shutdown, n, c_{n-1}, \ldots, c0
+                        # For n=3 the linear term c1 sits at position 2+n
+                        n = int(gcost_row.iloc[3]) if len(gcost_row) > 3 else 0
+                        if n >= 2 and len(gcost_row) >= 4 + n:
+                            cost = float(gcost_row.iloc[2 + n])
+                        else:
+                            # fall-back: scan from the right
+                            for v in reversed(list(gcost_row)):
+                                if isinstance(v, (int, float)) and 1 < float(v) < 200:
+                                    cost = float(v)
+                                    break
+                    except Exception:
                         pass
                 self.cost_dict[b] = cost
 
@@ -1580,7 +1592,7 @@ class MatpowerGrid(EnergyGrid):
 class EnergyGridWithCommitment(EnergyGrid):
     """Base commitment extension – adds binary indicators + epsilon min output."""
 
-    def __init__(self, epsilon=1.0):
+    def __init__(self, epsilon=1e-4):
         super().__init__()
         self.epsilon = float(epsilon)
 
@@ -1707,19 +1719,22 @@ class MatpowerGridWithCommitment(MatpowerGrid, EnergyGridWithCommitment):
     (binary on/off with epsilon min output) + full Benders support.
     """
 
+
+class MatpowerGridWithCommitment(MatpowerGrid, EnergyGridWithCommitment):
     def __init__(
         self,
         m_file: str,
         baseMVA: float = 100.0,
         defaultEmptyCost: float = 50.0,
-        epsilon: float = 1.0,
+        epsilon: float = 1e-4,
     ):
-        # Commitment layer first (sets self.epsilon)
-        EnergyGridWithCommitment.__init__(self, epsilon=epsilon)
-        # Matpower data loading (overrides everything with real case)
+        # 1. Load the real Matpower data (this also runs EnergyGrid.__init__ via the MRO)
         MatpowerGrid.__init__(self, m_file, baseMVA, defaultEmptyCost)
 
-        # Convenience
+        # 2. Guarantee the commitment parameter is exactly what the caller asked for
+        self.epsilon = float(epsilon)
+
+        # 3. Convenience list used by create_tiny_opf / create_root / etc.
         self.gen_buses = [b for b in self.buses if self.gen_max_dict.get(b, 0.0) > 0]
 
         # print(f"✅ MatpowerGridWithCommitment loaded | {m_file} | ε={epsilon} | "

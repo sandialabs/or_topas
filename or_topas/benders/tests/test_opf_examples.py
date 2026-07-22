@@ -23,6 +23,15 @@ from pyomo.common.dependencies import (
     attempt_import,
 )
 
+from pathlib import Path
+
+# Directory that contains this test file
+_TEST_DIR = Path(__file__).resolve().parent
+
+# Absolute locations of the PGLIB cases (assumes they live next to the tests)
+PGLIB_CASE5 = str(_TEST_DIR / "PGLIB_Data" / "pglib_opf_case5_pjm.m")
+PGLIB_CASE14 = str(_TEST_DIR / "PGLIB_Data" / "pglib_opf_case14_ieee.m")
+
 # from or_topas.benders.benders_serial import (
 #     BendersGenerator_Serial as BendersCutGenerator,
 # )
@@ -267,7 +276,7 @@ class TestBendersOPFExamples(unittest.TestCase):
     @unittest.skipIf(not numpy_available, "numpy is not available.")
     def test_matpower_case5_benders(self, solver):
         """Benders decomposition on real pglib case5 (repo layout)."""
-        file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
+        file_path = PGLIB_CASE5
         grid = tc.MatpowerGrid(m_file=file_path)
         m = tc.EnergyGrid.create_root(grid=grid)
         root_vars = list(m.generation.values())
@@ -298,7 +307,7 @@ class TestBendersOPFExamples(unittest.TestCase):
 
     def test_matpower_case5_creation_and_solve(self):
         """Smoke test using exact repo path."""
-        file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
+        file_path = PGLIB_CASE5
         grid = tc.MatpowerGrid(m_file=file_path)
         self.assertEqual(len(grid.buses), 5)
         model = tc.EnergyGrid.create_tiny_opf(grid, mode=2)
@@ -320,7 +329,7 @@ class TestBendersOPFExamples(unittest.TestCase):
         )
 
     def test_matpower_case14_smoke(self):
-        file_path = "PGLIB_Data/pglib_opf_case14_ieee.m"
+        file_path = PGLIB_CASE14
         grid = tc.MatpowerGrid(m_file=file_path)
         self.assertEqual(len(grid.buses), 14)
 
@@ -450,21 +459,21 @@ class TestBendersOPFExamples(unittest.TestCase):
     @pytest.mark.skipif(not matpower_available, reason="Need Matpower for these tests")
     def test_matpower_commitment_case5_creation(self):
         """Smoke: MatpowerGridWithCommitment builds on case5."""
-        file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
+        file_path = PGLIB_CASE5
         grid = tc.MatpowerGridWithCommitment(m_file=file_path, epsilon=1.0)
         self.assertEqual(len(grid.buses), 5)
         model = tc.MatpowerGridWithCommitment.create_tiny_opf(grid, mode=2)
         self.assertTrue(hasattr(model, "commit"))
         self.assertGreater(len(model.gen_buses), 0)
 
-    @pytest.mark.skipif(not matpower_available, reason="Need Matpower for these tests")
     @parameterized.expand(
         input=infeasibility_persistent_test_solvers, skip_on_empty=True
     )
     @unittest.skipIf(not numpy_available, "numpy is not available.")
+    @pytest.mark.skipif(not matpower_available, reason="Need Matpower for these tests")
     def test_matpower_commitment_case5_monolithic(self, solver):
         """Full MIP on real case5 commitment model solves optimally."""
-        file_path = "PGLIB_Data/pglib_opf_case5_pjm.m"
+        file_path = PGLIB_CASE5
         grid = tc.MatpowerGridWithCommitment(m_file=file_path, epsilon=1.0)
         model = tc.MatpowerGridWithCommitment.create_tiny_opf(grid, mode=2)
 
@@ -570,4 +579,206 @@ class TestBendersOPFExamples(unittest.TestCase):
                 costs[(0, 0)],
                 5000.0 + tol,
                 msg=f"mode={mode}: all-off should not be optimal",
+            )
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_3bus_continuous_vs_commitment_epsilon_gap(self, solver):
+        """
+        Extensive-form (monolithic) comparison of continuous vs commitment models
+        on the 3-bus toy while sweeping ε.
+        Continuous optimum is known to be 5000; the gap must vanish at ε = 0.
+        """
+        eps_values = [0.0, 1e-4, 1e-3, 0.01, 0.1, 1.0, 5.0]
+
+        print("\n" + "=" * 70)
+        print("3-bus toy  (mode=2, network)")
+        print("=" * 70)
+
+        # Continuous reference
+        grid_c = tc.EnergyGrid()
+        model_c = tc.EnergyGrid.create_tiny_opf(grid_c, mode=2)
+        opt_c = pyo.SolverFactory(solver)
+        opt_c.set_instance(model_c)
+        res_c = opt_c.solve(tee=False, save_results=False)
+        self.assertEqual(
+            res_c.solver.termination_condition, pyo.TerminationCondition.optimal
+        )
+        cont_obj = pyo.value(model_c.obj)
+        cont_gen = {b: pyo.value(model_c.generation[b]) for b in model_c.buses}
+        self.assertAlmostEqual(cont_obj, 5000.0, places=3)
+        print(f"Continuous objective : {cont_obj:.6f}")
+        print(f"Continuous generation: {cont_gen}")
+
+        print(
+            f"\n{'ε':>10}  {'commitment obj':>16}  {'gap':>12}  generation (bus1,bus2)"
+        )
+        print("-" * 70)
+        for eps in eps_values:
+            grid = tc.EnergyGridWithCommitment(epsilon=eps)
+            model = tc.EnergyGridWithCommitment.create_tiny_opf(grid, mode=2)
+            opt = pyo.SolverFactory(solver)
+            opt.set_instance(model)
+            res = opt.solve(tee=False, save_results=False)
+            self.assertEqual(
+                res.solver.termination_condition, pyo.TerminationCondition.optimal
+            )
+            obj = pyo.value(model.obj)
+            gap = obj - cont_obj
+            gen = (
+                pyo.value(model.generation["bus1"]),
+                pyo.value(model.generation["bus2"]),
+            )
+            print(f"{eps:10.4g}  {obj:16.6f}  {gap:12.6f}  {gen}")
+            if eps == 0.0:
+                self.assertAlmostEqual(obj, cont_obj, places=3)
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    @pytest.mark.skipif(not matpower_available, reason="Need Matpower for these tests")
+    def test_case5_continuous_vs_commitment_epsilon_gap(self, solver):
+        """
+        With a small default ε the commitment MIP must recover the continuous
+        objective on copper-plate (within a tight numerical tolerance).
+        A deliberately large floor is also checked to confirm that a gap appears.
+        """
+        file_path = PGLIB_CASE5
+
+        # Continuous reference
+        grid_c = tc.MatpowerGrid(m_file=file_path)
+        model_c = tc.EnergyGrid.create_tiny_opf(grid_c, mode=0)
+        opt_c = pyo.SolverFactory(solver)
+        opt_c.set_instance(model_c)
+        res_c = opt_c.solve(tee=False, save_results=False)
+        self.assertEqual(
+            res_c.solver.termination_condition, pyo.TerminationCondition.optimal
+        )
+        cont_obj = pyo.value(model_c.obj)
+
+        # ε values that should not bind in any economically meaningful way
+        small_eps = [0.0, 1e-6, 1e-4, 1e-3, 0.01, 0.1, 1.0]
+        for eps in small_eps:
+            grid = tc.MatpowerGridWithCommitment(m_file=file_path, epsilon=eps)
+            model = tc.MatpowerGridWithCommitment.create_tiny_opf(grid, mode=0)
+            opt = pyo.SolverFactory(solver)
+            opt.set_instance(model)
+            res = opt.solve(tee=False, save_results=False)
+            self.assertEqual(
+                res.solver.termination_condition, pyo.TerminationCondition.optimal
+            )
+
+            # ε=0 must match to high precision; larger (but still small) ε may
+            # differ by O(ε · Δcost) because of the forced residual.
+            tol = 1e-6 if eps == 0.0 else 1e-2
+            self.assertAlmostEqual(
+                pyo.value(model.obj),
+                cont_obj,
+                delta=tol,
+                msg=f"ε={eps} should recover continuous objective {cont_obj}",
+            )
+
+        # One deliberately large floor – a visible gap is expected
+        grid_large = tc.MatpowerGridWithCommitment(m_file=file_path, epsilon=5.0)
+        model_large = tc.MatpowerGridWithCommitment.create_tiny_opf(grid_large, mode=0)
+        opt_large = pyo.SolverFactory(solver)
+        opt_large.set_instance(model_large)
+        res_large = opt_large.solve(tee=False, save_results=False)
+        self.assertEqual(
+            res_large.solver.termination_condition, pyo.TerminationCondition.optimal
+        )
+        self.assertGreater(
+            pyo.value(model_large.obj),
+            cont_obj + 1.0,
+            msg="ε=5.0 should produce a visible gap",
+        )
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    @pytest.mark.skipif(not matpower_available, reason="Need Matpower for these tests")
+    def test_case5_benders_dcopf_commitment_matches_extensive_continuous(self, solver):
+        """
+        Reference = extensive-form continuous DC-OPF (mode=2).
+        Then run Benders on the commitment model with ε ∈ {0, 1e-6}
+        and assert that the Benders objective recovers the same value.
+        This guarantees that the Benders path does not introduce an extra gap.
+        """
+        file_path = PGLIB_CASE5
+        max_cuts = 20
+        tol = 1e-3
+
+        # ------------------------------------------------------------------
+        # Extensive-form continuous reference (mode=2, full DC-OPF)
+        # ------------------------------------------------------------------
+        grid_c = tc.MatpowerGrid(m_file=file_path)
+        model_c = tc.EnergyGrid.create_tiny_opf(grid_c, mode=2)
+        opt_c = pyo.SolverFactory(solver)
+        opt_c.set_instance(model_c)
+        res_c = opt_c.solve(tee=False, save_results=False)
+        self.assertEqual(
+            res_c.solver.termination_condition, pyo.TerminationCondition.optimal
+        )
+        cont_obj = pyo.value(model_c.obj)
+
+        # ------------------------------------------------------------------
+        # Benders commitment runs for the two small ε values
+        # ------------------------------------------------------------------
+        for eps in (0.0, 1e-6):
+            grid = tc.MatpowerGridWithCommitment(m_file=file_path, epsilon=eps)
+
+            if hasattr(
+                tc.EnergyGridWithCommitment, "setup_energy_grid_commitment_persistent"
+            ):
+                opt, m = (
+                    tc.EnergyGridWithCommitment.setup_energy_grid_commitment_persistent(
+                        solver_name=solver,
+                        grid=grid,
+                        eta_lb=-1e5,
+                        eta_ub=1e5,
+                        mode=2,
+                    )
+                )
+            else:
+                m = tc.EnergyGridWithCommitment.create_root(
+                    grid, eta_lb=-1e5, eta_ub=1e5
+                )
+                root_vars = list(m.commit.values())
+                m.benders = BendersCutGenerator()
+                m.benders.set_input(
+                    root_vars=root_vars,
+                    tol=1e-6,
+                    transform="standard_lp",
+                    allow_infeasible=True,
+                )
+                m.benders.add_subproblem(
+                    subproblem_fn=tc.EnergyGridWithCommitment.create_subproblem,
+                    subproblem_fn_kwargs={"root": m, "grid": grid, "mode": 2},
+                    root_eta=m.eta,
+                    subproblem_solver=solver,
+                )
+                opt = pyo.SolverFactory(solver)
+                opt.set_instance(m)
+
+            for _ in range(max_cuts):
+                opt.solve(tee=False, save_results=False)
+                cuts = m.benders.generate_cut()
+                for c in cuts:
+                    opt.add_constraint(c)
+                if not cuts:
+                    break
+
+            commit_obj = pyo.value(m.obj)  # eta after convergence
+            self.assertAlmostEqual(
+                commit_obj,
+                cont_obj,
+                delta=tol,
+                msg=(
+                    f"Benders commitment (ε={eps}) should recover the extensive-form "
+                    f"continuous objective {cont_obj}"
+                ),
             )
