@@ -11,6 +11,7 @@ from or_topas.util import pyomo_utils
 from or_topas.util.mymunch import MyMunch
 from or_topas.util.pyomo_utils import pprint_solution
 from pyomo.common.collections import ComponentSet
+from pyomo.environ import Var
 
 
 def aos_benders_generate_candidates(
@@ -156,8 +157,69 @@ def aos_benders_generate_candidates(
     return candidate_sol_pool, other_data_munch
 
 
+def get_eta_tracking_vars(
+    model,
+    scenarios=None,
+    name_candidates=("eta", "etas"),
+    eta_override=None,
+):
+    """
+    Resolve the master-problem second-stage cost tracking variables.
+
+    Contract (deliberately strict)
+    ------------------------------
+    1. Explicit override supplied by the caller (Var, list[Var], or iterable).
+       Prefer this whenever the component is not named ``eta`` or ``etas``.
+    2. First matching attribute among the conventional names ``eta`` / ``etas``.
+       Index order is taken from ``scenarios`` when the Var is indexed.
+
+
+    Returns
+    -------
+    list[pyomo.environ.Var]
+        Ordered list of the tracking variables.
+
+    Raises
+    ------
+    AttributeError
+        If neither an override nor a conventional name is found.
+    """
+    if eta_override is not None:
+        if isinstance(eta_override, Var):
+            if eta_override.is_indexed():
+                if scenarios is not None:
+                    return [eta_override[s] for s in scenarios]
+                return list(eta_override.values())
+            return [eta_override]
+        # assume iterable of Vars
+        return list(eta_override)
+
+    for name in name_candidates:
+        if hasattr(model, name):
+            comp = getattr(model, name)
+            if isinstance(comp, Var):
+                if not comp.is_indexed():
+                    return [comp]
+                if scenarios is not None:
+                    return [comp[s] for s in scenarios]
+                return list(comp.values())
+
+    raise AttributeError(
+        "Could not locate eta-style tracking variables. "
+        "Either pass eta_override=... with the actual Var(s), "
+        "or name the component 'eta' or 'etas'."
+    )
+
+
 def aos_benders_filter(
-    candidate_pool, data, tee=False, tee_final=False, true_pool=None, smoothing_tol=1e-6
+    candidate_pool,
+    data,
+    tee=False,
+    tee_final=False,
+    true_pool=None,
+    smoothing_tol=1e-6,
+    eta_override=None,
+    name_candidates=None,
 ):
 
     # handle case when solution pool not given
@@ -171,6 +233,14 @@ def aos_benders_filter(
 
     root_vars = data.benders_block.root_vars
     aos_filtering_model = data.model
+
+    eta_vars = get_eta_tracking_vars(
+        model=data.model,
+        scenarios=data.scenarios,
+        name_candidates=name_candidates or ("eta", "etas"),
+        eta_override=eta_override,
+    )
+
     for index, sol in enumerate(candidate_pool):
         # iterate through each solution in the candidate pool
 
@@ -205,9 +275,10 @@ def aos_benders_filter(
             #     f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
             # )
             print(f"x={str([(rv,pyo.value(rv)) for rv in root_vars])}")
-            print(
-                f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
-            )
+            # print(
+            #     f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
+            # )
+            print(f"eta={[(v.name, pyo.value(v)) for v in eta_vars]}")
             print(f"obj: {pyo.value(data.objective_expr)}")
 
         # might be able to get this from getting the active objective and then calling pyo.value on that
@@ -236,19 +307,24 @@ def aos_benders_filter(
             #     f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
             # )
             print(f"x={str([(rv,pyo.value(rv)) for rv in root_vars])}")
-            print(
-                f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
-            )
+            # print(
+            #     f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
+            # )
+            print(f"eta={[(v.name, pyo.value(v)) for v in eta_vars]}")
             print(f"obj: {pyo.value(data.objective_expr)}")
 
         # pull out the etas from this results list
         # this is tightly assuming an eta per scenario
         # will need to be changed for anything but multicut benders
-        if data.scenarios is None:
-            aos_filtering_model.eta = results_list[0].subproblem_eta
-        else:
-            for i, s in enumerate(data.scenarios):
-                aos_filtering_model.eta[s] = results_list[i].subproblem_eta
+        # if data.scenarios is None:
+        #     aos_filtering_model.eta = results_list[0].subproblem_eta
+        # else:
+        #     for i, s in enumerate(data.scenarios):
+        #         aos_filtering_model.eta[s] = results_list[i].subproblem_eta
+
+        for i, eta_var in enumerate(eta_vars):
+            eta_var.set_value(results_list[i].subproblem_eta)
+
         if tee:
             print(f"After eta load {index}")
             # Again update to be root vars
@@ -256,9 +332,10 @@ def aos_benders_filter(
             #     f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
             # )
             print(f"x={str([(rv,pyo.value(rv)) for rv in root_vars])}")
-            print(
-                f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
-            )
+            # print(
+            #     f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
+            # )
+            print(f"eta={[(v.name, pyo.value(v)) for v in eta_vars]}")
             print(f"obj: {pyo.value(data.objective_expr)}")
 
         # check filter value
