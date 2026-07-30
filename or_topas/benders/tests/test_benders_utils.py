@@ -842,6 +842,9 @@ class TestBendersUtils(unittest.TestCase):
     #
     # Newsvendor tests
     #
+    #
+    # Newsvendor tests
+    #
 
     @parameterized.expand(
         input=infeasibility_persistent_test_solvers, skip_on_empty=True
@@ -871,6 +874,41 @@ class TestBendersUtils(unittest.TestCase):
         )
         m.x = 0
         expected_obj_answer = 75
+
+        results_munch = m.benders.evaluate_single_subproblem(index=0)
+        assert isinstance(results_munch, MyMunch), "Expect only one MyMunch object"
+        assert results_munch.subproblem_infeasible == False
+        # assert results_munch.subproblem_needs_cut == True
+        self.assertAlmostEqual(results_munch.subproblem_eta, expected_obj_answer, 3)
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_newsvendor_simple_evaluate_2(self, solver):
+        transform = "standard_lp"
+        # for index, gen_start in enumerate(set_points):
+        m = tc.newsvendor.create_root()
+
+        root_vars = [m.x]
+        print(root_vars)
+        # root_vars = list(m.generation.values())
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(
+            root_vars=root_vars,
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=True,
+            feasibility_only=True,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=tc.newsvendor.create_subproblem,
+            subproblem_fn_kwargs={"root_x": m.x},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        m.x = 25  # 0
+        expected_obj_answer = 62.5  # 75
 
         results_munch = m.benders.evaluate_single_subproblem(index=0)
         assert isinstance(results_munch, MyMunch), "Expect only one MyMunch object"

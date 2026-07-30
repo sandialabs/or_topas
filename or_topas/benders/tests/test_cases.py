@@ -4,57 +4,63 @@ from or_topas.benders import (
     BendersGenerator_Serial,
 )
 from or_topas.util.mymunch import MyMunch
+from or_topas.util import try_import
 import itertools
 from math import pi as pi_value
 import time
 
+with try_import() as matpower_available:
+    from matpowercaseframes import CaseFrames
 
-class newsvendor:
 
-    @staticmethod
-    def create_root(
-        eta_count=None,
-        eta_lb=-1000,
-        eta_ub=None,
-        x_lb=0,
-        x_ub=None,
-        obj_offset=0,
-    ):
-        m = pyo.ConcreteModel()
-        # x is benders variable, saved for later
-        m.x = pyo.Var(bounds=(x_lb, x_ub), initialize=0)
-        if eta_count is None:
-            m.eta = pyo.Var(bounds=(eta_lb, eta_ub))
-            m.obj = pyo.Objective(expr=obj_offset + m.eta, sense=pyo.minimize)
-        else:
-            m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
-            m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, eta_ub))
-            m.obj = pyo.Objective(
-                expr=obj_offset + sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
-            )
-        return m
+# class newsvendor:
+#     @staticmethod
+#     def create_root(
+#         eta_count=None,
+#         eta_lb=-1000,
+#         eta_ub=None,
+#         x_lb=0,
+#         x_ub=None,
+#         obj_offset=0,
+#     ):
+#         print("Hi")
+#         m = pyo.ConcreteModel()
+#         print(f"{type(m)=}")
+#         # x is benders variable, saved for later
+#         m.x = pyo.Var(bounds=(x_lb, x_ub), initialize=0)
+#         if eta_count is None:
+#             m.eta = pyo.Var(bounds=(eta_lb, eta_ub))
+#             m.obj = pyo.Objective(expr=obj_offset + m.eta, sense=pyo.minimize)
+#         else:
+#             m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
+#             m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, eta_ub))
+#             m.obj = pyo.Objective(
+#                 expr=obj_offset + sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
+#             )
+#         print(f"{type(m)=}")
+#         return m
 
-    @staticmethod
-    def create_subproblem(root_x, data=dict()):
-        b = data.get("b", 1.5)
-        c = data.get("c", 1)
-        h = data.get("h", 0.1)
-        d = data.get("d", 50)
-        prob = data.get("prob", 1)
-        ID_val = data.get("ID", 0)
-        M = pyo.ConcreteModel(ID_val)
+#     @staticmethod
+#     def create_subproblem(root_x, data=dict()):
+#         b = data.get("b", 1.5)
+#         c = data.get("c", 1)
+#         h = data.get("h", 0.1)
+#         d = data.get("d", 50)
+#         prob = data.get("prob", 1)
+#         ID_val = data.get("ID", 0)
+#         M = pyo.ConcreteModel(ID_val)
 
-        M.x = pyo.Var(within=pyo.NonNegativeReals)
+#         M.x = pyo.Var(within=pyo.NonNegativeReals)
 
-        M.y = pyo.Var()
-        M.greater = pyo.Constraint(expr=M.y >= (c - b) * M.x + b * d)
-        M.less = pyo.Constraint(expr=M.y >= (c + h) * M.x - h * d)
+#         M.y = pyo.Var()
+#         M.greater = pyo.Constraint(expr=M.y >= (c - b) * M.x + b * d)
+#         M.less = pyo.Constraint(expr=M.y >= (c + h) * M.x - h * d)
 
-        M.o = pyo.Objective(expr=prob * M.y)
+#         M.o = pyo.Objective(expr=prob * M.y)
 
-        complicating_vars_map = pyo.ComponentMap()
-        complicating_vars_map[root_x] = M.x
-        return M, complicating_vars_map
+#         complicating_vars_map = pyo.ComponentMap()
+#         complicating_vars_map[root_x] = M.x
+#         return M, complicating_vars_map
 
 
 class modified_absolute_value:
@@ -83,7 +89,7 @@ class modified_absolute_value:
 
     @staticmethod
     def create_subproblem(root_x, data):
-        """
+        r"""
         This subproblem implements the following function
 
         Q(x) =  max{R(x-a), -L(x-a)} if x \in [LB, UB]
@@ -521,8 +527,138 @@ class absolute_value:
         return opt, m
 
 
+class newsvendor:
+    # adapted from the Sparow Newsvendor example
+    @staticmethod
+    def create_root(
+        eta_count=None,
+        eta_lb=-1000,
+        eta_ub=None,
+        x_lb=0,
+        x_ub=None,
+        obj_offset=0,
+    ):
+        print("Hi")
+        m = pyo.ConcreteModel()
+        print(f"{type(m)=}")
+        # x is benders variable, saved for later
+        m.x = pyo.Var(bounds=(x_lb, x_ub), initialize=0)
+        if eta_count is None:
+            m.eta = pyo.Var(bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(expr=obj_offset + m.eta, sense=pyo.minimize)
+        else:
+            m.scenarios = pyo.Set(initialize=range(eta_count), ordered=True)
+            m.eta = pyo.Var(m.scenarios, bounds=(eta_lb, eta_ub))
+            m.obj = pyo.Objective(
+                expr=obj_offset + sum(m.eta[s] for s in m.scenarios), sense=pyo.minimize
+            )
+        print(f"{type(m)=}")
+        return m
+
+    def create_subproblem(root_x, data=dict(), prob=1):
+        b = data.get("b", 1.5)
+        c = data.get("c", 1.0)
+        h = data.get("h", 0.1)
+        d = data.get("d", 50)
+
+        M = pyo.ConcreteModel()
+
+        M.x = pyo.Var(within=pyo.NonNegativeReals)
+
+        M.y = pyo.Var()
+        M.greater = pyo.Constraint(expr=M.y >= (c - b) * M.x + b * d)
+        M.less = pyo.Constraint(expr=M.y >= (c + h) * M.x - h * d)
+
+        M.o = pyo.Objective(expr=prob * M.y)
+
+        complicating_vars_map = pyo.ComponentMap()
+        complicating_vars_map[root_x] = M.x
+
+        return M, complicating_vars_map
+
+    @staticmethod
+    def setup_newsvendor(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        transform = kwargs.get("transform", None)
+        eta_count = kwargs.get("eta_count", None)
+        data_lists = kwargs.get("data_lists", dict())
+        m = newsvendor.create_root(eta_count=eta_count)
+        # TODO/N.B. using list(m.x) here breaks
+        root_vars = [m.x]
+        m.benders = CutGenerator()
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
+        if eta_count is None:
+            subproblem_fn_kwargs = dict()
+            subproblem_fn_kwargs["root_x"] = m.x
+            subproblem_fn_kwargs["data"] = data_lists.get(0, dict())
+            m.benders.add_subproblem(
+                subproblem_fn=newsvendor.create_subproblem,
+                subproblem_fn_kwargs=subproblem_fn_kwargs,
+                root_eta=m.eta,
+                subproblem_solver=solver_name,
+            )
+        else:
+            for s in m.scenarios:
+                subproblem_fn_kwargs = dict()
+                subproblem_fn_kwargs["root"] = m
+                subproblem_fn_kwargs["data"] = data_lists.get(s, dict())
+                subproblem_fn_kwargs["prob"] = 1 / len(m.scenarios)
+                m.benders.add_subproblem(
+                    subproblem_fn=newsvendor.create_subproblem,
+                    subproblem_fn_kwargs=subproblem_fn_kwargs,
+                    root_eta=m.eta[s],
+                    subproblem_solver=solver_name,
+                )
+        opt = pyo.SolverFactory(solver_name)
+        return opt, m
+
+    @staticmethod
+    def setup_newsvendor_persistent(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        transform = kwargs.get("transform", None)
+        eta_count = kwargs.get("eta_count", None)
+        obj_offset = kwargs.get("obj_offset", 0)
+        data_lists = kwargs.get("data_lists", dict())
+        m = newsvendor.create_root(eta_count=eta_count)
+        # TODO/N.B. using list(m.x) here breaks
+        root_vars = [m.x]
+        m.benders = CutGenerator()
+        m.benders.set_input(root_vars=root_vars, tol=1e-8, transform=transform)
+        if eta_count is None:
+            subproblem_fn_kwargs = dict()
+            subproblem_fn_kwargs["root"] = m
+            subproblem_fn_kwargs["data"] = data_lists.get(0, dict())
+            m.benders.add_subproblem(
+                subproblem_fn=newsvendor.create_subproblem,
+                subproblem_fn_kwargs=subproblem_fn_kwargs,
+                root_eta=m.eta,
+                subproblem_solver=solver_name,
+            )
+        else:
+            for s in m.scenarios:
+                subproblem_fn_kwargs = dict()
+                subproblem_fn_kwargs["root"] = m
+                subproblem_fn_kwargs["data"] = data_lists.get(s, dict())
+                subproblem_fn_kwargs["prob"] = 1 / len(m.scenarios)
+                m.benders.add_subproblem(
+                    subproblem_fn=newsvendor.create_subproblem,
+                    subproblem_fn_kwargs=subproblem_fn_kwargs,
+                    root_eta=m.eta[s],
+                    subproblem_solver=solver_name,
+                )
+        opt = pyo.SolverFactory(solver_name)
+        opt.set_instance(m)
+        return opt, m
+
+
 class reduced_costs_tester:
-    """
+    r"""
     This is a test to check for reduced cost terms in Benders.
     The overall optimization problem is:
     \min_{x,y} \sum_{s \in S} p_s y_s
@@ -948,7 +1084,7 @@ class EnergyGrid:
         }
         self.theta_bounds_dict = {"bus1": pi_value, "bus2": pi_value, "bus3": pi_value}
         self.buses = ["bus1", "bus2", "bus3"]
-        self.lines = itertools.combinations(self.buses, 2)
+        self.lines = list(itertools.combinations(self.buses, 2))
         # {('bus1', 'bus2'), ('bus1', 'bus3'), ('bus2', 'bus3')}
 
     # DC-Optimal Power Flow Example
@@ -1245,3 +1381,361 @@ class EnergyGrid:
                 break
 
         return opt, m
+
+
+class MatpowerGrid(EnergyGrid):
+    """
+    Extension for EnergyGrid that loads any pglib-opf case using matpowercaseframes.
+
+    Code adapted from a Grok generated parser to match matpowercaseframes to EnergyGrid structure.
+    """
+
+    # def __init__(
+    #     self, m_file: str, baseMVA: float = 100.0, defaultEmptyCost: float = 50.0
+    # ):
+    #     """
+    #     m_file : str
+    #         Path to pglib-opf file (e.g. "pglib_opf_case118_ieee.m")
+    #     baseMVA : float
+    #         Base power (default 100).
+    #     defaultEmptyCost : float
+    #         Price for generation when missing from data file (default 50)
+    #     """
+    #     assert (
+    #         matpower_available
+    #     ), "MatpowerGrid use requires matpowercaseframes to be avaiable"
+
+    #     # === 1. Call parent constructor FIRST ===
+    #     # This runs the original EnergyGrid.__init__ (which sets the toy 3-bus data).
+    #     # We do this for correctness and future-proofing, even though we will override everything.
+    #     # super().__init__()
+
+    #     # === 2. Now load real data and OVERRIDE everything ===
+    #     self.baseMVA = baseMVA
+
+    #     try:
+    #         cf = CaseFrames(m_file)
+    #     except Exception as e:
+    #         raise RuntimeError(
+    #             "Error in CaseFrames creation in MatpowerGrid initialization"
+    #         ) from e
+
+    #     try:
+    #         # Full raw DataFrames — kept for generator-level analysis (non-uniqueness)
+    #         self.bus_df = cf.bus.copy()
+    #         self.gen_df = cf.gen.copy()  # ← Critical for your "same generators on" rule
+    #         self.gencost_df = getattr(cf, "gencost", None)
+    #         self.branch_df = cf.branch.copy()
+
+    #         # Buses
+    #         self.buses = sorted(self.bus_df["BUS_I"].astype(int).tolist())
+
+    #         # Aggregated per-bus data (used by the existing continuous DC-OPF model)
+    #         gen = self.gen_df.copy()
+    #         gen["GEN_BUS"] = gen["GEN_BUS"].astype(int)
+
+    #         self.gen_max_dict = {}
+    #         self.cost_dict = {}
+
+    #         for b in self.buses:
+    #             gens_on_bus = gen[gen["GEN_BUS"] == b]
+    #             self.gen_max_dict[b] = (
+    #                 float(gens_on_bus["PMAX"].sum()) / baseMVA
+    #                 if not gens_on_bus.empty
+    #                 else 0.0
+    #             )
+    #             self.cost_dict[b] = (
+    #                 float(gens_on_bus["COST"].iloc[0])
+    #                 if not gens_on_bus.empty and "COST" in gens_on_bus.columns
+    #                 else defaultEmptyCost
+    #             )
+
+    #         # Loads
+    #         bus = self.bus_df.copy()
+    #         bus["BUS_I"] = bus["BUS_I"].astype(int)
+    #         self.load_dict = dict(zip(bus["BUS_I"], bus["PD"].values / baseMVA))
+
+    #         # Network
+    #         branch = self.branch_df.copy()
+    #         branch["F_BUS"] = branch["F_BUS"].astype(int)
+    #         branch["T_BUS"] = branch["T_BUS"].astype(int)
+
+    #         self.lines = list(zip(branch["F_BUS"], branch["T_BUS"]))
+
+    #         self.flow_bounds_dict = {}
+    #         self.susceptance_dict = {}
+
+    #         for _, row in branch.iterrows():
+    #             f, t = int(row["F_BUS"]), int(row["T_BUS"])
+    #             rate = float(row.get("RATE_A", 9999.0)) / baseMVA
+    #             if rate <= 0:
+    #                 rate = 9999.0
+    #             self.flow_bounds_dict[(f, t)] = rate
+    #             # self.flow_bounds_dict[(t, f)] = rate #removing symmetry case here
+
+    #             x = float(row["BR_X"])
+    #             b = 1.0 / x if abs(x) > 1e-8 else 1e6
+    #             self.susceptance_dict[(f, t)] = b
+    #             # self.susceptance_dict[(t, f)] = b
+
+    #         self.theta_bounds_dict = {b: pi_value for b in self.buses}
+    #     except Exception as e:
+    #         raise RuntimeError(f"Issue in MatpowerGrid data parsing") from e
+
+    def __init__(
+        self, m_file: str, baseMVA: float = 100.0, defaultEmptyCost: float = 50.0
+    ):
+        assert matpower_available, "Need matpowercaseframes for MatpowerGrid"
+        # Call parent to inherit methods/any future defaults, then override everything
+        super().__init__()  # safe - we override all data attrs immediately
+
+        self.baseMVA = baseMVA
+
+        try:
+            cf = CaseFrames(m_file)
+        except Exception as e:
+            raise RuntimeError(
+                "Error in CaseFrames creation in MatpowerGrid initialization"
+            ) from e
+
+        try:
+            self.bus_df = cf.bus.copy()
+            self.gen_df = cf.gen.copy()
+            self.gencost_df = getattr(cf, "gencost", None)
+            self.branch_df = cf.branch.copy()
+
+            self.buses = sorted(self.bus_df["BUS_I"].astype(int).tolist())
+
+            # Gen capacity & cost (aggregated per bus for the existing Benders design)
+            gen = self.gen_df.copy()
+            gen["GEN_BUS"] = gen["GEN_BUS"].astype(int)
+            self.gen_max_dict = {}
+            self.cost_dict = {}
+            for b in self.buses:
+                gens_on_bus = gen[gen["GEN_BUS"] == b]
+                self.gen_max_dict[b] = (
+                    float(gens_on_bus["PMAX"].sum()) / baseMVA
+                    if not gens_on_bus.empty
+                    else 0.0
+                )
+
+                # Extract the linear cost coefficient c1.
+                # gencost rows are in the same order as gen rows.
+                cost = defaultEmptyCost
+                if (
+                    self.gencost_df is not None
+                    and not self.gencost_df.empty
+                    and not gens_on_bus.empty
+                ):
+                    try:
+                        # Positional index of the first generator that belongs to this bus
+                        # (gencost is aligned with gen by row order)
+                        pos = gen.index.get_loc(gens_on_bus.index[0])
+                        if isinstance(pos, slice):  # safety for non-unique indices
+                            pos = pos.start
+                        gcost_row = self.gencost_df.iloc[pos]
+
+                        # Standard polynomial format:
+                        #   model, startup, shutdown, n, c_{n-1}, \ldots, c0
+                        # For n=3 the linear term c1 sits at position 2+n
+                        n = int(gcost_row.iloc[3]) if len(gcost_row) > 3 else 0
+                        if n >= 2 and len(gcost_row) >= 4 + n:
+                            cost = float(gcost_row.iloc[2 + n])
+                        else:
+                            # fall-back: scan from the right
+                            for v in reversed(list(gcost_row)):
+                                if isinstance(v, (int, float)) and 1 < float(v) < 200:
+                                    cost = float(v)
+                                    break
+                    except Exception:
+                        pass
+                self.cost_dict[b] = cost
+
+            # Loads (PD only - DC model ignores QD)
+            bus = self.bus_df.copy()
+            bus["BUS_I"] = bus["BUS_I"].astype(int)
+            self.load_dict = dict(
+                zip(bus["BUS_I"], (bus["PD"].fillna(0).values / baseMVA))
+            )
+
+            # Network data (matches toy EnergyGrid convention exactly)
+            branch = self.branch_df.copy()
+            branch["F_BUS"] = branch["F_BUS"].astype(int)
+            branch["T_BUS"] = branch["T_BUS"].astype(int)
+            self.lines = list(zip(branch["F_BUS"], branch["T_BUS"]))
+
+            self.flow_bounds_dict = {}
+            self.susceptance_dict = {}
+            for _, row in branch.iterrows():
+                f, t = int(row["F_BUS"]), int(row["T_BUS"])
+                rate = float(row.get("RATE_A", 9999.0)) / baseMVA
+                if rate <= 0:
+                    rate = 9999.0
+                self.flow_bounds_dict[(f, t)] = rate
+                x = float(row["BR_X"])
+                b = 1.0 / x if abs(x) > 1e-8 else 1e6
+                self.susceptance_dict[(f, t)] = b
+
+            self.theta_bounds_dict = {b: pi_value for b in self.buses}
+
+            # Optional: expose raw data for debugging
+            self.raw = {
+                "bus": self.bus_df,
+                "gen": self.gen_df,
+                "branch": self.branch_df,
+            }
+
+        except Exception as e:
+            raise RuntimeError(f"Issue in MatpowerGrid data parsing: {e}") from e
+
+
+class EnergyGridWithCommitment(EnergyGrid):
+    """Base commitment extension – adds binary indicators + epsilon min output."""
+
+    def __init__(self, epsilon=1e-4):
+        super().__init__()
+        self.epsilon = float(epsilon)
+
+    @staticmethod
+    def create_tiny_opf(grid, mode=2):
+        """Extended OPF with commitment indicators."""
+        if not isinstance(grid, EnergyGridWithCommitment):
+            return EnergyGrid.create_tiny_opf(grid, mode=mode)
+
+        model = EnergyGrid.create_tiny_opf(grid, mode=mode)
+
+        model.gen_buses = pyo.Set(
+            initialize=[b for b in model.buses if model.capacity[b] > 0]
+        )
+        model.epsilon = pyo.Param(initialize=grid.epsilon, mutable=True)
+        model.commit = pyo.Var(model.gen_buses, domain=pyo.Binary, initialize=1)
+
+        def min_gen_rule(m, bus):
+            return m.generation[bus] >= m.epsilon * m.commit[bus]
+
+        model.min_gen_commit = pyo.Constraint(model.gen_buses, rule=min_gen_rule)
+
+        def max_gen_commit_rule(m, bus):
+            return m.generation[bus] <= m.capacity[bus] * m.commit[bus]
+
+        model.max_gen_commit = pyo.Constraint(model.gen_buses, rule=max_gen_commit_rule)
+
+        mode_names = {0: "Copper Plate", 1: "Network Flow", 2: "DC-OPF"}
+        print(
+            f"Model in {mode_names[mode]} Mode WITH COMMITMENT (epsilon={grid.epsilon})"
+        )
+        return model
+
+    @staticmethod
+    def create_root(grid, eta_lb=None, eta_ub=None):
+        """Master: only commitment binaries + eta. Objective = min eta."""
+        model = pyo.ConcreteModel()
+        model.buses = pyo.Set(initialize=grid.buses)
+        model.costs = pyo.Param(model.buses, initialize=grid.cost_dict)
+        model.capacity = pyo.Param(model.buses, initialize=grid.gen_max_dict)
+
+        model.gen_buses = pyo.Set(
+            initialize=[b for b in model.buses if model.capacity[b] > 0]
+        )
+        model.commit = pyo.Var(model.gen_buses, domain=pyo.Binary, initialize=1)
+
+        model.eta = pyo.Var(initialize=0.0)
+        if eta_lb is not None:
+            model.eta.setlb(eta_lb)
+        if eta_ub is not None:
+            model.eta.setub(eta_ub)
+
+        model.obj = pyo.Objective(expr=model.eta, sense=pyo.minimize)
+        return model
+
+    @staticmethod
+    def create_subproblem(root, grid, mode=2, feasibility_only=False):
+        """Subproblem with relaxed (continuous unbounded) commit vars."""
+        if feasibility_only:
+            raise UserWarning(
+                "feasibility_only=True is ignored in EnergyGridWithCommitment (dispatch-cost objective is always kept)."
+            )
+
+        m = EnergyGridWithCommitment.create_tiny_opf(grid, mode=mode)
+
+        # Relax commit to continuous unbounded for proper duals
+        for bus in m.gen_buses:
+            m.commit[bus].domain = pyo.Reals
+
+        complicating_vars_map = pyo.ComponentMap()
+        for bus in m.gen_buses:
+            complicating_vars_map[root.commit[bus]] = m.commit[bus]
+
+        return m, complicating_vars_map
+
+    @staticmethod
+    def setup_energy_grid_commitment_persistent(
+        solver_name,
+        CutGenerator=BendersGenerator_Serial,
+        **kwargs,
+    ):
+        """Persistent Benders setup for commitment version."""
+        grid = kwargs.get("grid", EnergyGridWithCommitment())
+        if not isinstance(grid, EnergyGridWithCommitment):
+            raise TypeError(
+                "setup_energy_grid_commitment_persistent requires an EnergyGridWithCommitment grid"
+            )
+
+        eta_lb = kwargs.get("eta_lb", None)
+        eta_ub = kwargs.get("eta_ub", None)
+        m = EnergyGridWithCommitment.create_root(grid, eta_lb=eta_lb, eta_ub=eta_ub)
+
+        transform = kwargs.get("transform", "standard_lp")
+        feasibility_only = kwargs.get("feasibility_only", False)
+
+        root_vars = list(m.commit.values())
+
+        m.benders = CutGenerator()
+        m.benders.set_input(
+            root_vars=root_vars,
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=True,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=EnergyGridWithCommitment.create_subproblem,
+            subproblem_fn_kwargs={
+                "root": m,
+                "grid": grid,
+                "mode": kwargs.get("mode", 2),
+                "feasibility_only": feasibility_only,
+            },
+            root_eta=m.eta,
+            subproblem_solver=solver_name,
+        )
+        opt = pyo.SolverFactory(solver_name)
+        opt.set_instance(m)
+        return opt, m
+
+
+class MatpowerGridWithCommitment(MatpowerGrid, EnergyGridWithCommitment):
+    """
+    Real Matpower/pglib-opf case + generator commitment indicators
+    (binary on/off with epsilon min output) + full Benders support.
+    """
+
+
+class MatpowerGridWithCommitment(MatpowerGrid, EnergyGridWithCommitment):
+    def __init__(
+        self,
+        m_file: str,
+        baseMVA: float = 100.0,
+        defaultEmptyCost: float = 50.0,
+        epsilon: float = 1e-4,
+    ):
+        # 1. Load the real Matpower data (this also runs EnergyGrid.__init__ via the MRO)
+        MatpowerGrid.__init__(self, m_file, baseMVA, defaultEmptyCost)
+
+        # 2. Guarantee the commitment parameter is exactly what the caller asked for
+        self.epsilon = float(epsilon)
+
+        # 3. Convenience list used by create_tiny_opf / create_root / etc.
+        self.gen_buses = [b for b in self.buses if self.gen_max_dict.get(b, 0.0) > 0]
+
+        # print(f"✅ MatpowerGridWithCommitment loaded | {m_file} | ε={epsilon} | "
+        #       f"{len(self.gen_buses)} generators")

@@ -11,6 +11,7 @@ from or_topas.util import pyomo_utils
 from or_topas.util.mymunch import MyMunch
 from or_topas.util.pyomo_utils import pprint_solution
 from pyomo.common.collections import ComponentSet
+from pyomo.environ import Var
 
 
 def aos_benders_generate_candidates(
@@ -23,11 +24,26 @@ def aos_benders_generate_candidates(
     bound_smoothing_tol=1e-6,
     tee=False,
     scenarios=None,
+    binary_var_set=None,
+    enumeration_method="linear",  # "linear" | "binary" | "gurobi_pool"
 ):
-    # At present, only LP AOS Supported
+    """
+    Generate candidate solutions for subsequent AOS-Benders filtering.
 
-    # assume that we have a solved model
-    # objectives = [pyo.value(o) for o in m.component_objects(pyo.Objective, descend_into=False, active=True)]
+    enumeration_method
+        "linear"       – vertex enumeration of continuous LP masters
+                         (or_topas.aos.enumerate_linear_solutions / Lee Recursive Vertex Enumeration)
+        "binary"       – no-good cuts on binary variables
+                         (or_topas.aos.enumerate_binary_solutions / Balas No-Good Cuts)
+        "gurobi_pool"  – Gurobi Solution Pool with PoolSearchMode=2
+                         (or_topas.aos.gurobi_generate_solutions / Danna’s OneTree run Solver Side)
+
+    binary_var_set : optional collection of binary variables
+        Only used when enumeration_method="binary".  If None, all unfixed
+        binary variables are used for the no-good cuts.
+    """
+    # Supports LP (linear), binary (Balas), and Gurobi Solution Pool AOS
+
     if scenarios is None and hasattr(m, "scenarios"):
         scenarios = m.scenarios
 
@@ -35,15 +51,10 @@ def aos_benders_generate_candidates(
         o for o in m.component_objects(pyo.Objective, descend_into=False, active=True)
     ]
     assert len(objectives) == 1, "Should only have one active objective"
-    # need to grap lower bound before objectives gets updated
     lower_bound = pyo.value(objectives[0])
     if tee:
         print(f"{lower_bound=}")
 
-    # compute gap settings
-
-    # find all Benders blocks, general
-    # get benders blocks
     benders_blocks = [
         b
         for b in m.component_data_objects(pyo.Block)
@@ -52,48 +63,91 @@ def aos_benders_generate_candidates(
     assert len(benders_blocks) == 1, "There should only be one benders block"
     benders_block = benders_blocks[0]
 
-    # hypothetically we want to deactivate Benders block before AOS pass
-    # since we don't want the Benders Cut block stuff in solutions, but need m.benders.cuts
-    # since benders cuts live in the benders_block, not the master, at present we can't deactivate
-    # benders_block.deactivate()
+    # ------------------------------------------------------------------
+    # AOS pass
+    # ------------------------------------------------------------------
+    if enumeration_method == "linear":
+        if binary_var_set is not None and tee:
+            print(
+                f"Warning: binary_var_set is ignored when enumeration_method='linear' "
+                f"(got {binary_var_set=})"
+            )
 
-    # check that all vars have bounds
-    # LP AOS needs this
-    unbounded_vars = [
-        v
-        for v in m.component_data_objects(pyo.Var, descend_into=True, active=True)
-        if (v.has_lb() == False or v.has_ub() == False)
-    ]
-    assert (
-        len(unbounded_vars) == 0
-    ), f"Need to make sure all vars have bounds for LP AOS methods, there are {len(unbounded_vars)} unbounded variables"
+        # LP AOS requires finite bounds on all variables
+        unbounded_vars = [
+            v
+            for v in m.component_data_objects(pyo.Var, descend_into=True, active=True)
+            if (v.has_lb() is False or v.has_ub() is False)
+        ]
+        assert len(unbounded_vars) == 0, (
+            f"Need to make sure all vars have bounds for LP AOS methods; "
+            f"there are {len(unbounded_vars)} unbounded variables"
+        )
 
-    # do AOS pass
-    # can we augment the AOS methods to return to us what the min/max supported values are?
-    # it computes it, we should be able to augment to get it
+        candidate_sol_pool = or_topas.aos.enumerate_linear_solutions(
+            model=m,
+            solver=mip_solver,
+            rel_opt_gap=rel_gap,
+            num_solutions=num_solutions,
+            variables_to_skip=skip_vars,
+            ignore_opt_tol_in_basis=ignore_opt_tol_in_basis,
+        )
 
-    candidate_sol_pool = or_topas.aos.enumerate_linear_solutions(
-        model=m,
-        solver=mip_solver,
-        rel_opt_gap=rel_gap,
-        num_solutions=num_solutions,
-        variables_to_skip=skip_vars,
-        ignore_opt_tol_in_basis=ignore_opt_tol_in_basis,
-    )
+    elif enumeration_method == "binary":
+        if (skip_vars is not None or ignore_opt_tol_in_basis) and tee:
+            print(
+                "Warning: skip_vars and ignore_opt_tol_in_basis are LP-specific "
+                "and are ignored when enumeration_method='binary'."
+            )
 
-    # reactivate Benders blocks
-    # add in if the deactivate ever gets used again
-    # benders_block.activate()
+        candidate_sol_pool = or_topas.aos.enumerate_binary_solutions(
+            model=m,
+            num_solutions=num_solutions,
+            variables=binary_var_set,  # pass through; None → all unfixed binaries
+            rel_opt_gap=rel_gap,
+            solver=mip_solver,
+            tee=tee,
+        )
 
-    # filter solutions step
+        # Balas leaves a temporary _balas block; clean it up
+        if hasattr(m, "_balas"):
+            m.del_component("_balas")
+
+    elif enumeration_method == "gurobi_pool":
+        if tee and "gurobi" not in str(mip_solver).lower():
+            print(
+                f"Note: enumeration_method='gurobi_pool' always uses Gurobi "
+                f"via appsi (mip_solver={mip_solver!r} is ignored)."
+            )
+        if binary_var_set is not None and tee:
+            print(
+                "Warning: binary_var_set is ignored when enumeration_method='gurobi_pool'."
+            )
+
+        candidate_sol_pool = or_topas.aos.gurobi_generate_solutions(
+            model=m,
+            num_solutions=num_solutions,
+            rel_opt_gap=rel_gap,
+            solver_options={},
+            tee=tee,
+            pool_search_mode=2,  # forced – optimality ordered
+        )
+
+    else:
+        raise ValueError(
+            f"enumeration_method must be 'linear', 'binary', or 'gurobi_pool'; "
+            f"got {enumeration_method!r}"
+        )
+
+    # ------------------------------------------------------------------
+    # Common post-processing (unchanged)
+    # ------------------------------------------------------------------
     upper_bound = lower_bound + rel_gap * abs(lower_bound) + bound_smoothing_tol
     if tee:
         print(f"{upper_bound=}")
     other_data_munch = MyMunch(
         objective_expr=m.obj,
         model=m,
-        # TODO: update this to use the benders_block found above
-        # benders_block=m.benders,
         benders_block=benders_block,
         scenarios=scenarios,
         upper_bound=upper_bound,
@@ -103,8 +157,69 @@ def aos_benders_generate_candidates(
     return candidate_sol_pool, other_data_munch
 
 
+def get_eta_tracking_vars(
+    model,
+    scenarios=None,
+    name_candidates=("eta", "etas"),
+    eta_override=None,
+):
+    """
+    Resolve the master-problem second-stage cost tracking variables.
+
+    Contract (deliberately strict)
+    ------------------------------
+    1. Explicit override supplied by the caller (Var, list[Var], or iterable).
+       Prefer this whenever the component is not named ``eta`` or ``etas``.
+    2. First matching attribute among the conventional names ``eta`` / ``etas``.
+       Index order is taken from ``scenarios`` when the Var is indexed.
+
+
+    Returns
+    -------
+    list[pyomo.environ.Var]
+        Ordered list of the tracking variables.
+
+    Raises
+    ------
+    AttributeError
+        If neither an override nor a conventional name is found.
+    """
+    if eta_override is not None:
+        if isinstance(eta_override, Var):
+            if eta_override.is_indexed():
+                if scenarios is not None:
+                    return [eta_override[s] for s in scenarios]
+                return list(eta_override.values())
+            return [eta_override]
+        # assume iterable of Vars
+        return list(eta_override)
+
+    for name in name_candidates:
+        if hasattr(model, name):
+            comp = getattr(model, name)
+            if isinstance(comp, Var):
+                if not comp.is_indexed():
+                    return [comp]
+                if scenarios is not None:
+                    return [comp[s] for s in scenarios]
+                return list(comp.values())
+
+    raise AttributeError(
+        "Could not locate eta-style tracking variables. "
+        "Either pass eta_override=... with the actual Var(s), "
+        "or name the component 'eta' or 'etas'."
+    )
+
+
 def aos_benders_filter(
-    candidate_pool, data, tee=False, tee_final=False, true_pool=None, smoothing_tol=1e-6
+    candidate_pool,
+    data,
+    tee=False,
+    tee_final=False,
+    true_pool=None,
+    smoothing_tol=1e-6,
+    eta_override=None,
+    name_candidates=None,
 ):
 
     # handle case when solution pool not given
@@ -118,6 +233,14 @@ def aos_benders_filter(
 
     root_vars = data.benders_block.root_vars
     aos_filtering_model = data.model
+
+    eta_vars = get_eta_tracking_vars(
+        model=data.model,
+        scenarios=data.scenarios,
+        name_candidates=name_candidates or ("eta", "etas"),
+        eta_override=eta_override,
+    )
+
     for index, sol in enumerate(candidate_pool):
         # iterate through each solution in the candidate pool
 
@@ -152,9 +275,10 @@ def aos_benders_filter(
             #     f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
             # )
             print(f"x={str([(rv,pyo.value(rv)) for rv in root_vars])}")
-            print(
-                f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
-            )
+            # print(
+            #     f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
+            # )
+            print(f"eta={[(v.name, pyo.value(v)) for v in eta_vars]}")
             print(f"obj: {pyo.value(data.objective_expr)}")
 
         # might be able to get this from getting the active objective and then calling pyo.value on that
@@ -183,19 +307,24 @@ def aos_benders_filter(
             #     f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
             # )
             print(f"x={str([(rv,pyo.value(rv)) for rv in root_vars])}")
-            print(
-                f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
-            )
+            # print(
+            #     f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
+            # )
+            print(f"eta={[(v.name, pyo.value(v)) for v in eta_vars]}")
             print(f"obj: {pyo.value(data.objective_expr)}")
 
         # pull out the etas from this results list
         # this is tightly assuming an eta per scenario
         # will need to be changed for anything but multicut benders
-        if data.scenarios is None:
-            aos_filtering_model.eta = results_list[0].subproblem_eta
-        else:
-            for i, s in enumerate(data.scenarios):
-                aos_filtering_model.eta[s] = results_list[i].subproblem_eta
+        # if data.scenarios is None:
+        #     aos_filtering_model.eta = results_list[0].subproblem_eta
+        # else:
+        #     for i, s in enumerate(data.scenarios):
+        #         aos_filtering_model.eta[s] = results_list[i].subproblem_eta
+
+        for i, eta_var in enumerate(eta_vars):
+            eta_var.set_value(results_list[i].subproblem_eta)
+
         if tee:
             print(f"After eta load {index}")
             # Again update to be root vars
@@ -203,9 +332,10 @@ def aos_benders_filter(
             #     f"x={str([(c,pyo.value(aos_filtering_model.devoted_acreage[c])) for c in aos_filtering_model.devoted_acreage.index_set()])}"
             # )
             print(f"x={str([(rv,pyo.value(rv)) for rv in root_vars])}")
-            print(
-                f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
-            )
+            # print(
+            #     f"eta={str([(c,pyo.value(aos_filtering_model.eta[c])) for c in aos_filtering_model.eta.index_set()])}"
+            # )
+            print(f"eta={[(v.name, pyo.value(v)) for v in eta_vars]}")
             print(f"obj: {pyo.value(data.objective_expr)}")
 
         # check filter value
