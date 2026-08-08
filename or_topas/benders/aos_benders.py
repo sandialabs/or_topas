@@ -233,7 +233,7 @@ def aos_benders_filter(
         print(f"True Pool Inclusion Lower Bound: {data.lower_bound}")
         print(f"True Pool Inclusion Upper Bound: {data.upper_bound}")
 
-    #allow override of bounds
+    # allow override of bounds
     if override_upper_bound:
         upper_bound = override_upper_bound
     else:
