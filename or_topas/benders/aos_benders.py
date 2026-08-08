@@ -220,6 +220,8 @@ def aos_benders_filter(
     smoothing_tol=1e-6,
     eta_override=None,
     name_candidates=None,
+    override_upper_bound=None,
+    override_lower_bound=None,
 ):
 
     # handle case when solution pool not given
@@ -230,6 +232,17 @@ def aos_benders_filter(
         print(f"Candidate Solution pool has {len(candidate_pool)} sols")
         print(f"True Pool Inclusion Lower Bound: {data.lower_bound}")
         print(f"True Pool Inclusion Upper Bound: {data.upper_bound}")
+
+    # allow override of bounds
+    if override_upper_bound:
+        upper_bound = override_upper_bound
+    else:
+        upper_bound = data.upper_bound
+
+    if override_lower_bound:
+        lower_bound = override_lower_bound
+    else:
+        lower_bound = data.lower_bound
 
     root_vars = data.benders_block.root_vars
     aos_filtering_model = data.model
@@ -252,7 +265,7 @@ def aos_benders_filter(
             pprint_solution(sol)
 
         # load the solution into model
-        sol.load_into_model(
+        tracking_data = sol.load_into_model(
             model=aos_filtering_model,
             value_overrides=None,
             descend_into=True,
@@ -294,7 +307,7 @@ def aos_benders_filter(
             result.subproblem_infeasible for result in results_list
         ):
             # if any of the scenarios result in infeasible, the infeasible point
-            if tee:
+            if tee or tee_final:
                 # helper comments for print outs
                 print(f"Sol {index} not added to true pool, infeasible")
             # can skip to next solution
@@ -347,8 +360,8 @@ def aos_benders_filter(
         present_obj_value = pyo.value(orig_objective)
 
         added_to_pool = False
-        lower_bound_check = (data.lower_bound - smoothing_tol) <= present_obj_value
-        upper_bound_check = present_obj_value <= data.upper_bound + smoothing_tol
+        lower_bound_check = (lower_bound - smoothing_tol) <= present_obj_value
+        upper_bound_check = present_obj_value <= upper_bound + smoothing_tol
         if lower_bound_check and upper_bound_check:
             true_pool.add(variables=local_variables, objective=orig_objective)
             added_to_pool = True
@@ -360,7 +373,10 @@ def aos_benders_filter(
                 print(f"Sol {index} not added to true pool, not in bounds")
 
             print(f"After get model variables on updated model")
-            print(f"x = {local_variable_values=}")
+            if tee:
+                print(f"x = {local_variable_values=}")
+            print(f"lower_bound = {data.lower_bound}")
+            print(f"upper_bound = {data.upper_bound}")
             print(
                 f"obj val based on pre-evaluate etas : {objective_based_on_loaded_etas}"
             )
