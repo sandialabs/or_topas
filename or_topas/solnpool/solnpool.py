@@ -592,6 +592,7 @@ class SolutionPool_Pareto(SolutionPoolBase):
         b_obj : np.ndarray
             Objective values of solution B (shape: (n_objectives,))
         """
+        # LLM created helper function
         tol = self.objective_tolerance
 
         if self.sense_is_min:
