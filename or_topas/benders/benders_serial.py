@@ -21,6 +21,8 @@ class Benders_Serial(Benders_Abstract):
     # This Serial solver is designed to closely mirror the parallel solver as much as possible
     # to ease testing and moving back and forth between serial and parallel tools.
 
+    records_last_eval_results = True
+
     def __init__(self, component):
         if not numpy_available:
             raise ImportError("BendersGenerator_Serial requires numpy.")
@@ -94,6 +96,7 @@ class Benders_Serial(Benders_Abstract):
         )
         constants = np.zeros(self.global_num_subproblems(), dtype="d")
         eta_coeffs = np.zeros(self.global_num_subproblems(), dtype="d")
+        eval_results = [None] * self.global_num_subproblems()
 
         for local_subproblem_ndx in range(len(self.subproblems)):
             subproblem = self.subproblems[local_subproblem_ndx]
@@ -107,6 +110,7 @@ class Benders_Serial(Benders_Abstract):
                 subproblem=subproblem,
                 local_subproblem_ndx=local_subproblem_ndx,
             )
+            eval_results[global_subproblem_ndx] = results_munch
 
             #
             # Pull out data from results munch
@@ -167,6 +171,8 @@ class Benders_Serial(Benders_Abstract):
             if new_cut is not None:
                 cuts_added.append(new_cut)
 
+        self.last_eval_results = eval_results
+        self.last_cuts_added = cuts_added
         return cuts_added
 
     def generate_cut_standard_lp_transform(self):
@@ -179,6 +185,7 @@ class Benders_Serial(Benders_Abstract):
         # subproblem_eta_gaps = np.zeros(self.global_num_subproblems(), dtype="d")
         subproblems_needs_cuts = np.zeros(self.global_num_subproblems(), dtype="d")
         subproblems_infeasible = np.zeros(self.global_num_subproblems(), dtype="d")
+        eval_results = [None] * self.global_num_subproblems()
 
         for local_subproblem_ndx in range(len(self.subproblems)):
             # set up subproblem data
@@ -191,6 +198,7 @@ class Benders_Serial(Benders_Abstract):
                 local_subproblem_ndx=local_subproblem_ndx,
                 allow_infeasible=self.allow_infeasible,
             )
+            eval_results[global_subproblem_ndx] = results_munch
 
             subproblem_constant = results_munch.subproblem_constant
             subproblem_eta = results_munch.subproblem_eta
@@ -268,6 +276,8 @@ class Benders_Serial(Benders_Abstract):
             if new_cut is not None:
                 cuts_added.append(new_cut)
 
+        self.last_eval_results = eval_results
+        self.last_cuts_added = cuts_added
         return cuts_added
 
     def evaluate_all_subproblems(self, build_cut=True):
@@ -293,6 +303,7 @@ class Benders_Serial(Benders_Abstract):
                     self, **kwds
                 )
                 results_list.append(results_munch)
+            self.last_eval_results = results_list
             return results_list
 
     def evaluate_single_subproblem(self, index, build_cut=True):
@@ -330,4 +341,50 @@ class Benders_Serial(Benders_Abstract):
             )
 
     def generate_cut(self):
-        return self.generate_all_subproblem_cut()
+        cuts_added = self.generate_all_subproblem_cut()
+        self.last_cuts_added = cuts_added
+        return cuts_added
+
+    #
+    # Last_iterate_had_infeasible_subproblem, last_iterate_is_feasible, and last_subproblem_etas
+    # all are helper methods to get at underlying Benders iteration details
+    # they are updated by cut and evaluate logic that evaluates all subproblems
+    # do not use for evaluation for a single subproblem behavior
+    #
+    def last_iterate_had_infeasible_subproblem(self):
+        """
+        True if the last generate_cut / evaluate_all_subproblems call
+        saw at least one infeasible subproblem.
+
+        Returns None if nothing has been evaluated yet.
+        Subproblem records that lack `subproblem_infeasible` (feasibility
+        transform) are treated as feasible.
+        """
+        if not self.last_eval_results:
+            return None
+        return any(
+            getattr(r, "subproblem_infeasible", False)
+            for r in self.last_eval_results
+            if r is not None
+        )
+
+    def last_iterate_is_feasible(self):
+        flag = self.last_iterate_had_infeasible_subproblem()
+        if flag is None:
+            return False
+        return not flag
+
+    def last_subproblem_etas(self):
+        """
+        Per-subproblem eta from the last evaluation, global index order.
+
+        standard_lp: Q_s(x), or None if that subproblem was infeasible.
+        feasibility transform: dual coefficient on the eta-fixing constraint.
+        """
+        if not self.last_eval_results:
+            return None
+        else:
+            return [
+                None if r is None else getattr(r, "subproblem_eta", None)
+                for r in self.last_eval_results
+            ]

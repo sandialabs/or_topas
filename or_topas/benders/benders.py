@@ -43,6 +43,7 @@ class Benders_Abstract(BlockData):
         appsi_highs=-1,
     )
     default_transform_name = "default"
+    records_last_eval_results = False
 
     def __init__(self, component):
         BlockData.__init__(self, component)
@@ -64,6 +65,8 @@ class Benders_Abstract(BlockData):
         self.subproblem_solvers = list()
         self.subproblem_solver_names = list()
         self.tol = None
+        self.last_eval_results = None
+        self.last_cuts_added = []
 
     # TODO: what methods do we want here
     def set_input(self, *args, **kwargs):
@@ -99,6 +102,8 @@ class Benders_Abstract(BlockData):
         self.tol = kwargs.get("tol", 1e-6)
         self.subproblem_solvers = list()
         self.default_convert_bounds_to_constraints = True
+        self.last_eval_results = None
+        self.last_cuts_added = []
 
     def add_subproblem(self, *args, **kwargs):
         # old required arguments, we will want these to all be kwargs now
@@ -228,6 +233,21 @@ class Benders_Abstract(BlockData):
     def generate_all_subproblem_cut(self):
         raise NotImplementedError(
             "Inheriting classes must implement generate_all_subproblem_cut"
+        )
+
+    def last_iterate_had_infeasible_subproblem(self):
+        raise NotImplementedError(
+            f"{type(self).__name__} does not record last_eval_results"
+        )
+
+    def last_iterate_is_feasible(self):
+        raise NotImplementedError(
+            f"{type(self).__name__} does not record last_eval_results"
+        )
+
+    def last_subproblem_etas(self):
+        raise NotImplementedError(
+            f"{type(self).__name__} does not record last_eval_results"
         )
 
     def generate_cut(self):
