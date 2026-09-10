@@ -988,3 +988,408 @@ class TestBendersUtils(unittest.TestCase):
             assert results_munch.subproblem_infeasible == False
             # assert results_munch.subproblem_needs_cut == True
             self.assertAlmostEqual(results_munch.subproblem_eta, expected_obj_answer, 3)
+
+
+def _try_import_parallel_generator():
+    try:
+        from or_topas.benders.benders_parallel import (
+            BendersGenerator_Parallel,
+        )
+    except Exception:
+        return None
+    return BendersGenerator_Parallel
+
+
+class TestBendersLastEvalResults(unittest.TestCase):
+    """
+    Tests for last_eval_results / last_cuts_added and the Serial helpers.
+
+    last_eval_results[i] is aligned with all_root_etas[i] (add_subproblem order).
+    On standard_lp, last_subproblem_etas()[i] is Q_s(x), or None if that
+    subproblem was infeasible.
+    """
+
+    def _build_abs(self, solver, transform="standard_lp", allow_infeasible=False):
+        m = tc.absolute_value.create_root()
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(
+            root_vars=[m.x],
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=allow_infeasible,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=tc.absolute_value.create_subproblem,
+            subproblem_fn_kwargs={"root": m},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        return m
+
+    def _build_modified_abs(
+        self, solver, data, allow_infeasible=False, transform="standard_lp"
+    ):
+        m = tc.modified_absolute_value.create_root()
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(
+            root_vars=[m.x],
+            tol=1e-8,
+            transform=transform,
+            allow_infeasible=allow_infeasible,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=tc.modified_absolute_value.create_subproblem,
+            subproblem_fn_kwargs={"root_x": m.x, "data": data},
+            root_eta=m.eta,
+            subproblem_solver=solver,
+        )
+        return m
+
+    def _build_two_modified_abs(self, solver, data0, data1, allow_infeasible=False):
+        # Hand-rolled: do not use eta_count helper (it reuses one data object).
+        m = tc.modified_absolute_value.create_root(eta_count=2)
+        m.benders = BendersCutGenerator()
+        m.benders.set_input(
+            root_vars=[m.x],
+            tol=1e-8,
+            transform="standard_lp",
+            allow_infeasible=allow_infeasible,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=tc.modified_absolute_value.create_subproblem,
+            subproblem_fn_kwargs={"root_x": m.x, "data": data0},
+            root_eta=m.eta[0],
+            subproblem_solver=solver,
+        )
+        m.benders.add_subproblem(
+            subproblem_fn=tc.modified_absolute_value.create_subproblem,
+            subproblem_fn_kwargs={"root_x": m.x, "data": data1},
+            root_eta=m.eta[1],
+            subproblem_solver=solver,
+        )
+        return m
+
+    def _assert_pre_eval_helpers(self, benders):
+        self.assertIsNone(benders.last_eval_results)
+        self.assertIsNone(benders.last_iterate_had_infeasible_subproblem())
+        self.assertFalse(benders.last_iterate_is_feasible())
+        self.assertIsNone(benders.last_subproblem_etas())
+
+    #
+    # Interface
+    #
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_helpers_before_any_eval_serial(self, solver):
+        m = self._build_abs(solver)
+        self._assert_pre_eval_helpers(m.benders)
+
+    def test_parallel_helpers_raise(self):
+        Parallel = _try_import_parallel_generator()
+        if Parallel is None:
+            self.skipTest("BendersGenerator_Parallel could not be imported")
+        try:
+            m = pyo.ConcreteModel()
+            m.benders = Parallel()
+        except ImportError as e:
+            self.skipTest(str(e))
+
+        expected = "use Benders_Serial"
+        for method_name in (
+            "last_iterate_had_infeasible_subproblem",
+            "last_iterate_is_feasible",
+            "last_subproblem_etas",
+        ):
+            with self.assertRaises(NotImplementedError) as cm:
+                getattr(m.benders, method_name)()
+            self.assertIn(expected, str(cm.exception))
+
+    #
+    # Single absolute_value  (Q(x) = |x|)
+    #
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_generate_cut_abs_feasible_populates(self, solver):
+        m = self._build_abs(solver)
+        m.x = 2
+        m.eta = 0
+        cuts_added = m.benders.generate_cut()
+
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+        self.assertFalse(m.benders.last_iterate_had_infeasible_subproblem())
+        self.assertEqual(len(m.benders.last_eval_results), 1)
+        etas = m.benders.last_subproblem_etas()
+        self.assertEqual(len(etas), 1)
+        self.assertAlmostEqual(etas[0], 2.0, 6)
+        self.assertEqual(len(m.benders.last_cuts_added), len(cuts_added))
+        self.assertEqual(list(m.benders.last_cuts_added), list(cuts_added))
+        self.assertGreaterEqual(len(cuts_added), 1)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_evaluate_all_abs_feasible_populates(self, solver):
+        m = self._build_abs(solver)
+        m.x = 2
+        m.eta = 0
+        results = m.benders.evaluate_all_subproblems()
+
+        self.assertEqual(len(results), 1)
+        self.assertIs(m.benders.last_eval_results, results)
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+        self.assertAlmostEqual(m.benders.last_subproblem_etas()[0], 2.0, 6)
+        self.assertFalse(results[0].subproblem_infeasible)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_generate_cut_overwrites_evaluate_all(self, solver):
+        m = self._build_abs(solver)
+        m.x = 2
+        m.eta = 0
+        m.benders.evaluate_all_subproblems()
+        self.assertAlmostEqual(m.benders.last_subproblem_etas()[0], 2.0, 6)
+
+        m.x = 5
+        m.benders.generate_cut()
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+        self.assertAlmostEqual(m.benders.last_subproblem_etas()[0], 5.0, 6)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_set_input_resets_stash(self, solver):
+        m = self._build_abs(solver)
+        m.x = 2
+        m.eta = 0
+        m.benders.generate_cut()
+        self.assertIsNotNone(m.benders.last_eval_results)
+
+        m.benders.set_input(
+            root_vars=[m.x],
+            tol=1e-8,
+            transform="standard_lp",
+        )
+        self.assertEqual(m.benders.last_cuts_added, [])
+        self._assert_pre_eval_helpers(m.benders)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_feasibility_transform_abs_treated_as_feasible(self, solver):
+        m = self._build_abs(solver, transform="feasibility")
+        m.x = 2
+        m.eta = 0
+        m.benders.generate_cut()
+
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+        self.assertFalse(m.benders.last_iterate_had_infeasible_subproblem())
+        etas = m.benders.last_subproblem_etas()
+        self.assertEqual(len(etas), 1)
+        self.assertIsNotNone(etas[0])
+        # feasibility-transform eta is a dual coefficient, not Q(x)=|x|
+        self.assertEqual(len(m.benders.last_eval_results), 1)
+        self.assertFalse(
+            hasattr(m.benders.last_eval_results[0], "subproblem_infeasible")
+            and m.benders.last_eval_results[0].subproblem_infeasible
+        )
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_abs_solver_loop_terminates_feasible(self, solver):
+        m = self._build_abs(solver)
+        opt = pyo.SolverFactory(solver)
+        for _ in range(30):
+            opt.solve(m, tee=False)
+            cuts_added = m.benders.generate_cut()
+            if len(cuts_added) == 0:
+                break
+        self.assertAlmostEqual(m.x.value, 0.0, 4)
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+        self.assertAlmostEqual(m.benders.last_subproblem_etas()[0], 0.0, 4)
+
+    #
+    # Single modified_absolute_value  (infeasible + feasible)
+    #
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_modified_abs_infeasible_generate_cut(self, solver):
+        data = MyMunch(a=0, L=1, R=1, LB=-6, UB=4)
+        for x_val in (-10, 10):
+            m = self._build_modified_abs(solver, data, allow_infeasible=True)
+            m.x = x_val
+            m.eta = 0
+            cuts_added = m.benders.generate_cut()
+
+            self.assertTrue(m.benders.last_iterate_had_infeasible_subproblem())
+            self.assertFalse(m.benders.last_iterate_is_feasible())
+            etas = m.benders.last_subproblem_etas()
+            self.assertEqual(len(etas), 1)
+            self.assertIsNone(etas[0])
+            self.assertGreaterEqual(len(cuts_added), 1)
+            self.assertEqual(len(m.benders.last_cuts_added), len(cuts_added))
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_modified_abs_infeasible_evaluate_all(self, solver):
+        data = MyMunch(a=0, L=1, R=1, LB=-6, UB=4)
+        for x_val in (-10, 10):
+            for build_cut in (False, True):
+                m = self._build_modified_abs(solver, data, allow_infeasible=True)
+                m.x = x_val
+                m.eta = 0
+                results = m.benders.evaluate_all_subproblems(build_cut=build_cut)
+                self.assertEqual(len(results), 1)
+                self.assertTrue(results[0].subproblem_infeasible)
+                self.assertTrue(m.benders.last_iterate_had_infeasible_subproblem())
+                self.assertFalse(m.benders.last_iterate_is_feasible())
+                self.assertIsNone(m.benders.last_subproblem_etas()[0])
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_modified_abs_feasible_inside_bounds(self, solver):
+        data = MyMunch(a=0, L=1, R=1, LB=-6, UB=4)
+        m = self._build_modified_abs(solver, data)
+        m.x = 1
+        m.eta = 0
+        m.benders.evaluate_all_subproblems()
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+        self.assertAlmostEqual(m.benders.last_subproblem_etas()[0], 1.0, 6)
+
+    #
+    # Two modified-abs with different data
+    #
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_two_modified_abs_alignment(self, solver):
+        data0 = MyMunch(a=0, L=1, R=1, LB=None, UB=None)
+        data1 = MyMunch(a=3, L=1, R=1, LB=None, UB=None)
+        m = self._build_two_modified_abs(solver, data0, data1)
+        m.x = 1
+        m.eta[0] = 0
+        m.eta[1] = 0
+        m.benders.evaluate_all_subproblems()
+
+        etas = m.benders.last_subproblem_etas()
+        self.assertEqual(len(etas), 2)
+        self.assertEqual(len(m.benders.last_eval_results), 2)
+        self.assertEqual(len(m.benders.all_root_etas), 2)
+        # add order: Q_0(1)=|1-0|=1, Q_1(1)=|1-3|=2
+        self.assertAlmostEqual(etas[0], 1.0, 6)
+        self.assertAlmostEqual(etas[1], 2.0, 6)
+        self.assertIs(m.benders.all_root_etas[0], m.eta[0])
+        self.assertIs(m.benders.all_root_etas[1], m.eta[1])
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+
+        # swapped values would fail the reconstruction
+        m.eta[0] = etas[0]
+        m.eta[1] = etas[1]
+        self.assertAlmostEqual(pyo.value(m.obj), 3.0, 6)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_evaluate_single_does_not_clobber(self, solver):
+        data0 = MyMunch(a=0, L=1, R=1, LB=None, UB=None)
+        data1 = MyMunch(a=3, L=1, R=1, LB=None, UB=None)
+        m = self._build_two_modified_abs(solver, data0, data1)
+        m.x = 1
+        m.eta[0] = 0
+        m.eta[1] = 0
+        m.benders.evaluate_all_subproblems()
+        snapshot = list(m.benders.last_subproblem_etas())
+        self.assertEqual(len(snapshot), 2)
+
+        single = m.benders.evaluate_single_subproblem(index=0)
+        self.assertAlmostEqual(single.subproblem_eta, 1.0, 6)
+        # full-vector stash must be unchanged
+        self.assertEqual(len(m.benders.last_eval_results), 2)
+        etas = m.benders.last_subproblem_etas()
+        self.assertAlmostEqual(etas[0], snapshot[0], 6)
+        self.assertAlmostEqual(etas[1], snapshot[1], 6)
+
+    @parameterized.expand(
+        input=infeasibility_persistent_test_solvers, skip_on_empty=True
+    )
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_two_modified_abs_mixed_feasibility(self, solver):
+        data0 = MyMunch(a=0, L=1, R=1, LB=-6, UB=4)
+        data1 = MyMunch(a=3, L=1, R=1, LB=None, UB=None)
+        m = self._build_two_modified_abs(solver, data0, data1, allow_infeasible=True)
+        m.x = -10
+        m.eta[0] = 0
+        m.eta[1] = 0
+        m.benders.generate_cut()
+
+        self.assertTrue(m.benders.last_iterate_had_infeasible_subproblem())
+        self.assertFalse(m.benders.last_iterate_is_feasible())
+        etas = m.benders.last_subproblem_etas()
+        self.assertEqual(len(etas), 2)
+        self.assertIsNone(etas[0])
+        self.assertAlmostEqual(etas[1], 13.0, 6)  # |-10-3|
+
+    #
+    # Farmer  (three distinct Q_s, add-order = farmer.scenarios)
+    #
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_farmer_zero_acres_evaluate_all_alignment(self, mip_solver):
+        local_farmer = tc.Farmer()
+        opt, m = tc.Farmer.setup_farmer(
+            local_farmer, solver_name=mip_solver, transform="standard_lp"
+        )
+        for crop in local_farmer.crops:
+            m.devoted_acreage[crop] = 0
+        for s in local_farmer.scenarios:
+            m.eta[s] = 0
+
+        results = m.benders.evaluate_all_subproblems()
+        self.assertEqual(len(results), 3)
+        self.assertEqual(len(m.benders.last_eval_results), 3)
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+
+        etas = m.benders.last_subproblem_etas()
+        self.assertEqual(len(etas), 3)
+        self.assertTrue(all(e is not None for e in etas))
+        # add_subproblem order is farmer.scenarios
+        # (do not assert the three Q_s are distinct — at zero acres they
+        #  are p_s * 98000 and can match if probabilities match)
+        for i, s in enumerate(local_farmer.scenarios):
+            self.assertIs(m.benders.all_root_etas[i], m.eta[s])
+            m.eta[s] = etas[i]
+        # zero acres: first-stage cost 0; sum_s p_s * 98000 = 98000
+        self.assertAlmostEqual(pyo.value(m.obj), 98000.0, 0)
+
+    @parameterized.expand(input=non_persistent_mip_solvers, skip_on_empty=True)
+    @unittest.skipIf(not numpy_available, "numpy is not available.")
+    def test_farmer_known_acreage_alignment(self, mip_solver):
+        local_farmer = tc.Farmer()
+        opt, m = tc.Farmer.setup_farmer(
+            local_farmer, solver_name=mip_solver, transform="standard_lp"
+        )
+        expected_crop = {"WHEAT": 170, "CORN": 80, "SUGAR_BEETS": 250}
+        for crop, val in expected_crop.items():
+            m.devoted_acreage[crop] = val
+        for s in local_farmer.scenarios:
+            m.eta[s] = 0
+
+        m.benders.evaluate_all_subproblems()
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+        etas = m.benders.last_subproblem_etas()
+        self.assertEqual(len(etas), 3)
+        for i, s in enumerate(local_farmer.scenarios):
+            m.eta[s] = etas[i]
+        # published farmer objective at this acreage
+        self.assertAlmostEqual(pyo.value(m.obj), -108390, 0)
+
+        m.benders.generate_cut()
+        self.assertTrue(m.benders.last_iterate_is_feasible())
+        etas_after_cut = m.benders.last_subproblem_etas()
+        self.assertEqual(len(etas_after_cut), 3)
+        for i, s in enumerate(local_farmer.scenarios):
+            m.eta[s] = etas_after_cut[i]
+        self.assertAlmostEqual(pyo.value(m.obj), -108390, 0)

@@ -33,6 +33,11 @@ This standardizes error handling especially for unexpected and unhandled errors
 @declare_custom_block(name="BendersGenerator_Parallel")
 class Benders_Parallel(Benders_Abstract):
     # TODO: this is for generate multi-subproblem cut
+    records_last_eval_results = False
+    _LAST_EVAL_UNAVAILABLE = (
+        "last_eval_results is not gathered across MPI ranks on "
+        "Benders_Parallel; use Benders_Serial"
+    )
 
     def __init__(self, component):
         if not mpi4py_available:
@@ -292,6 +297,9 @@ class Benders_Parallel(Benders_Abstract):
             "Benders_Parallel does not have evaluate_single_subproblem"
         )
 
+    def evaluate_all_subproblems(self, build_cut=True):
+        raise NotImplementedError(self._LAST_EVAL_UNAVAILABLE)
+
     # need a create cut
     def generate_single_subproblem_cut(self, index):
         raise NotImplementedError(
@@ -308,3 +316,12 @@ class Benders_Parallel(Benders_Abstract):
 
     def generate_cut(self):
         return self.generate_all_subproblem_cut()
+
+    def last_iterate_had_infeasible_subproblem(self):
+        raise NotImplementedError(self._LAST_EVAL_UNAVAILABLE)
+
+    def last_iterate_is_feasible(self):
+        raise NotImplementedError(self._LAST_EVAL_UNAVAILABLE)
+
+    def last_subproblem_etas(self):
+        raise NotImplementedError(self._LAST_EVAL_UNAVAILABLE)
