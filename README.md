@@ -1,6 +1,6 @@
 # ARCHIVED
 
-This repository of OR_TOPAS has been archived.  See (https://github.com/or-fusion/or_topas)[https://github.com/or-fusion/or_topas] for the repository under active development.
+This repository of OR_TOPAS has been archived.  See [https://github.com/or-fusion/or_topas](https://github.com/or-fusion/or_topas) for the repository under active development.
 
 -------------------------------
 
