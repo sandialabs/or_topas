@@ -1,3 +1,9 @@
+# ARCHIVED
+
+This repository of OR_TOPAS has been archived.  See (https://github.com/or-fusion/or_topas)[https://github.com/or-fusion/or_topas] for the repository under active development.
+
+-------------------------------
+
 [![Pytest Tests](https://github.com/sandialabs/or_topas/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/sandialabs/or_topas/actions/workflows/pytest.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/sandialabs/or_topas/branch/main/graph/badge.svg)](https://codecov.io/gh/sandialabs/or_topas)
 [![Documentation Status](https://readthedocs.org/projects/or-topas/badge/?version=latest)](https://or-topas.readthedocs.org/en/latest/)
